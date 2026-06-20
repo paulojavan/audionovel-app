@@ -1,3 +1,5 @@
+import { revalidateTag, unstable_cache } from "next/cache";
+import { CACHE_TAGS } from "./cache-tags";
 import { prisma } from "./prisma";
 
 export const SYSTEM_SETTING_KEYS = {
@@ -11,12 +13,13 @@ export type SystemSettings = {
 };
 
 export async function getSystemSettingBoolean(key: string, defaultValue: boolean) {
-  const setting = await prisma.systemSetting.findUnique({ where: { key }, select: { value: true } });
-  if (!setting) return defaultValue;
-  return setting.value === "true";
+  const settings = await getSystemSettings();
+  if (key === SYSTEM_SETTING_KEYS.registrationsEnabled) return settings.registrationsEnabled;
+  if (key === SYSTEM_SETTING_KEYS.subscriptionsEnabled) return settings.subscriptionsEnabled;
+  return defaultValue;
 }
 
-export async function getSystemSettings(): Promise<SystemSettings> {
+export const getSystemSettings = unstable_cache(async function getSystemSettings(): Promise<SystemSettings> {
   const settings = await prisma.systemSetting.findMany({
     where: { key: { in: Object.values(SYSTEM_SETTING_KEYS) } },
     select: { key: true, value: true },
@@ -27,7 +30,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
     registrationsEnabled: values.get(SYSTEM_SETTING_KEYS.registrationsEnabled) !== "false",
     subscriptionsEnabled: values.get(SYSTEM_SETTING_KEYS.subscriptionsEnabled) !== "false",
   };
-}
+}, ["system-settings"], { revalidate: 60, tags: [CACHE_TAGS.settings] });
 
 export async function updateSystemSettings(settings: SystemSettings) {
   await prisma.$transaction([
@@ -42,4 +45,5 @@ export async function updateSystemSettings(settings: SystemSettings) {
       update: { value: String(settings.subscriptionsEnabled) },
     }),
   ]);
+  revalidateTag(CACHE_TAGS.settings, "max");
 }

@@ -2,30 +2,21 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
-  const [userCount, premiumCount, novelCount, chapterCount, commentCount, revenue, topNovels, recentPayments] =
-    await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { OR: [{ plan: "PREMIUM" }, { subscriptionStatus: "ACTIVE" }] } }),
-      prisma.novel.count(),
-      prisma.chapter.count(),
-      prisma.comment.count(),
-      prisma.paymentTransaction.aggregate({
-        where: { status: "SUCCEEDED" },
-        _sum: { amountCents: true },
-      }),
-      prisma.novel.findMany({ take: 5, orderBy: { viewCount: "desc" } }),
-      prisma.paymentTransaction.findMany({ take: 5, orderBy: { createdAt: "desc" }, include: { user: true } }),
-    ]);
+  const [stats, topNovels, recentPayments] = await Promise.all([
+    getAdminDashboardStats(),
+    prisma.novel.findMany({ take: 5, orderBy: { viewCount: "desc" } }),
+    prisma.paymentTransaction.findMany({ take: 5, orderBy: { createdAt: "desc" }, include: { user: true } }),
+  ]);
 
-  const totalRevenue = (revenue._sum.amountCents ?? 0) / 100;
+  const totalRevenue = stats.revenueCents / 100;
 
   return (
     <div className="grid gap-8">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Usuários" value={userCount.toString()} href="/admin/usuarios" />
-        <MetricCard label="Premium" value={premiumCount.toString()} href="/admin/usuarios" />
-        <MetricCard label="Novels" value={novelCount.toString()} href="/admin/conteudo" />
-        <MetricCard label="Capítulos" value={chapterCount.toString()} href="/admin/conteudo" />
+        <MetricCard label="Usuarios" value={stats.userCount.toString()} href="/admin/usuarios" />
+        <MetricCard label="Premium" value={stats.premiumCount.toString()} href="/admin/usuarios" />
+        <MetricCard label="Novels" value={stats.novelCount.toString()} href="/admin/conteudo" />
+        <MetricCard label="Capitulos" value={stats.chapterCount.toString()} href="/admin/conteudo" />
         <MetricCard label="Receita" value={`R$ ${totalRevenue.toFixed(2)}`} href="/admin/financeiro" />
       </section>
 
@@ -59,9 +50,9 @@ export default async function AdminDashboardPage() {
             {recentPayments.length ? (
               recentPayments.map((payment) => (
                 <div key={payment.id} className="border-b border-white/10 p-3 text-sm last:border-b-0">
-                  <p className="font-bold">{payment.user?.email ?? "Sem usuário"}</p>
+                  <p className="font-bold">{payment.user?.email ?? "Sem usuario"}</p>
                   <p className="mt-1 text-zinc-400">
-                    {payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)} • {payment.status}
+                    {payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)} - {payment.status}
                   </p>
                 </div>
               ))
@@ -73,14 +64,42 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section className="rounded-lg bg-[#06272b] p-4">
-        <h2 className="text-2xl font-bold">Moderação</h2>
-        <p className="mt-2 text-zinc-300">{commentCount} comentários cadastrados.</p>
+        <h2 className="text-2xl font-bold">Moderacao</h2>
+        <p className="mt-2 text-zinc-300">{stats.commentCount} comentarios cadastrados.</p>
         <Link href="/admin/moderacao" className="mt-4 inline-flex rounded-full bg-[#18b7bd] px-4 py-2 text-sm font-black text-[#021114] hover:bg-[#22d3dc]">
-          Abrir moderação
+          Abrir moderacao
         </Link>
       </section>
     </div>
   );
+}
+
+async function getAdminDashboardStats() {
+  const [row] = await prisma.$queryRaw<Array<{
+    userCount: bigint;
+    premiumCount: bigint;
+    novelCount: bigint;
+    chapterCount: bigint;
+    commentCount: bigint;
+    revenueCents: bigint | null;
+  }>>`
+    SELECT
+      (SELECT COUNT(*) FROM "User") AS "userCount",
+      (SELECT COUNT(*) FROM "User" WHERE "plan" = 'PREMIUM' OR "subscriptionStatus" = 'ACTIVE') AS "premiumCount",
+      (SELECT COUNT(*) FROM "Novel") AS "novelCount",
+      (SELECT COUNT(*) FROM "Chapter") AS "chapterCount",
+      (SELECT COUNT(*) FROM "Comment") AS "commentCount",
+      (SELECT COALESCE(SUM("amountCents"), 0) FROM "PaymentTransaction" WHERE "status" = 'SUCCEEDED') AS "revenueCents"
+  `;
+
+  return {
+    userCount: Number(row?.userCount ?? 0),
+    premiumCount: Number(row?.premiumCount ?? 0),
+    novelCount: Number(row?.novelCount ?? 0),
+    chapterCount: Number(row?.chapterCount ?? 0),
+    commentCount: Number(row?.commentCount ?? 0),
+    revenueCents: Number(row?.revenueCents ?? 0),
+  };
 }
 
 function MetricCard({ label, value, href }: { label: string; value: string; href: string }) {

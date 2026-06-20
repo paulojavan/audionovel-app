@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { shouldRefreshSessionLastSeen } from "./device-session";
 import { evaluateDeviceLogin, hasSuspiciousUserAgentChange } from "./device-session-policy";
 
 test("permite login quando o dispositivo ja esta ativo", () => {
@@ -35,4 +36,11 @@ test("revoga todas as sessoes quando terceiro dispositivo tenta entrar", () => {
 test("detecta mudanca suspeita de user-agent na mesma sessao", () => {
   assert.equal(hasSuspiciousUserAgentChange("ua-a", "ua-a"), false);
   assert.equal(hasSuspiciousUserAgentChange("ua-a", "ua-b"), true);
+});
+
+test("atualiza lastSeenAt apenas depois da janela minima", () => {
+  const now = new Date("2026-06-20T12:00:00.000Z");
+
+  assert.equal(shouldRefreshSessionLastSeen("2026-06-20T11:56:00.000Z", now), false);
+  assert.equal(shouldRefreshSessionLastSeen("2026-06-20T11:55:00.000Z", now), true);
 });

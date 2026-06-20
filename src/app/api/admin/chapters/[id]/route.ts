@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { normalizeChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
@@ -39,6 +41,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       },
     });
 
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json(chapter);
   } catch {
     return NextResponse.json({ error: "Capitulo duplicado, inexistente ou dados invalidos." }, { status: 409 });
@@ -54,6 +57,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
 
   try {
     await prisma.chapter.delete({ where: { id } });
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Nao foi possivel excluir o capitulo." }, { status: 404 });

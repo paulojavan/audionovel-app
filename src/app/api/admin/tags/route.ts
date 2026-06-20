@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 
@@ -24,6 +26,7 @@ export async function POST(request: Request) {
       create: { name: parsed.data.name, slug },
       update: { name: parsed.data.name },
     });
+    revalidateTag(CACHE_TAGS.tags, "max");
     return NextResponse.json(tag, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Nao foi possivel cadastrar a tag." }, { status: 409 });

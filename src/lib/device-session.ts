@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 
 const MAX_ACTIVE_DEVICES = 2;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const LAST_SEEN_REFRESH_MS = 5 * 60 * 1000;
 
 type HeaderLike = Record<string, string | string[] | undefined>;
 
@@ -21,6 +22,7 @@ type StoredSession = {
   userAgentHash: string | null;
   revokedAt: Date | string | null;
   expiresAt: Date | string;
+  lastSeenAt: Date | string;
 };
 
 export function createRandomSessionId() {
@@ -48,6 +50,10 @@ export function getIpPrefixFromHeaders(headers: HeaderLike | undefined) {
   }
 
   return ip || null;
+}
+
+export function shouldRefreshSessionLastSeen(lastSeenAt: Date | string, now = new Date(), refreshMs = LAST_SEEN_REFRESH_MS) {
+  return now.getTime() - new Date(lastSeenAt).getTime() >= refreshMs;
 }
 
 export async function createDeviceSession({ userId, deviceId, deviceName, headers }: CreateDeviceSessionOptions) {
@@ -107,7 +113,9 @@ export async function validateDeviceSession(sessionId: string | null | undefined
     return { valid: false as const, reason: "SUSPICIOUS_USER_AGENT" as const };
   }
 
-  await prisma.$executeRaw`UPDATE "UserSession" SET "lastSeenAt" = ${now} WHERE "id" = ${sessionId}`;
+  if (shouldRefreshSessionLastSeen(session.lastSeenAt, now)) {
+    await prisma.$executeRaw`UPDATE "UserSession" SET "lastSeenAt" = ${now} WHERE "id" = ${sessionId}`;
+  }
   return { valid: true as const, userId: session.userId, sessionId };
 }
 
@@ -141,7 +149,7 @@ export async function getRecentSecurityEvents(limit = 50) {
 
 async function getActiveSessionsForUser(userId: string, now = new Date()) {
   return prisma.$queryRaw<Array<StoredSession>>`
-    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt"
+    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt"
     FROM "UserSession"
     WHERE "userId" = ${userId} AND "revokedAt" IS NULL AND "expiresAt" > ${now}
   `;
@@ -149,7 +157,7 @@ async function getActiveSessionsForUser(userId: string, now = new Date()) {
 
 async function getSessionById(sessionId: string) {
   const rows = await prisma.$queryRaw<Array<StoredSession>>`
-    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt"
+    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt"
     FROM "UserSession"
     WHERE "id" = ${sessionId}
     LIMIT 1

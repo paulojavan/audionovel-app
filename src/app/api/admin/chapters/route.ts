@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
       }),
     );
 
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json(batch.success ? created : created[0], { status: 201 });
   } catch {
     return NextResponse.json({ error: "Capitulo duplicado, volume inexistente ou dados invalidos." }, { status: 409 });

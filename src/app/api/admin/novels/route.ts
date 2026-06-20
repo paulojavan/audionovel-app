@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { isSafePublicHttpsUrl } from "@/lib/url-security";
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
         tags: tagIds.length ? { create: tagIds.map((tagId) => ({ tagId })) } : undefined,
       },
     });
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json(novel, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Não foi possível cadastrar a novel." }, { status: 409 });

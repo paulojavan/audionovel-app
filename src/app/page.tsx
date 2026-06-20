@@ -3,6 +3,7 @@ import Image from "next/image";
 import { BookOpen, Download, Headphones, Play, ShieldCheck, Star } from "lucide-react";
 import { HomeRankingSwitcher } from "@/components/home-ranking-switcher";
 import { prisma } from "@/lib/prisma";
+import { getCachedHomeData } from "@/lib/public-data";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export default async function Home() {
@@ -12,14 +13,8 @@ export default async function Home() {
     return <LandingPage />;
   }
 
-  const [novels, rankingByViews, rankingByRating, ratedNovelIds] = await Promise.all([
-    prisma.novel.findMany({
-      take: 12,
-      include: { volumes: { include: { chapters: { take: 1, orderBy: { position: "asc" } } } } },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.novel.findMany({ take: 8, orderBy: { viewCount: "desc" } }),
-    prisma.novel.findMany({ take: 8, orderBy: { ratingScore: "desc" } }),
+  const [{ novels, rankingByViews, rankingByRating }, ratedNovelIds] = await Promise.all([
+    getCachedHomeData(),
     prisma.novelReaction.findMany({
       where: { userId: session.user.id, rating: { gte: 4 } },
       select: { novelId: true },

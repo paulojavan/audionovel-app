@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Search, Star, X } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { getCachedCatalogTags } from "@/lib/public-data";
 
 const PAGE_SIZE = 12;
 
@@ -33,7 +34,7 @@ export default async function NovelsPage({
   };
 
   const [tags, total, novels] = await Promise.all([
-    prisma.tag.findMany({ orderBy: { name: "asc" } }),
+    getCachedCatalogTags(),
     prisma.novel.count({ where }),
     prisma.novel.findMany({
       where,

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 import { isSafePublicHttpsUrl } from "@/lib/url-security";
 
@@ -41,6 +43,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       include: { tags: { include: { tag: true } } },
     });
 
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json(novel);
   } catch {
     return NextResponse.json({ error: "Nao foi possivel atualizar a novel." }, { status: 409 });
@@ -56,6 +59,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
 
   try {
     await prisma.novel.delete({ where: { id } });
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Nao foi possivel excluir a novel." }, { status: 404 });

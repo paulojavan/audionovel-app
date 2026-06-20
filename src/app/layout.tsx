@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Bell, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { getCachedUnreadNotificationCount } from "@/lib/notifications";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
@@ -24,7 +24,7 @@ export default async function RootLayout({
   const session = await getActiveServerSession();
   const activeSession = session?.user?.isBlocked ? null : session;
   const unreadNotificationCount = activeSession?.user?.id
-    ? await prisma.notification.count({ where: { userId: activeSession.user.id, readAt: null } })
+    ? await getCachedUnreadNotificationCount(activeSession.user.id)
     : 0;
   const showSubscriptionsLink = !activeSession?.user || !hasPremiumAccess(activeSession.user);
 
