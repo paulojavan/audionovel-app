@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { getDurationFromRange } from "@/lib/chapter-time";
 
 type VolumeOption = {
   id: string;
@@ -537,7 +538,12 @@ export function AdminNovelPanelForms({
                   title: getString(data, `chapter.${index}.title`),
                   position: getNumber(data, `chapter.${index}.position`),
                   startSec: contentType === "YOUTUBE" ? 0 : getNumber(data, `chapter.${index}.startSec`),
-                  durationSec: contentType === "YOUTUBE" ? 0 : getNumber(data, `chapter.${index}.durationSec`),
+                  durationSec:
+                    contentType === "YOUTUBE"
+                      ? 0
+                      : mode === "batch"
+                        ? getDurationFromRange(getNumber(data, `chapter.${index}.startSec`), getNumber(data, `chapter.${index}.endSec`))
+                        : getNumber(data, `chapter.${index}.durationSec`),
                   audioUrl: contentType === "AUDIO" ? sharedAudioUrl : "",
                   youtubeUrl: contentType === "YOUTUBE" ? getString(data, `chapter.${index}.youtubeUrl`) : "",
                   transcriptJson,
@@ -578,9 +584,11 @@ export function AdminNovelPanelForms({
           </>
         ) : null}
         <div className="grid gap-3">
-          {Array.from({ length: mode === "single" ? 1 : chapterCount }, (_, index) => (
-            <ChapterBlockFields key={index} index={index} contentType={contentType} />
-          ))}
+          {mode === "batch" ? (
+            <ChapterBatchTable chapterCount={chapterCount} contentType={contentType} />
+          ) : (
+            <ChapterBlockFields index={0} contentType={contentType} />
+          )}
         </div>
         <PublishFields defaultPremium={false} defaultPublished />
         <button disabled={pending || volumes.length === 0} className="rounded-full bg-[#18b7bd] px-5 py-3 font-black text-[#021114] disabled:opacity-60">
@@ -618,6 +626,57 @@ function ChapterSharedFields({
         <option value="AUDIO">Audio hospedado</option>
         <option value="YOUTUBE">Video do YouTube</option>
       </select>
+    </div>
+  );
+}
+
+function ChapterBatchTable({ chapterCount, contentType }: { chapterCount: number; contentType: MediaType }) {
+  const chapters = Array.from({ length: chapterCount }, (_, index) => index);
+
+  return (
+    <div className="overflow-x-auto rounded-md bg-black/30">
+      <table className="min-w-full table-fixed border-collapse text-sm">
+        <thead className="bg-black/40 text-left text-xs uppercase text-zinc-400">
+          <tr>
+            <th className="w-24 px-3 py-2">Numero</th>
+            <th className="min-w-56 px-3 py-2">Titulo</th>
+            {contentType === "AUDIO" ? (
+              <>
+                <th className="w-32 px-3 py-2">Inicio (s)</th>
+                <th className="w-32 px-3 py-2">Fim (s)</th>
+              </>
+            ) : (
+              <th className="min-w-64 px-3 py-2">YouTube</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {chapters.map((index) => (
+            <tr key={index} className="border-t border-white/10">
+              <td className="px-3 py-2 align-top">
+                <input name={`chapter.${index}.position`} type="number" min="1" defaultValue={index + 1} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+              </td>
+              <td className="px-3 py-2 align-top">
+                <input name={`chapter.${index}.title`} placeholder={`Capitulo ${index + 1}`} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+              </td>
+              {contentType === "AUDIO" ? (
+                <>
+                  <td className="px-3 py-2 align-top">
+                    <input name={`chapter.${index}.startSec`} type="number" min="0" defaultValue={index * 60} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <input name={`chapter.${index}.endSec`} type="number" min="0" defaultValue={(index + 1) * 60} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
+                  </td>
+                </>
+              ) : (
+                <td className="px-3 py-2 align-top">
+                  <input name={`chapter.${index}.youtubeUrl`} placeholder="Link do YouTube" className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
