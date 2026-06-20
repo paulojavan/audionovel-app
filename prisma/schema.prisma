@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String               @id @default(cuid())
+  name                   String               @unique
+  email                  String               @unique
+  passwordHash           String
+  role                   String               @default("USER")
+  plan                   String               @default("FREE")
+  subscriptionStatus     String               @default("NONE")
+  stripeCustomerId       String?              @unique
+  stripeSubscriptionId   String?              @unique
+  premiumUntil           DateTime?
+  isBlocked              Boolean              @default(false)
+  blockedReason          String?
+  blockedAt              DateTime?
+  adminNotes             String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  comments               Comment[]
+  notifications          Notification[]
+  favorites              Favorite[]
+  listeningProgress      ListeningProgress[]
+  novelReactions         NovelReaction[]
+  chapterReactions       ChapterReaction[]
+  payments               PaymentTransaction[]
+  manualSubscriptionLogs ManualSubscription[]
+  offlineDownloads       OfflineDownload[]
+  sessions               UserSession[]
+  securityEvents         SecurityEvent[]
+  passwordResetTokens    PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt, expiresAt])
+  @@index([expiresAt])
+}
+
+model UserSession {
+  id              String    @id
+  userId          String
+  deviceIdHash    String
+  deviceName      String?
+  userAgentHash   String
+  ipPrefixHash    String?
+  revokedAt       DateTime?
+  expiresAt       DateTime
+  lastSeenAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([userId, deviceIdHash])
+}
+
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  severity  String   @default("HIGH")
+  message   String
+  metadata  String   @default("{}")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([readAt, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Novel {
+  id           String          @id @default(cuid())
+  slug         String          @unique
+  title        String
+  author       String
+  narrator     String?
+  synopsis     String
+  coverUrl     String
+  status       String          @default("ONGOING")
+  viewCount    Int             @default(0)
+  likeCount    Int             @default(0)
+  dislikeCount Int             @default(0)
+  ratingScore  Float           @default(0)
+  ratingCount  Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  volumes      Volume[]
+  comments     Comment[]
+  favorites    Favorite[]
+  reactions    NovelReaction[]
+  tags         NovelTag[]
+}
+
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  slug      String     @unique
+  createdAt DateTime   @default(now())
+  novels    NovelTag[]
+}
+
+model NovelTag {
+  novelId String
+  tagId   String
+  novel   Novel  @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([novelId, tagId])
+  @@index([tagId])
+}
+
+model Volume {
+  id        String    @id @default(cuid())
+  title     String
+  position  Int
+  novelId   String
+  novel     Novel     @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapters  Chapter[]
+  createdAt DateTime  @default(now())
+
+  @@unique([novelId, position])
+}
+
+model Chapter {
+  id               String              @id @default(cuid())
+  title            String
+  position         Int
+  contentType      String              @default("AUDIO")
+  durationSec      Int                 @default(0)
+  audioUrl         String?
+  youtubeUrl       String?
+  youtubeVideoId   String?
+  coverUrl         String?
+  startSec         Int                 @default(0)
+  transcriptJson   String              @default("[]")
+  premiumOnly      Boolean             @default(false)
+  published        Boolean             @default(true)
+  viewCount        Int                 @default(0)
+  likeCount        Int                 @default(0)
+  dislikeCount     Int                 @default(0)
+  volumeId         String
+  volume           Volume              @relation(fields: [volumeId], references: [id], onDelete: Cascade)
+  comments         Comment[]
+  progress         ListeningProgress[]
+  reactions        ChapterReaction[]
+  offlineDownloads OfflineDownload[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([volumeId, position])
+}
+
+model ListeningProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  chapterId   String
+  positionSec Int
+  durationSec Int
+  completed   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter     Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chapterId])
+  @@index([userId, updatedAt])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId])
+}
+
+model NovelReaction {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  type      String
+  rating    Int      @default(5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel     Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId])
+}
+
+model ChapterReaction {
+  id        String   @id @default(cuid())
+  userId    String
+  chapterId String
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chapterId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  status    String   @default("PENDING")
+  userId    String
+  novelId   String?
+  chapterId String?
+  parentId  String?
+  editedAt  DateTime?
+  approvedAt DateTime?
+  removedAt DateTime?
+  moderatedByAdminId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel     Novel?   @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapter   Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  notifications Notification[]
+
+  @@index([novelId, createdAt])
+  @@index([chapterId, createdAt])
+  @@index([parentId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  commentId String?
+  type      String    @default("COMMENT_REPLY")
+  title     String
+  message   String
+  href      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model PaymentTransaction {
+  id              String   @id @default(cuid())
+  userId          String?
+  stripeEventId   String   @unique
+  stripePaymentId String?
+  amountCents     Int
+  currency        String
+  status          String
+  description     String?
+  createdAt       DateTime @default(now())
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  description   String?
+  amountCents   Int
+  currency      String   @default("brl")
+  interval      String   @default("month")
+  active        Boolean  @default(true)
+  allowCard     Boolean  @default(true)
+  allowPix      Boolean  @default(false)
+  stripePriceId String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model ManualSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  adminUserId  String
+  plan         String
+  premiumUntil DateTime
+  reason       String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OfflineDownload {
+  id         String   @id @default(cuid())
+  userId     String
+  chapterId  String
+  cacheKey   String   @unique
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter    Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chapterId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
