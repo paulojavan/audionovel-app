@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { PlaySquare } from "lucide-react";
 import { AudioPlayer } from "@/components/audio-player";
+import { ChapterPartLinks } from "@/components/chapter-part-links";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
@@ -120,7 +121,11 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
                   <PlaySquare size={14} /> Capitulo em video
                 </span>
               ) : null}
-              <h1 className="mt-3 max-w-4xl text-3xl font-black leading-tight md:text-5xl">{access.chapter.title}</h1>
+              {chapterParts.length > 1 ? (
+                <ChapterPartLinks parts={chapterParts} />
+              ) : (
+                <h1 className="mt-3 max-w-4xl text-3xl font-black leading-tight md:text-5xl">{access.chapter.title}</h1>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -156,7 +161,6 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           duration={access.chapter.durationSec}
           startOffset={access.chapter.startSec}
           transcript={transcript}
-          chapterParts={chapterParts}
           chapterTitle={access.chapter.title}
           novelTitle={access.chapter.volume.novel.title}
           coverUrl={chapterCoverUrl}

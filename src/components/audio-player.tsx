@@ -1,20 +1,13 @@
 "use client";
 
 import { Gauge, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getEncryptedAudioUrl } from "@/lib/audio-cache";
 
 type Cue = {
   start: number;
   end: number;
   text: string;
-};
-
-type ChapterPart = {
-  position: number;
-  title: string;
-  startSec: number;
-  endSec: number;
 };
 
 export function AudioPlayer({
@@ -24,7 +17,6 @@ export function AudioPlayer({
   duration,
   startOffset = 0,
   transcript,
-  chapterParts,
   chapterTitle,
   novelTitle,
   coverUrl,
@@ -35,12 +27,12 @@ export function AudioPlayer({
   duration: number;
   startOffset?: number;
   transcript: Cue[];
-  chapterParts?: ChapterPart[];
   chapterTitle: string;
   novelTitle: string;
   coverUrl: string;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const pendingStartRef = useRef<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
@@ -181,12 +173,23 @@ export function AudioPlayer({
     setCurrent(nextRelativeTime);
   }
 
-  function seekToChapterPart(startSec: number) {
+  const seekToAbsoluteTime = useCallback((startSec: number) => {
     const audio = audioRef.current;
     const nextRelativeTime = Math.max(0, startSec - startOffset);
+    pendingStartRef.current = startSec;
     if (audio) audio.currentTime = startSec;
     setCurrent(nextRelativeTime);
-  }
+  }, [startOffset]);
+
+  useEffect(() => {
+    function seekFromChapterTitle(event: Event) {
+      const startSec = (event as CustomEvent<{ startSec?: number }>).detail?.startSec;
+      if (typeof startSec === "number") seekToAbsoluteTime(startSec);
+    }
+
+    window.addEventListener("audio-novel-seek", seekFromChapterTitle);
+    return () => window.removeEventListener("audio-novel-seek", seekFromChapterTitle);
+  }, [seekToAbsoluteTime]);
 
   function updateVolume(nextVolume: number) {
     const normalized = Math.min(1, Math.max(0, nextVolume));
@@ -214,7 +217,7 @@ export function AudioPlayer({
 
   return (
     <>
-      <div className="grid gap-5 rounded-lg bg-[#06272b] p-4">
+      <div id="chapter-player" className="grid gap-5 rounded-lg bg-[#06272b] p-4">
         <audio
           ref={audioRef}
           src={audioSrc}
@@ -222,7 +225,8 @@ export function AudioPlayer({
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
             setResolvedDuration(duration || audioDuration);
-            if (initialPosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialPosition;
+            if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
+            else if (initialPosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialPosition;
             event.currentTarget.volume = volume;
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
@@ -295,23 +299,6 @@ export function AudioPlayer({
           </div>
         </div>
         {playbackError ? <p className="rounded-md bg-red-500/10 p-3 text-sm text-red-200">{playbackError}</p> : null}
-        {chapterParts && chapterParts.length > 1 ? (
-          <section className="grid gap-2 rounded-md bg-black/30 p-3">
-            <h2 className="text-lg font-black">Capitulos do bloco</h2>
-            <div className="grid gap-2">
-              {chapterParts.map((part) => (
-                <button
-                  key={`${part.position}-${part.startSec}`}
-                  type="button"
-                  onClick={() => seekToChapterPart(part.startSec)}
-                  className="min-h-11 rounded-md bg-black/40 px-3 py-2 text-left font-bold text-zinc-100 hover:bg-[#18b7bd] hover:text-[#021114]"
-                >
-                  Cap. {part.position} - {part.title}
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         {playing && playMode === "page" ? (
           <div className="grid gap-3 rounded-md bg-black/30 p-3">
