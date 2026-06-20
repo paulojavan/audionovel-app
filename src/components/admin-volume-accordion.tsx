@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { AdminDeleteButton } from "./admin-delete-button";
 
 type AdminVolume = {
   id: string;
@@ -79,9 +80,16 @@ export function AdminVolumeAccordion({ volumes }: { volumes: AdminVolume[] }) {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-300">{formatDate(chapter.createdAt)}</td>
                         <td className="px-4 py-3 text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
                           <Link href={`/admin/conteudo/capitulos/${chapter.id}/editar`} className="rounded-full bg-[#18b7bd] px-3 py-2 text-xs font-black text-[#021114] hover:bg-[#22d3dc]">
                             Editar capitulo
                           </Link>
+                          <AdminDeleteButton
+                            endpoint={`/api/admin/chapters/${chapter.id}`}
+                            label="Excluir capitulo"
+                            confirmMessage={`Excluir definitivamente o capitulo "${chapter.title}"?`}
+                          />
+                          </div>
                         </td>
                       </tr>
                     ))

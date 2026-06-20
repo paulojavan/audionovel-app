@@ -44,3 +44,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: "Capitulo duplicado, inexistente ou dados invalidos." }, { status: 409 });
   }
 }
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const auth = await requireUser();
+  if ("error" in auth) return auth.error;
+  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+
+  const { id } = await context.params;
+
+  try {
+    await prisma.chapter.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Nao foi possivel excluir o capitulo." }, { status: 404 });
+  }
+}

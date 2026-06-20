@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminNovelPanelForms } from "@/components/admin-content-forms";
+import { AdminDeleteButton } from "@/components/admin-delete-button";
 import { AdminVolumeAccordion } from "@/components/admin-volume-accordion";
 import { prisma } from "@/lib/prisma";
 
@@ -50,6 +51,12 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
             <Link href={`/admin/conteudo/${novel.id}/editar`} className="rounded-full bg-[#18b7bd] px-4 py-2 text-[#021114]">
               Editar novel
             </Link>
+            <AdminDeleteButton
+              endpoint={`/api/admin/novels/${novel.id}`}
+              label="Excluir novel"
+              confirmMessage={`Excluir definitivamente a novel "${novel.title}" e todo o conteudo dela?`}
+              redirectTo="/admin/conteudo"
+            />
             <a href="#novo-conteudo" className="rounded-full border border-white/10 px-4 py-2 hover:bg-white/10">Cadastrar conteudo</a>
             <Link href={`/novels/${novel.slug}`} className="rounded-full border border-white/10 px-4 py-2 hover:bg-white/10">Ver pagina publica</Link>
           </div>

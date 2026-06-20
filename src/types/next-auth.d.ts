@@ -26,6 +26,7 @@ declare module "next-auth" {
     isBlocked?: boolean | null;
     sessionId?: string | null;
     sessionInvalid?: boolean | null;
+    sessionCheckedAt?: number | null;
   }
 }
 

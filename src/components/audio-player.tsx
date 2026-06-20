@@ -33,6 +33,8 @@ export function AudioPlayer({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingStartRef = useRef<number | null>(null);
+  const transcriptCueRefs = useRef<Array<HTMLParagraphElement | null>>([]);
+  const shouldScrollActiveCueRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
@@ -177,9 +179,17 @@ export function AudioPlayer({
     const audio = audioRef.current;
     const nextRelativeTime = Math.max(0, startSec - startOffset);
     pendingStartRef.current = startSec;
+    shouldScrollActiveCueRef.current = true;
     if (audio) audio.currentTime = startSec;
     setCurrent(nextRelativeTime);
   }, [startOffset]);
+
+  useEffect(() => {
+    if (!shouldScrollActiveCueRef.current || activeIndex < 0) return;
+
+    transcriptCueRefs.current[activeIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    shouldScrollActiveCueRef.current = false;
+  }, [activeIndex]);
 
   useEffect(() => {
     function seekFromChapterTitle(event: Event) {
@@ -313,8 +323,14 @@ export function AudioPlayer({
         <section>
           <h2 className="mb-3 text-xl font-bold">Texto do capítulo</h2>
           <div className="max-h-[520px] overflow-auto rounded-md bg-black/40 p-4 scrollbar-thin">
-            {transcript.map((cue) => (
-              <p key={`${cue.start}-${cue.text}`} className={`rounded px-3 py-2 leading-7 ${activeCue === cue ? "bg-[#18b7bd] font-bold text-[#021114]" : "text-zinc-300"}`}>
+            {transcript.map((cue, index) => (
+              <p
+                key={`${cue.start}-${cue.text}`}
+                ref={(element) => {
+                  transcriptCueRefs.current[index] = element;
+                }}
+                className={`rounded px-3 py-2 leading-7 ${activeCue === cue ? "bg-[#18b7bd] font-bold text-[#021114]" : "text-zinc-300"}`}
+              >
                 {cue.text}
               </p>
             ))}

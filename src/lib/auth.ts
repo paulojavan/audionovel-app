@@ -4,6 +4,8 @@ import { createDeviceSession, revokeDeviceSession, validateDeviceSession } from 
 import { verifyPassword } from "./password";
 import { prisma } from "./prisma";
 
+const SESSION_VALIDATION_INTERVAL_MS = 30_000;
+
 type AuthRequestLike = {
   headers?: Record<string, string | string[] | undefined>;
 };
@@ -88,6 +90,7 @@ export const authOptions: NextAuthOptions = {
         token.isBlocked = dbUser?.isBlocked ?? user.isBlocked;
         token.sessionId = user.sessionId ?? token.sessionId;
         token.sessionInvalid = user.sessionInvalid ?? false;
+        token.sessionCheckedAt = 0;
       }
 
       if (token.id && !token.sessionId) {
@@ -96,16 +99,23 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
 
+      let shouldRefreshUserState = false;
       if (token.sessionId) {
-        const deviceSession = await validateDeviceSession(token.sessionId);
-        token.sessionInvalid = !deviceSession.valid;
-        if (!deviceSession.valid) {
-          token.id = undefined;
-          return token;
+        const now = Date.now();
+        const lastCheckedAt = typeof token.sessionCheckedAt === "number" ? token.sessionCheckedAt : 0;
+        if (token.sessionInvalid || now - lastCheckedAt >= SESSION_VALIDATION_INTERVAL_MS) {
+          const deviceSession = await validateDeviceSession(token.sessionId);
+          token.sessionCheckedAt = now;
+          shouldRefreshUserState = true;
+          token.sessionInvalid = !deviceSession.valid;
+          if (!deviceSession.valid) {
+            token.id = undefined;
+            return token;
+          }
         }
       }
 
-      if (token.id) {
+      if (token.id && shouldRefreshUserState) {
         const userState = await prisma.user.findUnique({
           where: { id: token.id as string },
           select: { email: true, isBlocked: true, name: true },

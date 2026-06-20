@@ -29,7 +29,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
       {volumes.map((volume, index) => (
         <details key={volume.id} open={index === 0} className="overflow-hidden rounded-md bg-[#1b1b1b]">
           <summary className="flex cursor-pointer list-none items-center justify-between bg-zinc-600 px-4 py-3 font-black text-white marker:hidden">
-            <span>Volume {volume.position}</span>
+            <span>Volume {volume.position}: {volume.title}</span>
             <ChevronDown size={18} className="transition group-open:rotate-180" />
           </summary>
           <div className="grid gap-2 p-3 md:hidden">
