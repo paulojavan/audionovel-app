@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
 import { Check } from "lucide-react";
 import { BillingButton } from "@/components/billing-button";
-import { authOptions } from "@/lib/auth";
 import { formatPlanInterval, formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
@@ -15,7 +14,7 @@ export default async function SubscriptionsPage({
 }) {
   const [{ checkout, premium }, session, subscriptionsEnabled] = await Promise.all([
     searchParams,
-    getServerSession(authOptions),
+    getActiveServerSession(),
     getSystemSettingBoolean(SYSTEM_SETTING_KEYS.subscriptionsEnabled, true),
   ]);
   const [user, plans] = await Promise.all([

@@ -1,9 +1,8 @@
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { authOptions } from "@/lib/auth";
 import { canPlayChapter } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { isSafePublicHttpsUrl } from "@/lib/url-security";
 
 type Context = {
@@ -12,7 +11,7 @@ type Context = {
 
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   const access = await canPlayChapter(id, session?.user?.id);
 
   if (!access.allowed || !access.chapter) {

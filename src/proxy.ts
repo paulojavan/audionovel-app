@@ -2,6 +2,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { clearNextAuthSessionCookies, hasNextAuthSessionCookie } from "./lib/session-cookies";
+import { isDecodedSessionTokenUsable } from "./lib/session-token";
 
 const publicPages = new Set(["/", "/login", "/cadastro", "/recuperar-senha", "/redefinir-senha"]);
 const publicApiPrefixes = ["/api/auth", "/api/register", "/api/password-reset"];
@@ -29,7 +30,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (token && !token.isBlocked) {
+  if (isDecodedSessionTokenUsable(token)) {
     return NextResponse.next();
   }
 

@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { NotificationReadButton } from "@/components/notification-read-button";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export default async function NotificationsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   if (!session?.user?.id) redirect("/login");
   if (session.user.isBlocked) redirect("/login?blocked=1");
 

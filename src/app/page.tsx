@@ -3,10 +3,10 @@ import Image from "next/image";
 import { BookOpen, Download, Headphones, Play, ShieldCheck, Star } from "lucide-react";
 import { HomeRankingSwitcher } from "@/components/home-ranking-switcher";
 import { prisma } from "@/lib/prisma";
-import { getSafeServerSession } from "@/lib/safe-auth-session";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export default async function Home() {
-  const session = await getSafeServerSession();
+  const session = await getActiveServerSession();
 
   if (!session?.user?.id || session.user.isBlocked) {
     return <LandingPage />;

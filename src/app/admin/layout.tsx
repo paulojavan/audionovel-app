@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
-import { getSafeServerSession } from "@/lib/safe-auth-session";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSafeServerSession();
+  const session = await getActiveServerSession();
   if (!session?.user?.id) redirect("/login");
   if (session.user.isBlocked) redirect("/login?blocked=1");
   if (session.user.role !== "ADMIN") redirect("/");

@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Bell, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getSafeServerSession } from "@/lib/safe-auth-session";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
 import { MobileAppNav } from "@/components/mobile-app-nav";
@@ -21,7 +21,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getSafeServerSession();
+  const session = await getActiveServerSession();
   const activeSession = session?.user?.isBlocked ? null : session;
   const unreadNotificationCount = activeSession?.user?.id
     ? await prisma.notification.count({ where: { userId: activeSession.user.id, readAt: null } })

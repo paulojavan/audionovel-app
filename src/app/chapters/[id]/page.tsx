@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { PlaySquare } from "lucide-react";
 import { AudioPlayer } from "@/components/audio-player";
@@ -8,11 +7,11 @@ import { ChapterPartLinks } from "@/components/chapter-part-links";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
-import { authOptions } from "@/lib/auth";
 import { canPlayChapter } from "@/lib/api";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 type Cue = {
   start: number;
@@ -22,7 +21,7 @@ type Cue = {
 
 export default async function ChapterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   const access = await canPlayChapter(id, session?.user?.id);
 
   if (access.status === 404) notFound();

@@ -1,14 +1,13 @@
-import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
-import { authOptions } from "@/lib/auth";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 
 export default async function OfflinePage() {
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   if (!session?.user?.id) redirect("/login");
   if (session.user.isBlocked) redirect("/login?blocked=1");
   const canUseOffline = hasPremiumAccess(session.user);

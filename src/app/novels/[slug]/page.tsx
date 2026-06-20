@@ -1,14 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getServerSession } from "next-auth";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { FavoriteNovelButton } from "@/components/favorite-novel-button";
 import { NovelVolumeList } from "@/components/novel-volume-list";
 import { StarRating } from "@/components/star-rating";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 
 export default async function NovelPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -39,7 +38,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
 
   if (!novel) notFound();
 
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   const chapterIds = novel.volumes.flatMap((volume) => volume.chapters.map((chapter) => chapter.id));
   const [listenedProgress, currentRating, favorite] = await Promise.all([
     session?.user?.id

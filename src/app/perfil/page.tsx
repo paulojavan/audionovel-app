@@ -1,14 +1,13 @@
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { BillingButton } from "@/components/billing-button";
 import { ProfileEditForm } from "@/components/profile-edit-form";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
+  const session = await getActiveServerSession();
   if (!session?.user?.id) redirect("/login");
   if (session.user.isBlocked) redirect("/login?blocked=1");
 
