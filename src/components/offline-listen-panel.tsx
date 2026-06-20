@@ -254,7 +254,7 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
                   >
                     <span className="font-black">{item.title}</span>
                     <span className="text-sm text-zinc-400">
-                      {item.volumeTitle} - Capitulo {item.chapterPosition}
+                      {item.volumeTitle} - Capitulo {item.chapterPositionLabel ?? item.chapterPosition}
                     </span>
                     <span className="text-xs text-zinc-500">Disponivel ate {new Date(item.expiresAt).toLocaleDateString("pt-BR")}</span>
                   </button>

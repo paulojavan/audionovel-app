@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
 
 type AdminVolume = {
   id: string;
@@ -11,6 +12,7 @@ type AdminVolume = {
     id: string;
     title: string;
     position: number;
+    positionEnd: number | null;
     contentType: string;
     durationSec: number;
     premiumOnly: boolean;
@@ -60,7 +62,7 @@ export function AdminVolumeAccordion({ volumes }: { volumes: AdminVolume[] }) {
                   {volume.chapters.length ? (
                     volume.chapters.map((chapter) => (
                       <tr key={chapter.id} className="border-t border-black/30 odd:bg-[#08353a] even:bg-[#0b3338]">
-                        <td className="whitespace-nowrap px-4 py-3 font-black">Vol. {volume.position} Cap. {chapter.position}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-black">Vol. {volume.position} Cap. {getChapterPositionLabel(chapter.position, chapter.positionEnd)}</td>
                         <td className="px-4 py-3">
                           <Link href={`/chapters/${chapter.id}`} className="font-bold hover:text-[#18b7bd]">
                             {chapter.title}

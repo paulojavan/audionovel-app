@@ -5,6 +5,7 @@ export type OfflineItem = {
   novelTitle: string;
   volumeTitle: string;
   chapterPosition: number;
+  chapterPositionLabel?: string;
   cacheKey: string;
   expiresAt: string;
 };

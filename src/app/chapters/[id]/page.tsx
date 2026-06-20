@@ -9,6 +9,7 @@ import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
 import { authOptions } from "@/lib/auth";
 import { canPlayChapter } from "@/lib/api";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
 
 type Cue = {
@@ -83,6 +84,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         id: true,
         title: true,
         position: true,
+        positionEnd: true,
         volume: { select: { position: true } },
       },
     }),
@@ -95,6 +97,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   const transcript = JSON.parse(access.chapter.transcriptJson) as Cue[];
   const chapterCoverUrl = access.chapter.coverUrl ?? access.chapter.volume.novel.coverUrl;
   const durationLabel = isYouTubeChapter ? "YouTube" : `${Math.round(access.chapter.durationSec / 60)} min`;
+  const chapterPositionLabel = getChapterPositionLabel(access.chapter.position, access.chapter.positionEnd);
   const canComment = Boolean(session?.user?.id && !session.user.isBlocked);
 
   return (
@@ -108,7 +111,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
             <div>
               <p className="text-sm font-bold uppercase text-black/70 md:text-zinc-300">{access.chapter.volume.novel.title}</p>
               <p className="mt-2 text-sm font-bold text-zinc-200">
-                {access.chapter.volume.title} - Capitulo {access.chapter.position} - {durationLabel}
+                {access.chapter.volume.title} - Capitulo {chapterPositionLabel} - {durationLabel}
               </p>
               {isYouTubeChapter ? (
                 <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white">
@@ -170,7 +173,7 @@ function ChapterNavigationLink({
   chapter,
 }: {
   direction: "previous" | "next";
-  chapter: { id: string; title: string; position: number } | null;
+  chapter: { id: string; title: string; position: number; positionEnd: number | null } | null;
 }) {
   const label = direction === "previous" ? "Anterior" : "Proximo";
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
 import { authOptions } from "@/lib/auth";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
 import { hasPremiumAccess } from "@/lib/subscription";
 
@@ -57,6 +58,7 @@ export default async function OfflinePage() {
           novelTitle: download.chapter.volume.novel.title,
           volumeTitle: download.chapter.volume.title,
           chapterPosition: download.chapter.position,
+          chapterPositionLabel: getChapterPositionLabel(download.chapter.position, download.chapter.positionEnd),
           cacheKey: download.cacheKey,
           expiresAt: download.expiresAt.toISOString(),
         }))}

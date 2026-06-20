@@ -1,0 +1,2 @@
+ALTER TABLE "Chapter"
+ADD COLUMN IF NOT EXISTS "positionEnd" INTEGER;

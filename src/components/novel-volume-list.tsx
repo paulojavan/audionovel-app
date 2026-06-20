@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ChevronDown, Lock, Play, PlaySquare } from "lucide-react";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { OfflineChapterButton } from "./offline-chapter-button";
 
 type NovelVolume = {
@@ -12,6 +13,7 @@ type NovelVolume = {
     id: string;
     title: string;
     position: number;
+    positionEnd: number | null;
     contentType: string;
     durationSec: number;
     viewCount: number;
@@ -37,7 +39,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                   <Link href={`/chapters/${chapter.id}`} className="flex min-h-11 items-start gap-2 font-black hover:text-[#18b7bd]">
                     {chapter.contentType === "YOUTUBE" ? <PlaySquare size={18} className="mt-0.5 shrink-0 text-red-400" /> : <Play size={18} className="mt-0.5 shrink-0 text-[#18b7bd]" />}
                     <span>
-                      Vol. {volume.position} Cap. {chapter.position}
+                      Vol. {volume.position} Cap. {getChapterPositionLabel(chapter.position, chapter.positionEnd)}
                       <span className="block text-base text-white">{chapter.title}</span>
                     </span>
                   </Link>
@@ -65,6 +67,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                         novelTitle,
                         volumeTitle: volume.title,
                         chapterPosition: chapter.position,
+                        chapterPositionLabel: getChapterPositionLabel(chapter.position, chapter.positionEnd),
                       }}
                     />
                   </div>
@@ -91,7 +94,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                       <td className="whitespace-nowrap px-4 py-3 font-black">
                         <Link href={`/chapters/${chapter.id}`} className="flex items-center gap-2 hover:text-[#18b7bd]">
                           {chapter.contentType === "YOUTUBE" ? <PlaySquare size={16} className="text-red-400" /> : <Play size={16} className="text-[#18b7bd]" />}
-                          Vol. {volume.position} Cap. {chapter.position}
+                          Vol. {volume.position} Cap. {getChapterPositionLabel(chapter.position, chapter.positionEnd)}
                         </Link>
                       </td>
                       <td className="px-4 py-3">
@@ -123,6 +126,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                             novelTitle,
                             volumeTitle: volume.title,
                             chapterPosition: chapter.position,
+                            chapterPositionLabel: getChapterPositionLabel(chapter.position, chapter.positionEnd),
                           }}
                         />
                       </td>

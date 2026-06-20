@@ -74,6 +74,7 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
               id: chapter.id,
               title: chapter.title,
               position: chapter.position,
+              positionEnd: chapter.positionEnd,
               contentType: chapter.contentType,
               durationSec: chapter.durationSec,
               premiumOnly: chapter.premiumOnly,

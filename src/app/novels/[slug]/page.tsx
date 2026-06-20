@@ -115,6 +115,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
             id: chapter.id,
             title: chapter.title,
             position: chapter.position,
+            positionEnd: chapter.positionEnd,
             contentType: chapter.contentType,
             durationSec: chapter.durationSec,
             viewCount: chapter.viewCount,

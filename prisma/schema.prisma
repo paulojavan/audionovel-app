@@ -140,6 +140,7 @@ model Chapter {
   id               String              @id @default(cuid())
   title            String
   position         Int
+  positionEnd      Int?
   contentType      String              @default("AUDIO")
   durationSec      Int                 @default(0)
   audioUrl         String?

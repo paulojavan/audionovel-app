@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
+import { getGroupedChapterSummary } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
+
+type ChapterInput = z.infer<typeof chapterSchema>;
+type PersistedChapterInput = ChapterInput & { positionEnd?: number | null };
 
 export async function POST(request: Request) {
   const auth = await requireUser();
@@ -11,7 +16,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const batch = chapterBatchSchema.safeParse(body);
   const single = chapterSchema.safeParse(body);
-  const chapters = batch.success ? batch.data.chapters : single.success ? [single.data] : null;
+  const chapters: PersistedChapterInput[] | null = batch.success ? [groupBatchChapters(batch.data.chapters)] : single.success ? [single.data] : null;
   if (!chapters) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
 
   try {
@@ -26,6 +31,7 @@ export async function POST(request: Request) {
             volumeId: chapter.volumeId,
             title: chapter.title,
             position: chapter.position,
+            positionEnd: chapter.positionEnd,
             contentType: chapter.contentType,
             durationSec: chapter.durationSec,
             audioUrl: chapter.contentType === "AUDIO" ? chapter.audioUrl : null,
@@ -45,4 +51,13 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Capitulo duplicado, volume inexistente ou dados invalidos." }, { status: 409 });
   }
+}
+
+function groupBatchChapters(chapters: ChapterInput[]) {
+  const summary = getGroupedChapterSummary(chapters);
+
+  return {
+    ...chapters.find((chapter) => chapter.position === summary.position)!,
+    ...summary,
+  };
 }
