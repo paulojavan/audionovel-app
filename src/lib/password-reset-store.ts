@@ -19,19 +19,19 @@ type PasswordResetTokenRow = {
 
 export async function ensurePasswordResetTable() {
   await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS PasswordResetToken (
-      id TEXT NOT NULL PRIMARY KEY,
-      userId TEXT NOT NULL,
-      tokenHash TEXT NOT NULL,
-      usedAt DATETIME,
-      expiresAt DATETIME NOT NULL,
-      createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT PasswordResetToken_userId_fkey FOREIGN KEY (userId) REFERENCES User (id) ON DELETE CASCADE ON UPDATE CASCADE
+    CREATE TABLE IF NOT EXISTS "PasswordResetToken" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "tokenHash" TEXT NOT NULL,
+      "usedAt" TIMESTAMP(3),
+      "expiresAt" TIMESTAMP(3) NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
     )
   `);
-  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS PasswordResetToken_tokenHash_key ON PasswordResetToken(tokenHash)`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS PasswordResetToken_userId_usedAt_expiresAt_idx ON PasswordResetToken(userId, usedAt, expiresAt)`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS PasswordResetToken_expiresAt_idx ON PasswordResetToken(expiresAt)`);
+  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetToken_tokenHash_key" ON "PasswordResetToken"("tokenHash")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PasswordResetToken_userId_usedAt_expiresAt_idx" ON "PasswordResetToken"("userId", "usedAt", "expiresAt")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt")`);
 }
 
 export async function createPasswordResetRequest(email: string, origin: string) {
@@ -55,12 +55,12 @@ export async function createPasswordResetRequest(email: string, origin: string) 
 
   await prisma.$transaction([
     prisma.$executeRaw`
-      UPDATE PasswordResetToken
-      SET usedAt = ${now}
-      WHERE userId = ${user.id} AND usedAt IS NULL
+      UPDATE "PasswordResetToken"
+      SET "usedAt" = ${now}
+      WHERE "userId" = ${user.id} AND "usedAt" IS NULL
     `,
     prisma.$executeRaw`
-      INSERT INTO PasswordResetToken (id, userId, tokenHash, usedAt, expiresAt, createdAt)
+      INSERT INTO "PasswordResetToken" ("id", "userId", "tokenHash", "usedAt", "expiresAt", "createdAt")
       VALUES (${createRandomSessionId()}, ${user.id}, ${tokenHash}, NULL, ${expiresAt}, ${now})
     `,
   ]);
@@ -79,9 +79,9 @@ export async function confirmPasswordReset(token: string, password: string) {
   const now = new Date();
   const tokenHash = hashResetToken(token);
   const rows = await prisma.$queryRaw<PasswordResetTokenRow[]>`
-    SELECT id, userId
-    FROM PasswordResetToken
-    WHERE tokenHash = ${tokenHash} AND usedAt IS NULL AND expiresAt > ${now}
+    SELECT "id", "userId"
+    FROM "PasswordResetToken"
+    WHERE "tokenHash" = ${tokenHash} AND "usedAt" IS NULL AND "expiresAt" > ${now}
     LIMIT 1
   `;
   const resetToken = rows[0];
@@ -95,9 +95,9 @@ export async function confirmPasswordReset(token: string, password: string) {
   try {
     await prisma.$transaction(async (tx) => {
       const updatedTokenCount = await tx.$executeRaw`
-        UPDATE PasswordResetToken
-        SET usedAt = ${now}
-        WHERE id = ${resetToken.id} AND usedAt IS NULL AND expiresAt > ${now}
+        UPDATE "PasswordResetToken"
+        SET "usedAt" = ${now}
+        WHERE "id" = ${resetToken.id} AND "usedAt" IS NULL AND "expiresAt" > ${now}
       `;
 
       if (Number(updatedTokenCount) !== 1) {
@@ -105,17 +105,17 @@ export async function confirmPasswordReset(token: string, password: string) {
       }
 
       await tx.$executeRaw`
-        UPDATE User
-        SET passwordHash = ${passwordHash}, updatedAt = ${now}
-        WHERE id = ${resetToken.userId}
+        UPDATE "User"
+        SET "passwordHash" = ${passwordHash}, "updatedAt" = ${now}
+        WHERE "id" = ${resetToken.userId}
       `;
       await tx.$executeRaw`
-        UPDATE UserSession
-        SET revokedAt = ${now}
-        WHERE userId = ${resetToken.userId} AND revokedAt IS NULL
+        UPDATE "UserSession"
+        SET "revokedAt" = ${now}
+        WHERE "userId" = ${resetToken.userId} AND "revokedAt" IS NULL
       `;
       await tx.$executeRaw`
-        INSERT INTO SecurityEvent (id, userId, type, severity, message, metadata, readAt, createdAt)
+        INSERT INTO "SecurityEvent" ("id", "userId", "type", "severity", "message", "metadata", "readAt", "createdAt")
         VALUES (${createRandomSessionId()}, ${resetToken.userId}, 'PASSWORD_RESET', 'MEDIUM', 'Senha redefinida por link de recuperacao.', '{}', NULL, ${now})
       `;
     });

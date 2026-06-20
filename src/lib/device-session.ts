@@ -78,7 +78,7 @@ export async function createDeviceSession({ userId, deviceId, deviceName, header
 
   await revokeActiveSessionsForDevice(userId, deviceIdHash);
   await prisma.$executeRaw`
-    INSERT INTO UserSession (id, userId, deviceIdHash, deviceName, userAgentHash, ipPrefixHash, revokedAt, expiresAt, lastSeenAt, createdAt)
+    INSERT INTO "UserSession" ("id", "userId", "deviceIdHash", "deviceName", "userAgentHash", "ipPrefixHash", "revokedAt", "expiresAt", "lastSeenAt", "createdAt")
     VALUES (${sessionId}, ${userId}, ${deviceIdHash}, ${deviceName ?? null}, ${userAgentHash}, ${ipPrefixHash}, NULL, ${expiresAt}, ${now}, ${now})
   `;
 
@@ -107,51 +107,51 @@ export async function validateDeviceSession(sessionId: string | null | undefined
     return { valid: false as const, reason: "SUSPICIOUS_USER_AGENT" as const };
   }
 
-  await prisma.$executeRaw`UPDATE UserSession SET lastSeenAt = ${now} WHERE id = ${sessionId}`;
+  await prisma.$executeRaw`UPDATE "UserSession" SET "lastSeenAt" = ${now} WHERE "id" = ${sessionId}`;
   return { valid: true as const, userId: session.userId, sessionId };
 }
 
 export async function revokeDeviceSession(sessionId: string | null | undefined) {
   if (!sessionId) return;
 
-  await prisma.$executeRaw`UPDATE UserSession SET revokedAt = ${new Date()} WHERE id = ${sessionId} AND revokedAt IS NULL`;
+  await prisma.$executeRaw`UPDATE "UserSession" SET "revokedAt" = ${new Date()} WHERE "id" = ${sessionId} AND "revokedAt" IS NULL`;
 }
 
 export async function revokeAllUserSessions(userId: string) {
-  await prisma.$executeRaw`UPDATE UserSession SET revokedAt = ${new Date()} WHERE userId = ${userId} AND revokedAt IS NULL`;
+  await prisma.$executeRaw`UPDATE "UserSession" SET "revokedAt" = ${new Date()} WHERE "userId" = ${userId} AND "revokedAt" IS NULL`;
 }
 
 export async function getUnreadSecurityEventCount() {
   const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
-    SELECT COUNT(*) as count FROM SecurityEvent WHERE readAt IS NULL
+    SELECT COUNT(*) as "count" FROM "SecurityEvent" WHERE "readAt" IS NULL
   `;
   return Number(rows[0]?.count ?? 0);
 }
 
 export async function getRecentSecurityEvents(limit = 50) {
   return prisma.$queryRaw<Array<{ id: string; userId: string; type: string; severity: string; message: string; createdAt: Date; userName: string | null; userEmail: string | null }>>`
-    SELECT SecurityEvent.id, SecurityEvent.userId, SecurityEvent.type, SecurityEvent.severity, SecurityEvent.message, SecurityEvent.createdAt,
-           User.name as userName, User.email as userEmail
-    FROM SecurityEvent
-    LEFT JOIN User ON User.id = SecurityEvent.userId
-    ORDER BY SecurityEvent.createdAt DESC
+    SELECT "SecurityEvent"."id", "SecurityEvent"."userId", "SecurityEvent"."type", "SecurityEvent"."severity", "SecurityEvent"."message", "SecurityEvent"."createdAt",
+           "User"."name" as "userName", "User"."email" as "userEmail"
+    FROM "SecurityEvent"
+    LEFT JOIN "User" ON "User"."id" = "SecurityEvent"."userId"
+    ORDER BY "SecurityEvent"."createdAt" DESC
     LIMIT ${limit}
   `;
 }
 
 async function getActiveSessionsForUser(userId: string, now = new Date()) {
   return prisma.$queryRaw<Array<StoredSession>>`
-    SELECT id, userId, deviceIdHash, userAgentHash, revokedAt, expiresAt
-    FROM UserSession
-    WHERE userId = ${userId} AND revokedAt IS NULL AND expiresAt > ${now}
+    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt"
+    FROM "UserSession"
+    WHERE "userId" = ${userId} AND "revokedAt" IS NULL AND "expiresAt" > ${now}
   `;
 }
 
 async function getSessionById(sessionId: string) {
   const rows = await prisma.$queryRaw<Array<StoredSession>>`
-    SELECT id, userId, deviceIdHash, userAgentHash, revokedAt, expiresAt
-    FROM UserSession
-    WHERE id = ${sessionId}
+    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt"
+    FROM "UserSession"
+    WHERE "id" = ${sessionId}
     LIMIT 1
   `;
   return rows[0] ?? null;
@@ -159,14 +159,14 @@ async function getSessionById(sessionId: string) {
 
 async function revokeActiveSessionsForDevice(userId: string, deviceIdHash: string) {
   await prisma.$executeRaw`
-    UPDATE UserSession SET revokedAt = ${new Date()}
-    WHERE userId = ${userId} AND deviceIdHash = ${deviceIdHash} AND revokedAt IS NULL
+    UPDATE "UserSession" SET "revokedAt" = ${new Date()}
+    WHERE "userId" = ${userId} AND "deviceIdHash" = ${deviceIdHash} AND "revokedAt" IS NULL
   `;
 }
 
 async function createSecurityEvent({ userId, type, message, metadata }: { userId: string; type: string; message: string; metadata: Record<string, unknown> }) {
   await prisma.$executeRaw`
-    INSERT INTO SecurityEvent (id, userId, type, severity, message, metadata, readAt, createdAt)
+    INSERT INTO "SecurityEvent" ("id", "userId", "type", "severity", "message", "metadata", "readAt", "createdAt")
     VALUES (${createRandomSessionId()}, ${userId}, ${type}, 'HIGH', ${message}, ${JSON.stringify(metadata)}, NULL, ${new Date()})
   `;
 }
