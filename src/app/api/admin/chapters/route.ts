@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
-import { getGroupedChapterSummary } from "@/lib/chapter-grouping";
+import { getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
 type ChapterInput = z.infer<typeof chapterSchema>;
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
             youtubeVideoId,
             coverUrl: chapter.coverUrl || null,
             startSec: chapter.startSec,
+            chapterPartsJson: JSON.stringify(normalizeChapterParts(chapter.chapterParts)),
             transcriptJson: chapter.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(chapter.transcriptJson, chapter.title, chapter.durationSec)) : "[]",
             premiumOnly: chapter.premiumOnly,
             published: chapter.published,
@@ -59,5 +60,6 @@ function groupBatchChapters(chapters: ChapterInput[]) {
   return {
     ...chapters.find((chapter) => chapter.position === summary.position)!,
     ...summary,
+    chapterParts: parseChapterParts(summary.chapterPartsJson),
   };
 }

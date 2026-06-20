@@ -9,6 +9,7 @@ import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
 import { authOptions } from "@/lib/auth";
 import { canPlayChapter } from "@/lib/api";
+import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
 
@@ -98,6 +99,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   const chapterCoverUrl = access.chapter.coverUrl ?? access.chapter.volume.novel.coverUrl;
   const durationLabel = isYouTubeChapter ? "YouTube" : `${Math.round(access.chapter.durationSec / 60)} min`;
   const chapterPositionLabel = getChapterPositionLabel(access.chapter.position, access.chapter.positionEnd);
+  const chapterParts = getChapterPartsForDisplay(access.chapter);
   const canComment = Boolean(session?.user?.id && !session.user.isBlocked);
 
   return (
@@ -154,6 +156,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           duration={access.chapter.durationSec}
           startOffset={access.chapter.startSec}
           transcript={transcript}
+          chapterParts={chapterParts}
           chapterTitle={access.chapter.title}
           novelTitle={access.chapter.volume.novel.title}
           coverUrl={chapterCoverUrl}

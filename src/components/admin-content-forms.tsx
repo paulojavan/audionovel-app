@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getDurationFromRange } from "@/lib/chapter-time";
+import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
+import { getDurationFromRange, getGroupedChapterDuration, getGroupedChapterPositionEnd } from "@/lib/chapter-time";
 
 type VolumeOption = {
   id: string;
@@ -22,11 +23,13 @@ type ChapterEditData = {
   id: string;
   title: string;
   position: number;
+  positionEnd: number | null;
   contentType: string;
   durationSec: number;
   audioUrl: string | null;
   youtubeUrl: string | null;
   startSec: number;
+  chapterPartsJson: string;
   transcriptJson: string;
   premiumOnly: boolean;
   published: boolean;
@@ -102,6 +105,9 @@ export function AdminChapterEditForm({
   const [message, setMessage] = useState("");
   const [contentType, setContentType] = useState<MediaType>(chapter.contentType === "YOUTUBE" ? "YOUTUBE" : "AUDIO");
   const [pending, startTransition] = useTransition();
+  const chapterParts = getChapterPartsForDisplay(chapter);
+  const isGroupedChapter = Boolean(chapter.positionEnd && chapter.positionEnd > chapter.position);
+  const isEditingGroupedAudio = isGroupedChapter && contentType === "AUDIO";
 
   return (
     <form
@@ -110,16 +116,22 @@ export function AdminChapterEditForm({
         event.preventDefault();
         const form = event.currentTarget;
         const data = new FormData(form);
+        const nextChapterParts = isEditingGroupedAudio ? getChapterPartsFromForm(data, chapterParts.length) : [];
+        const firstPart = nextChapterParts[0];
+        const groupedTitle = nextChapterParts.map((part) => part.title).join(", ");
+        const groupedDuration = getGroupedChapterDuration(nextChapterParts.map((part) => ({ startSec: part.startSec, durationSec: getDurationFromRange(part.startSec, part.endSec) })));
         startTransition(async () => {
           try {
             await patchJson(`/api/admin/chapters/${chapter.id}`, {
               ...sharedChapterPayload(data),
-              title: getString(data, "title"),
-              position: getNumber(data, "position"),
-              durationSec: contentType === "YOUTUBE" ? 0 : getNumber(data, "durationSec"),
+              title: isEditingGroupedAudio ? groupedTitle : getString(data, "title"),
+              position: isEditingGroupedAudio && firstPart ? firstPart.position : getNumber(data, "position"),
+              positionEnd: isEditingGroupedAudio ? getGroupedChapterPositionEnd(nextChapterParts.map((part) => part.position)) : null,
+              durationSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio ? groupedDuration : getNumber(data, "durationSec"),
               audioUrl: getString(data, "audioUrl"),
               youtubeUrl: getString(data, "youtubeUrl"),
-              startSec: contentType === "YOUTUBE" ? 0 : getNumber(data, "startSec"),
+              startSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio && firstPart ? firstPart.startSec : getNumber(data, "startSec"),
+              chapterParts: isEditingGroupedAudio ? nextChapterParts : [],
               transcriptJson: getString(data, "transcriptJson"),
             });
             setMessage("Capitulo atualizado com sucesso.");
@@ -133,25 +145,31 @@ export function AdminChapterEditForm({
     >
       <h2 className="text-2xl font-black">Editar capitulo</h2>
       <ChapterSharedFields volumes={volumes} contentType={contentType} setContentType={setContentType} defaultVolumeId={chapter.volumeId} />
-      <input name="title" defaultValue={chapter.title} placeholder="Titulo do capitulo" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
-      <div className={`grid gap-2 ${contentType === "YOUTUBE" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
-        <label className="grid gap-1 text-sm text-zinc-300">
-          Numero do capitulo
-          <input name="position" type="number" min="1" defaultValue={chapter.position} className="rounded-md border border-white/10 bg-black px-3 py-2" required />
-        </label>
-        {contentType === "AUDIO" ? (
-          <>
+      {isEditingGroupedAudio ? (
+        <ChapterBatchTable chapterParts={chapterParts} contentType={contentType} />
+      ) : (
+        <>
+          <input name="title" defaultValue={chapter.title} placeholder="Titulo do capitulo" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
+          <div className={`grid gap-2 ${contentType === "YOUTUBE" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
             <label className="grid gap-1 text-sm text-zinc-300">
-              Inicio no audio (segundos)
-              <input name="startSec" type="number" min="0" defaultValue={chapter.startSec} className="rounded-md border border-white/10 bg-black px-3 py-2" />
+              Numero do capitulo
+              <input name="position" type="number" min="1" defaultValue={chapter.position} className="rounded-md border border-white/10 bg-black px-3 py-2" required />
             </label>
-            <label className="grid gap-1 text-sm text-zinc-300">
-              Duracao (segundos)
-              <input name="durationSec" type="number" min="0" defaultValue={chapter.durationSec} className="rounded-md border border-white/10 bg-black px-3 py-2" />
-            </label>
-          </>
-        ) : null}
-      </div>
+            {contentType === "AUDIO" ? (
+              <>
+                <label className="grid gap-1 text-sm text-zinc-300">
+                  Inicio no audio (segundos)
+                  <input name="startSec" type="number" min="0" defaultValue={chapter.startSec} className="rounded-md border border-white/10 bg-black px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm text-zinc-300">
+                  Duracao (segundos)
+                  <input name="durationSec" type="number" min="0" defaultValue={chapter.durationSec} className="rounded-md border border-white/10 bg-black px-3 py-2" />
+                </label>
+              </>
+            ) : null}
+          </div>
+        </>
+      )}
       {contentType === "YOUTUBE" ? (
         <input name="youtubeUrl" defaultValue={chapter.youtubeUrl ?? ""} placeholder="Link do YouTube" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
       ) : (
@@ -529,6 +547,7 @@ export function AdminNovelPanelForms({
           const shared = sharedChapterPayload(data);
           const sharedAudioUrl = getString(data, "sharedAudioUrl");
           const transcriptJson = getString(data, "transcriptJson");
+          const batchParts = mode === "batch" ? getChapterPartsFromForm(data, count) : [];
 
           startTransition(async () => {
             try {
@@ -546,6 +565,7 @@ export function AdminNovelPanelForms({
                         : getNumber(data, `chapter.${index}.durationSec`),
                   audioUrl: contentType === "AUDIO" ? sharedAudioUrl : "",
                   youtubeUrl: contentType === "YOUTUBE" ? getString(data, `chapter.${index}.youtubeUrl`) : "",
+                  chapterParts: mode === "batch" && contentType === "AUDIO" ? batchParts : [],
                   transcriptJson,
                 })),
               });
@@ -630,8 +650,29 @@ function ChapterSharedFields({
   );
 }
 
-function ChapterBatchTable({ chapterCount, contentType }: { chapterCount: number; contentType: MediaType }) {
-  const chapters = Array.from({ length: chapterCount }, (_, index) => index);
+type ChapterPartFormData = {
+  position: number;
+  title: string;
+  startSec: number;
+  endSec: number;
+};
+
+function getChapterPartsFromForm(data: FormData, count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    position: getNumber(data, `chapter.${index}.position`),
+    title: getString(data, `chapter.${index}.title`),
+    startSec: getNumber(data, `chapter.${index}.startSec`),
+    endSec: getNumber(data, `chapter.${index}.endSec`),
+  }));
+}
+
+function ChapterBatchTable({ chapterCount, chapterParts, contentType }: { chapterCount?: number; chapterParts?: ChapterPartFormData[]; contentType: MediaType }) {
+  const chapters = chapterParts ?? Array.from({ length: chapterCount ?? 1 }, (_, index) => ({
+    position: index + 1,
+    title: `Capitulo ${index + 1}`,
+    startSec: index * 60,
+    endSec: (index + 1) * 60,
+  }));
 
   return (
     <div className="overflow-x-auto rounded-md bg-black/30">
@@ -651,21 +692,21 @@ function ChapterBatchTable({ chapterCount, contentType }: { chapterCount: number
           </tr>
         </thead>
         <tbody>
-          {chapters.map((index) => (
+          {chapters.map((chapter, index) => (
             <tr key={index} className="border-t border-white/10">
               <td className="px-3 py-2 align-top">
-                <input name={`chapter.${index}.position`} type="number" min="1" defaultValue={index + 1} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+                <input name={`chapter.${index}.position`} type="number" min="1" defaultValue={chapter.position} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
               </td>
               <td className="px-3 py-2 align-top">
-                <input name={`chapter.${index}.title`} placeholder={`Capitulo ${index + 1}`} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+                <input name={`chapter.${index}.title`} defaultValue={chapter.title} placeholder={`Capitulo ${index + 1}`} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
               </td>
               {contentType === "AUDIO" ? (
                 <>
                   <td className="px-3 py-2 align-top">
-                    <input name={`chapter.${index}.startSec`} type="number" min="0" defaultValue={index * 60} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
+                    <input name={`chapter.${index}.startSec`} type="number" min="0" defaultValue={chapter.startSec} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
                   </td>
                   <td className="px-3 py-2 align-top">
-                    <input name={`chapter.${index}.endSec`} type="number" min="0" defaultValue={(index + 1) * 60} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
+                    <input name={`chapter.${index}.endSec`} type="number" min="0" defaultValue={chapter.endSec} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" />
                   </td>
                 </>
               ) : (

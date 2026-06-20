@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getGroupedChapterSummary } from "./chapter-grouping";
+import { getChapterPartsForDisplay, getGroupedChapterSummary, parseChapterParts } from "./chapter-grouping";
 
 test("getGroupedChapterSummary combines chapter titles and range", () => {
   const grouped = getGroupedChapterSummary([
@@ -16,6 +16,11 @@ test("getGroupedChapterSummary combines chapter titles and range", () => {
     startSec: 0,
     durationSec: 210,
     youtubeUrl: undefined,
+    chapterPartsJson: JSON.stringify([
+      { position: 1, title: "Abertura", startSec: 0, endSec: 60 },
+      { position: 2, title: "Conflito", startSec: 60, endSec: 180 },
+      { position: 3, title: "Virada", startSec: 180, endSec: 210 },
+    ]),
   });
 });
 
@@ -28,4 +33,34 @@ test("getGroupedChapterSummary sorts chapters by position before combining", () 
   assert.equal(grouped.title, "Primeiro, Segundo");
   assert.equal(grouped.position, 1);
   assert.equal(grouped.positionEnd, 2);
+});
+
+test("parseChapterParts returns normalized sorted parts", () => {
+  const parts = parseChapterParts(
+    JSON.stringify([
+      { position: 2, title: "Segundo", startSec: 60, endSec: 120 },
+      { position: 1, title: "Primeiro", startSec: 0, endSec: 60 },
+    ]),
+  );
+
+  assert.deepEqual(parts, [
+    { position: 1, title: "Primeiro", startSec: 0, endSec: 60 },
+    { position: 2, title: "Segundo", startSec: 60, endSec: 120 },
+  ]);
+});
+
+test("getChapterPartsForDisplay derives fallback parts for old grouped chapters", () => {
+  const parts = getChapterPartsForDisplay({
+    title: "Um, Dois",
+    position: 1,
+    positionEnd: 2,
+    startSec: 30,
+    durationSec: 120,
+    chapterPartsJson: "[]",
+  });
+
+  assert.deepEqual(parts, [
+    { position: 1, title: "Um", startSec: 30, endSec: 90 },
+    { position: 2, title: "Dois", startSec: 90, endSec: 150 },
+  ]);
 });

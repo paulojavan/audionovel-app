@@ -148,6 +148,7 @@ model Chapter {
   youtubeVideoId   String?
   coverUrl         String?
   startSec         Int                 @default(0)
+  chapterPartsJson String              @default("[]")
   transcriptJson   String              @default("[]")
   premiumOnly      Boolean             @default(false)
   published        Boolean             @default(true)

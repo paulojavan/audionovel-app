@@ -7,6 +7,13 @@ const cueSchema = z.object({
   text: z.string().min(1),
 });
 
+const chapterPartSchema = z.object({
+  position: z.number().int().min(1),
+  title: z.string().trim().min(1),
+  startSec: z.number().int().min(0),
+  endSec: z.number().int().min(0),
+});
+
 const optionalSafeMediaUrl = z
   .string()
   .trim()
@@ -23,7 +30,9 @@ export const chapterSchema = z.object({
   audioUrl: optionalSafeMediaUrl,
   youtubeUrl: z.string().url().optional().or(z.literal("")),
   coverUrl: optionalSafeMediaUrl,
+  positionEnd: z.number().int().min(1).nullable().optional(),
   startSec: z.number().int().min(0).default(0),
+  chapterParts: z.array(chapterPartSchema).optional().default([]),
   transcriptJson: z.string().optional().default("[]"),
   premiumOnly: z.boolean(),
   published: z.boolean(),

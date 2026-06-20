@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
+import { normalizeChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -23,6 +24,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         volumeId: parsed.data.volumeId,
         title: parsed.data.title,
         position: parsed.data.position,
+        positionEnd: parsed.data.positionEnd ?? null,
         contentType: parsed.data.contentType,
         durationSec: parsed.data.durationSec,
         audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
@@ -30,6 +32,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         youtubeVideoId,
         coverUrl: parsed.data.coverUrl || null,
         startSec: parsed.data.startSec,
+        chapterPartsJson: JSON.stringify(normalizeChapterParts(parsed.data.chapterParts)),
         transcriptJson: parsed.data.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(parsed.data.transcriptJson, parsed.data.title, parsed.data.durationSec)) : "[]",
         premiumOnly: parsed.data.premiumOnly,
         published: parsed.data.published,
