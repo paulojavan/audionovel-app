@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { calculateFixedPremiumUntil } from "@/lib/billing";
-import { parseCheckoutReference } from "@/lib/billing-checkout";
+import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
 import { getMercadoPagoPayment, verifyMercadoPagoWebhookSignature } from "@/lib/mercado-pago";
 import { prisma } from "@/lib/prisma";
 
@@ -50,8 +49,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  const reference = parseCheckoutReference(payment.external_reference);
-  if (!reference) {
+  const result = await applyApprovedMercadoPagoPayment(payment, { eventId });
+  if (result.status === "ignored") {
     await recordPaymentEvent({
       eventId,
       paymentId,
@@ -64,48 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true, ignored: "missing-reference" });
   }
 
-  const alreadyApplied = await prisma.paymentTransaction.findFirst({
-    where: { providerPaymentId: paymentId, status: "SUCCEEDED" },
-    select: { id: true },
-  });
-  if (alreadyApplied) return NextResponse.json({ received: true, duplicate: true });
-
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({
-      where: { id: reference.userId },
-      select: { premiumUntil: true },
-    });
-    const plan = await tx.subscriptionPlan.findUnique({
-      where: { id: reference.planId },
-      select: { name: true, amountCents: true, currency: true },
-    });
-    if (!user || !plan) return;
-
-    await tx.user.update({
-      where: { id: reference.userId },
-      data: {
-        plan: "PREMIUM",
-        subscriptionStatus: "ACTIVE",
-        premiumUntil: calculateFixedPremiumUntil(user.premiumUntil, reference.premiumDays),
-      },
-    });
-
-    await tx.paymentTransaction.upsert({
-      where: { providerEventId: eventId },
-      create: {
-        providerEventId: eventId,
-        providerPaymentId: paymentId,
-        userId: reference.userId,
-        amountCents: toCents(payment.transaction_amount) || plan.amountCents,
-        currency: (payment.currency_id ?? plan.currency).toLowerCase(),
-        status: "SUCCEEDED",
-        description: `Mercado Pago - ${plan.name} (${reference.premiumDays} dias)`,
-      },
-      update: {},
-    });
-  });
-
-  return NextResponse.json({ received: true });
+  return NextResponse.json({ received: true, status: result.status });
 }
 
 function parseWebhookBody(rawBody: string): MercadoPagoWebhookBody {

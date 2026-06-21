@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { BillingButton } from "@/components/billing-button";
+import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
+import { getApprovedCheckoutReturnPaymentId } from "@/lib/billing-return";
+import { getMercadoPagoPayment } from "@/lib/mercado-pago";
 import { formatPlanInterval, formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -10,13 +13,19 @@ import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-setti
 export default async function SubscriptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; premium?: string }>;
+  searchParams: Promise<{ checkout?: string; premium?: string; payment_id?: string; status?: string; collection_status?: string }>;
 }) {
-  const [{ checkout, premium }, session, subscriptionsEnabled] = await Promise.all([
+  const [params, session, subscriptionsEnabled] = await Promise.all([
     searchParams,
     getActiveServerSession(),
     getSystemSettingBoolean(SYSTEM_SETTING_KEYS.subscriptionsEnabled, true),
   ]);
+  const { checkout, premium } = params;
+  const returnPaymentId = getApprovedCheckoutReturnPaymentId(params);
+  if (returnPaymentId && session?.user?.id) {
+    await reconcileCheckoutReturnPayment(returnPaymentId, session.user.id);
+  }
+
   const [user, plans] = await Promise.all([
     session?.user?.id
       ? prisma.user.findUnique({
@@ -99,6 +108,18 @@ export default async function SubscriptionsPage({
       </section>
     </div>
   );
+}
+
+async function reconcileCheckoutReturnPayment(paymentId: string, userId: string) {
+  try {
+    const payment = await getMercadoPagoPayment(paymentId);
+    await applyApprovedMercadoPagoPayment(payment, {
+      expectedUserId: userId,
+      eventId: `mp-return-${paymentId}`,
+    });
+  } catch (error) {
+    console.error("Nao foi possivel reconciliar retorno do Mercado Pago.", error);
+  }
 }
 
 function PlanCard({
