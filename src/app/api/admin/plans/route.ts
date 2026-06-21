@@ -17,7 +17,6 @@ export async function POST(request: Request) {
       ...parsed.data,
       slug: await uniquePlanSlug(parsed.data.name),
       description: parsed.data.description || null,
-      stripePriceId: parsed.data.stripePriceId || null,
     },
   });
 

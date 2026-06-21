@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
@@ -38,7 +39,8 @@ export default async function LibraryPage() {
               <Link key={item.id} href={`/chapters/${item.chapterId}`} className="rounded-md bg-[#06272b] p-3 hover:bg-[#08353a]">
                 <h3 className="font-bold">{item.chapter.title}</h3>
                 <p className="text-sm text-zinc-400">
-                  {item.chapter.volume.novel.title} - {item.completed ? "visto" : `parou em ${item.positionSec}s`}
+                  {item.chapter.volume.novel.title} - {item.chapter.volume.title} - Vol. {item.chapter.volume.position} Cap.{" "}
+                  {getChapterPositionLabel(item.chapter.position, item.chapter.positionEnd)} - {item.completed ? "visto" : `parou em ${item.positionSec}s`}
                 </p>
               </Link>
             ))

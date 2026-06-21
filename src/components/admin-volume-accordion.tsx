@@ -118,9 +118,9 @@ export function AdminVolumeAccordion({ volumes }: { volumes: AdminVolume[] }) {
                 {message ? <p className="md:col-span-4 rounded-md bg-white/10 p-3 text-sm text-zinc-200">{message}</p> : null}
               </form>
             ) : null}
-            <div className="overflow-x-auto">
+            <div className="max-h-[430px] overflow-auto pr-2 scrollbar-thin">
               <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                <thead className="bg-[#202020] text-white">
+                <thead className="sticky top-0 z-10 bg-[#202020] text-white">
                   <tr>
                     <th className="px-4 py-3 font-black">Vol/Cap</th>
                     <th className="px-4 py-3 font-black">Titulo do Capitulo</th>

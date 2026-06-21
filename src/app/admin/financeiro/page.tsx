@@ -24,7 +24,7 @@ export default async function AdminFinancePage() {
               <div key={payment.id} className="grid gap-2 border-b border-white/10 p-3 text-sm last:border-b-0 md:grid-cols-[1fr_auto_auto_auto]">
                 <span>
                   <strong>{payment.user?.email ?? "Sem usuario"}</strong>
-                  <span className="block text-zinc-400">{payment.description ?? payment.stripePaymentId ?? payment.stripeEventId}</span>
+                  <span className="block text-zinc-400">{payment.description ?? payment.providerPaymentId ?? payment.providerEventId}</span>
                 </span>
                 <span>{payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)}</span>
                 <span>{payment.status}</span>

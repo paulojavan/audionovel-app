@@ -10,7 +10,6 @@ export const subscriptionPlanSchema = z
     active: z.boolean().default(true),
     allowCard: z.boolean().default(true),
     allowPix: z.boolean().default(false),
-    stripePriceId: z.string().trim().max(120).optional().or(z.literal("")),
     sortOrder: z.number().int().min(0).max(9999).default(0),
   })
   .refine((value) => value.allowCard || value.allowPix, {

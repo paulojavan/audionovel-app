@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { getNextChapterPosition } from "@/lib/admin-chapter-sequence";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getDurationFromRange, getGroupedChapterDuration, getGroupedChapterPositionEnd } from "@/lib/chapter-time";
 
@@ -9,6 +10,8 @@ type VolumeOption = {
   id: string;
   title: string;
   position: number;
+  nextChapterPosition?: number;
+  chapters?: Array<{ position: number; positionEnd: number | null }>;
 };
 
 type TagOption = {
@@ -453,6 +456,8 @@ export function AdminNovelPanelForms({
   const [chapterCount, setChapterCount] = useState(3);
   const [contentType, setContentType] = useState<MediaType>("AUDIO");
   const [pending, startTransition] = useTransition();
+  const selectedVolume = volumes.find((volume) => volume.id === selectedVolumeId);
+  const nextChapterPosition = selectedVolume?.nextChapterPosition ?? getNextChapterPosition(selectedVolume?.chapters ?? []);
 
   useEffect(() => {
     function openChapterForm(event: Event) {
@@ -603,11 +608,11 @@ export function AdminNovelPanelForms({
             <textarea name="transcriptJson" defaultValue={defaultTranscript} className="min-h-32 rounded-md border border-white/10 bg-black px-3 py-2 font-mono text-xs" />
           </>
         ) : null}
-        <div className="grid gap-3">
+        <div className="grid gap-3 overflow-x-auto pb-2 scrollbar-thin">
           {mode === "batch" ? (
-            <ChapterBatchTable chapterCount={chapterCount} contentType={contentType} />
+            <ChapterBatchTable chapterCount={chapterCount} contentType={contentType} startPosition={nextChapterPosition} />
           ) : (
-            <ChapterBlockFields index={0} contentType={contentType} />
+            <ChapterBlockFields index={0} contentType={contentType} startPosition={nextChapterPosition} />
           )}
         </div>
         <PublishFields defaultPremium={false} defaultPublished />
@@ -666,18 +671,18 @@ function getChapterPartsFromForm(data: FormData, count: number) {
   }));
 }
 
-function ChapterBatchTable({ chapterCount, chapterParts, contentType }: { chapterCount?: number; chapterParts?: ChapterPartFormData[]; contentType: MediaType }) {
+function ChapterBatchTable({ chapterCount, chapterParts, contentType, startPosition = 1 }: { chapterCount?: number; chapterParts?: ChapterPartFormData[]; contentType: MediaType; startPosition?: number }) {
   const chapters = chapterParts ?? Array.from({ length: chapterCount ?? 1 }, (_, index) => ({
-    position: index + 1,
-    title: `Capitulo ${index + 1}`,
+    position: startPosition + index,
+    title: `Capitulo ${startPosition + index}`,
     startSec: index * 60,
     endSec: (index + 1) * 60,
   }));
 
   return (
-    <div className="overflow-x-auto rounded-md bg-black/30">
-      <table className="min-w-full table-fixed border-collapse text-sm">
-        <thead className="bg-black/40 text-left text-xs uppercase text-zinc-400">
+    <div className="max-h-[430px] overflow-auto rounded-md bg-black/30 pb-2 pr-2 scrollbar-thin">
+      <table className="min-w-[760px] table-fixed border-collapse text-sm">
+        <thead className="sticky top-0 z-10 bg-black/80 text-left text-xs uppercase text-zinc-400">
           <tr>
             <th className="w-24 px-3 py-2">Numero</th>
             <th className="min-w-56 px-3 py-2">Titulo</th>
@@ -722,15 +727,17 @@ function ChapterBatchTable({ chapterCount, chapterParts, contentType }: { chapte
   );
 }
 
-function ChapterBlockFields({ index, contentType }: { index: number; contentType: MediaType }) {
+function ChapterBlockFields({ index, contentType, startPosition = 1 }: { index: number; contentType: MediaType; startPosition?: number }) {
+  const chapterPosition = startPosition + index;
+
   return (
-    <fieldset className="grid gap-2 rounded-md bg-black/30 p-3">
-      <legend className="px-1 text-sm font-bold text-zinc-300">Capitulo {index + 1}</legend>
+    <fieldset className="min-w-[720px] grid gap-2 rounded-md bg-black/30 p-3">
+      <legend className="px-1 text-sm font-bold text-zinc-300">Capitulo {chapterPosition}</legend>
       <input name={`chapter.${index}.title`} placeholder="Titulo" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
       <div className={`grid gap-2 ${contentType === "YOUTUBE" ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
         <label className="grid gap-1 text-sm text-zinc-300">
           Numero do capitulo
-          <input name={`chapter.${index}.position`} type="number" min="1" defaultValue={index + 1} className="rounded-md border border-white/10 bg-black px-3 py-2" required />
+          <input name={`chapter.${index}.position`} type="number" min="1" defaultValue={chapterPosition} className="rounded-md border border-white/10 bg-black px-3 py-2" required />
         </label>
         {contentType === "AUDIO" ? (
           <>

@@ -11,7 +11,7 @@ export default async function AdminPlansPage() {
     <section className="grid gap-5">
       <div>
         <h2 className="text-2xl font-bold">Planos de assinatura</h2>
-        <p className="mt-1 text-sm text-zinc-400">Cadastre valores, periodos e metodos de pagamento aceitos no Stripe.</p>
+        <p className="mt-1 text-sm text-zinc-400">Cadastre valores, periodos e metodos de pagamento aceitos no Mercado Pago.</p>
       </div>
 
       <div className="grid gap-3">
@@ -48,7 +48,6 @@ export default async function AdminPlansPage() {
                   active: plan.active,
                   allowCard: plan.allowCard,
                   allowPix: plan.allowPix,
-                  stripePriceId: plan.stripePriceId ?? "",
                   sortOrder: plan.sortOrder,
                 }}
               />

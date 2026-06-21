@@ -17,7 +17,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     data: {
       ...parsed.data,
       description: parsed.data.description || null,
-      stripePriceId: parsed.data.stripePriceId || null,
     },
   });
 

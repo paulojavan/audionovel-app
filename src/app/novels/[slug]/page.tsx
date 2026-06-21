@@ -44,7 +44,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
     session?.user?.id
       ? prisma.listeningProgress.findMany({
           where: { userId: session.user.id, chapterId: { in: chapterIds } },
-          select: { chapterId: true },
+          select: { chapterId: true, updatedAt: true },
         })
       : Promise.resolve([]),
     session?.user?.id
@@ -61,6 +61,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
       : Promise.resolve(null),
   ]);
   const listenedChapterIds = new Set(listenedProgress.map((item) => item.chapterId));
+  const lastListenedChapterId = listenedProgress.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.chapterId ?? null;
   const isLoggedIn = Boolean(session?.user?.id && !session.user.isBlocked);
   const canUseOffline = hasPremiumAccess(session?.user);
 
@@ -121,6 +122,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
             premiumOnly: chapter.premiumOnly,
             createdAt: chapter.createdAt.toISOString(),
             listened: listenedChapterIds.has(chapter.id),
+            lastListened: lastListenedChapterId === chapter.id,
           })),
         }))}
         canUseOffline={canUseOffline}

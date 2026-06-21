@@ -1,4 +1,5 @@
 import type { OfflineItem } from "./offline-items";
+import { assertOfflineCryptoSupported } from "./offline-crypto";
 import { removeExpiredOfflineItems } from "./offline-items";
 
 const DB_NAME = "audio-novel-br-audio-cache";
@@ -12,6 +13,7 @@ type AudioCacheMode = "temporary" | "offline";
 
 type AudioCacheOptions = {
   mode?: AudioCacheMode;
+  onProgress?: (progress: { loadedBytes: number; totalBytes: number | null; percent: number | null }) => void;
 };
 
 type AudioRecord = {
@@ -53,14 +55,16 @@ function openAudioDb() {
 }
 
 async function getCryptoKey() {
+  assertOfflineCryptoSupported();
+  const cryptoApi = globalThis.crypto;
   const existing = localStorage.getItem(KEY_NAME);
   if (existing) {
-    return crypto.subtle.importKey("raw", base64ToArrayBuffer(existing), "AES-GCM", false, ["encrypt", "decrypt"]);
+    return cryptoApi.subtle.importKey("raw", base64ToArrayBuffer(existing), "AES-GCM", false, ["encrypt", "decrypt"]);
   }
 
-  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const raw = cryptoApi.getRandomValues(new Uint8Array(32));
   localStorage.setItem(KEY_NAME, arrayBufferToBase64(raw.buffer));
-  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  return cryptoApi.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 async function readRecord(id: string) {
@@ -123,6 +127,45 @@ function getCacheId(chapterId: string, mode: AudioCacheMode) {
 
 function getCacheTtl(mode: AudioCacheMode) {
   return mode === "offline" ? SEVEN_DAYS_MS : TWO_DAYS_MS;
+}
+
+async function readResponseBuffer(response: Response, onProgress?: AudioCacheOptions["onProgress"]) {
+  const totalBytes = Number(response.headers.get("content-length"));
+  const total = Number.isFinite(totalBytes) && totalBytes > 0 ? totalBytes : null;
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    onProgress?.({ loadedBytes: buffer.byteLength, totalBytes: total, percent: total ? 100 : null });
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+  onProgress?.({ loadedBytes: 0, totalBytes: total, percent: total ? 0 : null });
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    chunks.push(value);
+    loadedBytes += value.byteLength;
+    onProgress?.({
+      loadedBytes,
+      totalBytes: total,
+      percent: total ? Math.min(100, Math.round((loadedBytes / total) * 100)) : null,
+    });
+  }
+
+  const buffer = new Uint8Array(loadedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  onProgress?.({ loadedBytes, totalBytes: total, percent: total ? 100 : null });
+  return buffer.buffer;
 }
 
 export async function cleanupExpiredAudioCache() {
@@ -193,6 +236,8 @@ export async function getSavedOfflineItems() {
 }
 
 export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string, options: AudioCacheOptions = {}) {
+  assertOfflineCryptoSupported();
+  const cryptoApi = globalThis.crypto;
   await cleanupExpiredAudioCache();
   const mode = options.mode ?? "temporary";
   const cacheId = getCacheId(chapterId, mode);
@@ -200,7 +245,7 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
   const cached = await readRecord(cacheId);
 
   if (cached && cached.expiresAt > Date.now()) {
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: cached.iv }, key, cached.data);
+    const decrypted = await cryptoApi.subtle.decrypt({ name: "AES-GCM", iv: cached.iv }, key, cached.data);
     return URL.createObjectURL(new Blob([decrypted], { type: cached.mimeType }));
   }
 
@@ -210,9 +255,9 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
   if (!response.ok) throw new Error("Nao foi possivel baixar o audio.");
 
   const mimeType = response.headers.get("content-type") ?? "audio/mpeg";
-  const buffer = await response.arrayBuffer();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, buffer);
+  const buffer = await readResponseBuffer(response, options.onProgress);
+  const iv = cryptoApi.getRandomValues(new Uint8Array(12));
+  const encrypted = await cryptoApi.subtle.encrypt({ name: "AES-GCM", iv }, key, buffer);
 
   await writeRecord({
     id: cacheId,

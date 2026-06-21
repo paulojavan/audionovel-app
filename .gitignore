@@ -44,6 +44,17 @@ next-env.d.ts
 
 /src/generated/prisma
 
+# local project notes and SQL snippets
+/docs/
+
+# local agent/tool state
+/.agents/
+/.codex/
+/.kiro/
+/.qoder/
+/.qwen/
+/.trae/
+
 # local database files
 prisma/*.db
 prisma/*.db-journal

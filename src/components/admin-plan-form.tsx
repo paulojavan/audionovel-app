@@ -13,7 +13,6 @@ type PlanFormData = {
   active: boolean;
   allowCard: boolean;
   allowPix: boolean;
-  stripePriceId: string;
   sortOrder: number;
 };
 
@@ -26,7 +25,6 @@ const blankPlan: PlanFormData = {
   active: true,
   allowCard: true,
   allowPix: false,
-  stripePriceId: "",
   sortOrder: 0,
 };
 
@@ -117,16 +115,7 @@ export function AdminPlanForm({ plan }: { plan?: PlanFormData }) {
         />
       </label>
 
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px]">
-        <label className="grid gap-1 text-sm font-bold text-zinc-300">
-          Stripe Price ID opcional
-          <input
-            value={form.stripePriceId}
-            onChange={(event) => updateField("stripePriceId", event.target.value)}
-            placeholder="price_..."
-            className="rounded-md border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-[#18b7bd]"
-          />
-        </label>
+      <div className="grid gap-3 md:grid-cols-[120px]">
         <label className="grid gap-1 text-sm font-bold text-zinc-300">
           Ordem
           <input

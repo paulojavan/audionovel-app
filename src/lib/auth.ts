@@ -118,11 +118,23 @@ export const authOptions: NextAuthOptions = {
       if (token.id && shouldRefreshUserState) {
         const userState = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { email: true, isBlocked: true, name: true },
+          select: {
+            email: true,
+            isBlocked: true,
+            name: true,
+            plan: true,
+            role: true,
+            subscriptionStatus: true,
+            premiumUntil: true,
+          },
         });
         token.email = userState?.email ?? token.email;
         token.isBlocked = userState?.isBlocked ?? true;
         token.name = userState?.name ?? token.name;
+        token.plan = userState?.plan ?? token.plan;
+        token.role = userState?.role ?? token.role;
+        token.subscriptionStatus = userState?.subscriptionStatus ?? token.subscriptionStatus;
+        token.premiumUntil = userState?.premiumUntil?.toISOString() ?? token.premiumUntil;
       }
 
       return token;

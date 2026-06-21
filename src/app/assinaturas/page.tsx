@@ -46,6 +46,7 @@ export default async function SubscriptionsPage({
       ) : null}
       {!subscriptionsEnabled ? <StatusMessage tone="warning">Compras de assinaturas estao temporariamente desativadas.</StatusMessage> : null}
       {checkout === "success" ? <StatusMessage tone="success">Pagamento aprovado. Sua assinatura sera liberada em instantes.</StatusMessage> : null}
+      {checkout === "pending" ? <StatusMessage tone="warning">Pagamento pendente. Assim que o Mercado Pago aprovar, o premium sera liberado.</StatusMessage> : null}
       {checkout === "cancel" ? <StatusMessage tone="warning">Pagamento cancelado. Nenhuma cobranca foi feita.</StatusMessage> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -93,7 +94,7 @@ export default async function SubscriptionsPage({
       <section className="mt-8 rounded-lg bg-[#06272b] p-5 text-sm text-zinc-300">
         <h2 className="text-lg font-bold text-white">Pagamento</h2>
         <p className="mt-2">
-          Em producao, o pagamento e processado pelo Stripe. No ambiente local de desenvolvimento, se o Stripe nao estiver disponivel, o sistema ativa uma assinatura de teste para permitir validar o fluxo.
+          Em producao, o pagamento e processado pelo Mercado Pago. No ambiente local de desenvolvimento, se o Mercado Pago nao estiver disponivel, o sistema ativa uma assinatura de teste para permitir validar o fluxo.
         </p>
       </section>
     </div>

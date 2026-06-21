@@ -14,6 +14,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Áudio Novel BR",
   description: "Ouça novels com áudio, texto sincronizado, assinatura premium e modo offline.",
+  icons: {
+    icon: "/logo-audio-novel-br.png",
+    shortcut: "/logo-audio-novel-br.png",
+    apple: "/logo-audio-novel-br.png",
+  },
 };
 
 export default async function RootLayout({

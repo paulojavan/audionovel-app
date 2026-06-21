@@ -108,7 +108,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         Voltar para {access.chapter.volume.novel.title}
       </Link>
       <section className="my-6 overflow-hidden rounded-lg bg-[linear-gradient(135deg,#18b7bd_0%,#06272b_48%)] p-5 md:p-8">
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_170px] md:items-stretch">
+        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_170px] md:items-start">
           <div className="flex min-w-0 flex-col justify-between gap-5">
             <div>
               <p className="text-sm font-bold uppercase text-black/70 md:text-zinc-300">{access.chapter.volume.novel.title}</p>
@@ -139,7 +139,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          <div className="relative min-h-52 overflow-hidden rounded-lg bg-black/30 shadow-2xl shadow-black/30 md:min-h-0">
+          <div className="relative aspect-square w-full max-w-[220px] overflow-hidden rounded-lg bg-black/30 shadow-2xl shadow-black/30 md:max-w-none">
             <Image
               src={chapterCoverUrl}
               alt={`Capa de ${access.chapter.volume.novel.title}`}

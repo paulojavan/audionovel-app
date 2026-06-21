@@ -2,7 +2,9 @@
 
 import { ChevronDown, FastForward, Pause, Play, Rewind, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
 import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio, saveOfflineItem } from "@/lib/audio-cache";
+import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import { mergeOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
 export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
@@ -17,8 +19,9 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
   const [message, setMessage] = useState("");
   const [availableItems, setAvailableItems] = useState<OfflineItem[] | null>(null);
   const [pending, startTransition] = useTransition();
+  const offlineCryptoSupported = useOfflineCryptoSupported();
   const checkedItems = availableItems ?? [];
-  const checkingCache = availableItems === null;
+  const checkingCache = offlineCryptoSupported && availableItems === null;
   const activeItem = checkedItems.find((item) => item.id === activeId);
   const groupedItems = groupByNovel(checkedItems);
 
@@ -30,6 +33,12 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
 
   useEffect(() => {
     let active = true;
+
+    if (!offlineCryptoSupported) {
+      return () => {
+        active = false;
+      };
+    }
 
     getSavedOfflineItems()
       .then(async (localItems) => {
@@ -50,16 +59,16 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
         if (!active) return;
         setAvailableItems(validItems);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setAvailableItems([]);
-        setMessage("Nao foi possivel verificar os audios offline deste dispositivo.");
+        setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel verificar os audios offline deste dispositivo.");
       });
 
     return () => {
       active = false;
     };
-  }, [items]);
+  }, [items, offlineCryptoSupported]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -80,6 +89,7 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
       const source = `/api/chapters/${item.chapterId}/audio?offline=${encodeURIComponent(item.cacheKey)}`;
 
       try {
+        if (!offlineCryptoSupported) throw new OfflineCryptoUnavailableError();
         const hasCache = await hasValidEncryptedAudio(item.chapterId, "offline");
         if (!hasCache) {
           setAvailableItems((current) => (current ?? []).filter((savedItem) => savedItem.id !== item.id));
@@ -105,8 +115,8 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
               });
           }
         });
-      } catch {
-        setMessage("Nao foi possivel abrir este audio offline. Tente salvar novamente na pagina da novel.");
+      } catch (error) {
+        setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel abrir este audio offline. Tente salvar novamente na pagina da novel.");
       }
     });
   }
@@ -229,7 +239,9 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
       </div>
 
       <div className="grid gap-3">
-        {checkingCache ? (
+        {!offlineCryptoSupported ? (
+          <p className="rounded-md bg-[#06272b] p-4 text-zinc-400">{OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE}</p>
+        ) : checkingCache ? (
           <p className="rounded-md bg-[#06272b] p-4 text-zinc-400">Verificando audios offline salvos neste dispositivo...</p>
         ) : groupedItems.length ? (
           groupedItems.map((group, index) => (

@@ -28,7 +28,7 @@ export async function requireUser() {
       premiumUntil: true,
       email: true,
       name: true,
-      stripeCustomerId: true,
+      paymentProviderCustomerId: true,
       isBlocked: true,
     },
   });

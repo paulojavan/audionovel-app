@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AdminNovelPanelForms } from "@/components/admin-content-forms";
 import { AdminDeleteButton } from "@/components/admin-delete-button";
 import { AdminVolumeAccordion } from "@/components/admin-volume-accordion";
+import { getNextChapterPosition } from "@/lib/admin-chapter-sequence";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminNovelPanelPage({ params }: { params: Promise<{ id: string }> }) {
@@ -93,7 +94,15 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
 
       <section>
         <h2 className="mb-3 text-2xl font-bold">Adicionar conteudo nesta novel</h2>
-        <AdminNovelPanelForms novelId={novel.id} volumes={novel.volumes} />
+        <AdminNovelPanelForms
+          novelId={novel.id}
+          volumes={novel.volumes.map((volume) => ({
+            id: volume.id,
+            title: volume.title,
+            position: volume.position,
+            nextChapterPosition: getNextChapterPosition(volume.chapters),
+          }))}
+        />
       </section>
     </div>
   );
