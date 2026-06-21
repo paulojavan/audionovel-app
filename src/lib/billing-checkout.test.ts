@@ -55,6 +55,28 @@ test("plano de cartao cria preferencia Mercado Pago sem pix", () => {
   assert.equal(params.payment_methods?.installments, 12);
 });
 
+test("normaliza origem com barra final nas urls do Mercado Pago", () => {
+  const params = buildMercadoPagoPreferencePayload({
+    origin: "https://audionovelbr.qzz.io/",
+    userId,
+    userEmail,
+    userName,
+    plan: {
+      id: "plan_pix",
+      name: "Assinatura 30 dias PIX",
+      description: null,
+      amountCents: 800,
+      currency: "brl",
+      interval: "month",
+      allowCard: false,
+      allowPix: true,
+    },
+  });
+
+  assert.equal(params.back_urls.success, "https://audionovelbr.qzz.io/assinaturas?checkout=success");
+  assert.equal(params.notification_url, "https://audionovelbr.qzz.io/api/billing/webhook");
+});
+
 test("identifica plano apenas pix pelas flags do plano", () => {
   assert.equal(isPixOnlyPlan({ allowCard: false, allowPix: true }), true);
   assert.equal(isPixOnlyPlan({ allowCard: true, allowPix: false }), false);

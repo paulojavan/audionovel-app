@@ -38,6 +38,7 @@ export function buildMercadoPagoPreferencePayload({
   userName,
   plan,
 }: CheckoutUserInput): MercadoPagoPreferencePayload {
+  const baseOrigin = normalizeCheckoutOrigin(origin);
   const premiumDays = String(getFixedPremiumDays(plan));
   const metadata = {
     user_id: userId,
@@ -62,11 +63,11 @@ export function buildMercadoPagoPreferencePayload({
     },
     external_reference: buildCheckoutReference(userId, plan.id, premiumDays),
     metadata,
-    notification_url: `${origin}/api/billing/webhook`,
+    notification_url: `${baseOrigin}/api/billing/webhook`,
     back_urls: {
-      success: `${origin}/assinaturas?checkout=success`,
-      failure: `${origin}/assinaturas?checkout=cancel`,
-      pending: `${origin}/assinaturas?checkout=pending`,
+      success: `${baseOrigin}/assinaturas?checkout=success`,
+      failure: `${baseOrigin}/assinaturas?checkout=cancel`,
+      pending: `${baseOrigin}/assinaturas?checkout=pending`,
     },
     auto_return: "approved",
     payment_methods: getPaymentMethods(plan),
@@ -75,6 +76,11 @@ export function buildMercadoPagoPreferencePayload({
 
 export function buildCheckoutReference(userId: string, planId: string, premiumDays: string | number) {
   return `user:${userId};plan:${planId};days:${premiumDays}`;
+}
+
+export function normalizeCheckoutOrigin(origin: string) {
+  const normalized = origin.trim().replace(/\/+$/, "");
+  return normalized || "http://localhost:3000";
 }
 
 export function parseCheckoutReference(reference: string | null | undefined) {
