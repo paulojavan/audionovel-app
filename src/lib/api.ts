@@ -1,21 +1,14 @@
 import { getServerSession } from "next-auth";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { authOptions } from "./auth";
-import { validateDeviceSession } from "./device-session";
 import { prisma } from "./prisma";
+import { hasActiveSessionUser } from "./session-state";
 import { hasPremiumAccess } from "./subscription";
 
 export async function requireUser() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!hasActiveSessionUser(session)) {
     return { error: NextResponse.json({ error: "Não autenticado." }, { status: 401 }) };
-  }
-
-  const headerStore = await headers();
-  const sessionValidation = await validateDeviceSession(session.user.sessionId, Object.fromEntries(headerStore));
-  if (!sessionValidation.valid) {
-    return { error: NextResponse.json({ error: "Sessao expirada ou revogada. Entre novamente." }, { status: 401 }) };
   }
 
   const user = await prisma.user.findUnique({
