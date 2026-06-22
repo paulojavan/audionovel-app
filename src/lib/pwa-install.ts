@@ -20,5 +20,7 @@ export function getPwaInstallPromptState({
 }
 
 export function isIosUserAgent(userAgent: string) {
-  return /iPad|iPhone|iPod/.test(userAgent);
+  if (/iPad|iPhone|iPod/.test(userAgent)) return true;
+  if (userAgent.includes("Mac") && "ontouchstart" in globalThis) return true;
+  return false;
 }

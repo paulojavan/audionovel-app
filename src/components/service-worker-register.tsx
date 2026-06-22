@@ -24,9 +24,16 @@ export function ServiceWorkerRegister() {
           const worker = registration.installing;
           if (!worker) return;
 
+          let hasDispatched = false;
           worker.addEventListener("statechange", () => {
-            if (worker.state === "installed" && navigator.serviceWorker.controller) {
-              window.dispatchEvent(new CustomEvent("pwa-update-available"));
+            if (worker.state === "installed") {
+              if (navigator.serviceWorker.controller && !hasDispatched) {
+                hasDispatched = true;
+                window.dispatchEvent(new CustomEvent("pwa-update-available"));
+              }
+              if (!navigator.serviceWorker.controller) {
+                window.dispatchEvent(new CustomEvent("pwa-update-available"));
+              }
             }
           });
         });

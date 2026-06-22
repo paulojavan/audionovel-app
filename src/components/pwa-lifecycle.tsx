@@ -16,9 +16,10 @@ const INSTALL_DISMISSED_KEY = "audio-novel-br-install-dismissed";
 export function PwaLifecycle() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(true);
-  const [installDismissed, setInstallDismissed] = useState(true);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [installDismissed, setInstallDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -30,12 +31,12 @@ export function PwaLifecycle() {
       setIsStandalone(standalone);
       setIsIos(isIosUserAgent(navigator.userAgent));
       setInstallDismissed(localStorage.getItem(INSTALL_DISMISSED_KEY) === "1");
+      setMounted(true);
     });
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setPromptEvent(event as BeforeInstallPromptEvent);
-      setInstallDismissed(false);
     };
     const handleAppInstalled = () => {
       setPromptEvent(null);
@@ -65,6 +66,8 @@ export function PwaLifecycle() {
       }),
     [installDismissed, isIos, isStandalone, promptEvent],
   );
+
+  if (!mounted) return null;
 
   if (updateAvailable) {
     return (

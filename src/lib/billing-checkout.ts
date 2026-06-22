@@ -116,7 +116,8 @@ export function getCheckoutErrorMessage(error: unknown) {
 function getPaymentMethods(plan: Pick<CheckoutPlan, "allowCard" | "allowPix">) {
   if (isPixOnlyPlan(plan)) {
     return {
-      excluded_payment_types: [{ id: "credit_card" }, { id: "debit_card" }, { id: "ticket" }],
+      excluded_payment_methods: [{ id: "credit_card" }, { id: "debit_card" }],
+      excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
       installments: 1,
     };
   }
@@ -124,13 +125,13 @@ function getPaymentMethods(plan: Pick<CheckoutPlan, "allowCard" | "allowPix">) {
   if (isCardOnlyPlan(plan)) {
     return {
       excluded_payment_methods: [{ id: "pix" }],
-      excluded_payment_types: [{ id: "ticket" }, { id: "bank_transfer" }],
+      excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
       installments: 12,
     };
   }
 
   return {
-    excluded_payment_types: [{ id: "ticket" }],
+    excluded_payment_types: [{ id: "ticket" }, { id: "atm" }],
     installments: 12,
   };
 }
