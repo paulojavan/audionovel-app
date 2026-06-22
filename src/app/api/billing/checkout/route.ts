@@ -61,17 +61,24 @@ export async function POST(request: Request) {
       },
     });
 
-    const preference = await createMercadoPagoPreference(
-      buildMercadoPagoPreferencePayload({
-        origin,
-        userId: auth.user.id,
-        userEmail: auth.user.email,
-        userName: auth.user.name,
-        checkoutReference: checkoutIntent.id,
-        plan,
-      }),
-      { idempotencyKey: `checkout-${auth.user.id}-${plan.id}-${Date.now()}` },
-    );
+    const preferencePayload = buildMercadoPagoPreferencePayload({
+      origin,
+      userId: auth.user.id,
+      userEmail: auth.user.email,
+      userName: auth.user.name,
+      checkoutReference: checkoutIntent.id,
+      plan,
+    });
+
+    console.info("Mercado Pago checkout origin", {
+      origin,
+      notificationUrl: preferencePayload.notification_url,
+      backUrls: preferencePayload.back_urls,
+    });
+
+    const preference = await createMercadoPagoPreference(preferencePayload, {
+      idempotencyKey: `checkout-${auth.user.id}-${plan.id}-${Date.now()}`,
+    });
 
     const url = preference.init_point ?? preference.sandbox_init_point;
     if (!url) return NextResponse.json({ error: "Mercado Pago nao retornou URL de pagamento." }, { status: 502 });
