@@ -77,6 +77,11 @@ async function requestJson(method: string, endpoint: string, payload: Record<str
   if (!response.ok) throw new Error(data.error ?? "Nao foi possivel salvar.");
 }
 
+function cleanYouTubeUrl(url: string) {
+  const ampIndex = url.indexOf("&");
+  return ampIndex === -1 ? url : url.substring(0, ampIndex);
+}
+
 function getString(data: FormData, key: string) {
   return String(data.get(key) ?? "");
 }
@@ -132,7 +137,7 @@ export function AdminChapterEditForm({
               positionEnd: isEditingGroupedAudio ? getGroupedChapterPositionEnd(nextChapterParts.map((part) => part.position)) : null,
               durationSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio ? groupedDuration : getNumber(data, "durationSec"),
               audioUrl: getString(data, "audioUrl"),
-              youtubeUrl: getString(data, "youtubeUrl"),
+              youtubeUrl: cleanYouTubeUrl(getString(data, "youtubeUrl")),
               startSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio && firstPart ? firstPart.startSec : getNumber(data, "startSec"),
               chapterParts: isEditingGroupedAudio ? nextChapterParts : [],
               transcriptJson: getString(data, "transcriptJson"),
@@ -174,7 +179,7 @@ export function AdminChapterEditForm({
         </>
       )}
       {contentType === "YOUTUBE" ? (
-        <input name="youtubeUrl" defaultValue={chapter.youtubeUrl ?? ""} placeholder="Link do YouTube" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
+        <input name="youtubeUrl" defaultValue={chapter.youtubeUrl ?? ""} placeholder="Link do YouTube" className="rounded-md border border-white/10 bg-black px-3 py-2" required onBlur={(e) => { e.target.value = cleanYouTubeUrl(e.target.value); }} />
       ) : (
         <>
           <input name="audioUrl" defaultValue={chapter.audioUrl ?? ""} placeholder="URL privada/proxy do audio" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
@@ -569,7 +574,7 @@ export function AdminNovelPanelForms({
                         ? getDurationFromRange(getNumber(data, `chapter.${index}.startSec`), getNumber(data, `chapter.${index}.endSec`))
                         : getNumber(data, `chapter.${index}.durationSec`),
                   audioUrl: contentType === "AUDIO" ? sharedAudioUrl : "",
-                  youtubeUrl: contentType === "YOUTUBE" ? getString(data, `chapter.${index}.youtubeUrl`) : "",
+                  youtubeUrl: contentType === "YOUTUBE" ? cleanYouTubeUrl(getString(data, `chapter.${index}.youtubeUrl`)) : "",
                   chapterParts: mode === "batch" && contentType === "AUDIO" ? batchParts : [],
                   transcriptJson,
                 })),
@@ -716,7 +721,7 @@ function ChapterBatchTable({ chapterCount, chapterParts, contentType, startPosit
                 </>
               ) : (
                 <td className="px-3 py-2 align-top">
-                  <input name={`chapter.${index}.youtubeUrl`} placeholder="Link do YouTube" className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+                  <input name={`chapter.${index}.youtubeUrl`} placeholder="Link do YouTube" className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required onBlur={(e) => { e.target.value = cleanYouTubeUrl(e.target.value); }} />
                 </td>
               )}
             </tr>
@@ -752,7 +757,7 @@ function ChapterBlockFields({ index, contentType, startPosition = 1 }: { index: 
           </>
         ) : null}
       </div>
-      {contentType === "YOUTUBE" ? <input name={`chapter.${index}.youtubeUrl`} placeholder="Link do YouTube" className="rounded-md border border-white/10 bg-black px-3 py-2" required /> : null}
+      {contentType === "YOUTUBE" ? <input name={`chapter.${index}.youtubeUrl`} placeholder="Link do YouTube" className="rounded-md border border-white/10 bg-black px-3 py-2" required onBlur={(e) => { e.target.value = cleanYouTubeUrl(e.target.value); }} /> : null}
     </fieldset>
   );
 }

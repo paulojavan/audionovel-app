@@ -23,7 +23,7 @@ const optionalSafeMediaUrl = z
 
 export const chapterSchema = z.object({
   volumeId: z.string().min(1),
-  title: z.string().trim().min(2).max(180),
+  title: z.string().trim().min(2).max(2000),
   position: z.number().int().min(1),
   contentType: z.enum(["AUDIO", "YOUTUBE"]).default("AUDIO"),
   durationSec: z.number().int().min(0).default(0),
@@ -41,6 +41,11 @@ export const chapterSchema = z.object({
 export const chapterBatchSchema = z.object({
   chapters: z.array(chapterSchema).min(1).max(50),
 });
+
+export function cleanYouTubeUrl(url: string) {
+  const ampIndex = url.indexOf("&");
+  return ampIndex === -1 ? url : url.substring(0, ampIndex);
+}
 
 export function getYouTubeVideoId(url: string) {
   const parsed = new URL(url);

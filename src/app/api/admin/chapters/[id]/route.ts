@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
+import { chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { normalizeChapterParts } from "@/lib/chapter-grouping";
@@ -16,7 +16,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!parsed.success) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
 
   try {
-    const youtubeVideoId = parsed.data.contentType === "YOUTUBE" && parsed.data.youtubeUrl ? getYouTubeVideoId(parsed.data.youtubeUrl) : null;
+    const cleanedUrl = parsed.data.youtubeUrl ? cleanYouTubeUrl(parsed.data.youtubeUrl) : parsed.data.youtubeUrl;
+    const youtubeVideoId = parsed.data.contentType === "YOUTUBE" && cleanedUrl ? getYouTubeVideoId(cleanedUrl) : null;
     if (parsed.data.contentType === "YOUTUBE" && !youtubeVideoId) throw new Error("youtube");
     if (parsed.data.contentType === "AUDIO" && !parsed.data.audioUrl) throw new Error("audio");
 
@@ -30,7 +31,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         contentType: parsed.data.contentType,
         durationSec: parsed.data.durationSec,
         audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
-        youtubeUrl: parsed.data.contentType === "YOUTUBE" ? parsed.data.youtubeUrl : null,
+        youtubeUrl: parsed.data.contentType === "YOUTUBE" ? cleanedUrl : null,
         youtubeVideoId,
         coverUrl: parsed.data.coverUrl || null,
         startSec: parsed.data.startSec,

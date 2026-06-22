@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import type { z } from "zod";
-import { chapterBatchSchema, chapterSchema, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
+import { chapterBatchSchema, chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireUser } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
   try {
     const created = await prisma.$transaction(
       chapters.map((chapter) => {
-        const youtubeVideoId = chapter.contentType === "YOUTUBE" && chapter.youtubeUrl ? getYouTubeVideoId(chapter.youtubeUrl) : null;
+        const cleanedUrl = chapter.youtubeUrl ? cleanYouTubeUrl(chapter.youtubeUrl) : chapter.youtubeUrl;
+        const youtubeVideoId = chapter.contentType === "YOUTUBE" && cleanedUrl ? getYouTubeVideoId(cleanedUrl) : null;
         if (chapter.contentType === "YOUTUBE" && !youtubeVideoId) throw new Error("youtube");
         if (chapter.contentType === "AUDIO" && !chapter.audioUrl) throw new Error("audio");
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
             contentType: chapter.contentType,
             durationSec: chapter.durationSec,
             audioUrl: chapter.contentType === "AUDIO" ? chapter.audioUrl : null,
-            youtubeUrl: chapter.contentType === "YOUTUBE" ? chapter.youtubeUrl : null,
+            youtubeUrl: chapter.contentType === "YOUTUBE" ? cleanedUrl : null,
             youtubeVideoId,
             coverUrl: chapter.coverUrl || null,
             startSec: chapter.startSec,
