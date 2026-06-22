@@ -100,12 +100,6 @@ export default async function SubscriptionsPage({
 
       {!plans.length ? <p className="mt-4 rounded-md bg-[#06272b] p-4 text-zinc-400">Nenhum plano premium ativo no momento.</p> : null}
 
-      <section className="mt-8 rounded-lg bg-[#06272b] p-5 text-sm text-zinc-300">
-        <h2 className="text-lg font-bold text-white">Pagamento</h2>
-        <p className="mt-2">
-          Em producao, o pagamento e processado pelo Mercado Pago. No ambiente local de desenvolvimento, se o Mercado Pago nao estiver disponivel, o sistema ativa uma assinatura de teste para permitir validar o fluxo.
-        </p>
-      </section>
     </div>
   );
 }
