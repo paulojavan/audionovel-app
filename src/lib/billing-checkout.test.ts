@@ -34,8 +34,10 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
   assert.equal(params.notification_url, `${origin}/api/billing/webhook`);
   assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "credit_card"));
   assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "debit_card"));
+  assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "prepaid_card"));
   assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "credit_card"));
   assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "debit_card"));
+  assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "prepaid_card"));
   assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "pix"));
 });
 
