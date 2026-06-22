@@ -13,6 +13,7 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
     userId,
     userEmail,
     userName,
+    checkoutReference: "checkout_intent_123",
     plan: {
       id: "plan_pix",
       name: "Assinatura 30 dias PIX",
@@ -26,6 +27,9 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
   });
 
   assert.equal(params.items[0]?.unit_price, 8);
+  assert.equal(params.external_reference, "checkout_intent_123");
+  assert.ok(!params.external_reference.includes("user:"));
+  assert.ok(!params.external_reference.includes("plan:"));
   assert.equal(params.metadata.premium_days, "30");
   assert.equal(params.notification_url, `${origin}/api/billing/webhook`);
   assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "credit_card"));
@@ -38,6 +42,7 @@ test("plano de cartao cria preferencia Mercado Pago sem pix", () => {
     userId,
     userEmail,
     userName,
+    checkoutReference: "checkout_intent_card",
     plan: {
       id: "plan_card",
       name: "Assinatura 30 dias Cartao",
@@ -61,6 +66,7 @@ test("normaliza origem com barra final nas urls do Mercado Pago", () => {
     userId,
     userEmail,
     userName,
+    checkoutReference: "checkout_intent_trailing_slash",
     plan: {
       id: "plan_pix",
       name: "Assinatura 30 dias PIX",
@@ -73,7 +79,7 @@ test("normaliza origem com barra final nas urls do Mercado Pago", () => {
     },
   });
 
-  assert.equal(params.back_urls.success, "https://audionovelbr.qzz.io/assinaturas?checkout=success");
+  assert.equal(params.back_urls.success, "https://audionovelbr.qzz.io/api/billing/return?checkout=success");
   assert.equal(params.notification_url, "https://audionovelbr.qzz.io/api/billing/webhook");
 });
 

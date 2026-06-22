@@ -277,6 +277,19 @@ model PaymentTransaction {
   user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
+model BillingCheckoutIntent {
+  id          String    @id @default(cuid())
+  userId      String
+  planId      String
+  premiumDays Int
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([planId])
+}
+
 model SubscriptionPlan {
   id          String   @id @default(cuid())
   slug        String   @unique

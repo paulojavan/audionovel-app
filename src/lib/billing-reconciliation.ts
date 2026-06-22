@@ -14,6 +14,7 @@ export type ApprovedPaymentReference = {
   userId: string;
   planId: string;
   premiumDays: number;
+  checkoutIntentId?: string;
 };
 
 export function resolveApprovedPaymentReference(
@@ -33,7 +34,7 @@ export function resolveApprovedPaymentReference(
 }
 
 export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymentResponse, options: ApplyPaymentOptions = {}) {
-  const reference = resolveApprovedPaymentReference(payment, options.expectedUserId);
+  const reference = await resolvePaymentReference(payment, options.expectedUserId);
   if (!reference) return { status: "ignored" as const };
 
   const existingPayment = await prisma.paymentTransaction.findFirst({
@@ -77,6 +78,13 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
         update: {},
       });
 
+      if (reference.checkoutIntentId) {
+        await tx.billingCheckoutIntent.update({
+          where: { id: reference.checkoutIntentId },
+          data: { usedAt: new Date() },
+        });
+      }
+
       return { status: "applied" as const, userId: reference.userId };
     });
   } catch (error) {
@@ -85,6 +93,35 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
     }
     throw error;
   }
+}
+
+async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expectedUserId?: string) {
+  const legacyReference = resolveApprovedPaymentReference(payment, expectedUserId);
+  if (legacyReference) return legacyReference;
+  if (payment.status !== "approved") return null;
+
+  const checkoutIntentId = payment.external_reference?.trim();
+  if (!checkoutIntentId) return null;
+
+  const checkoutIntent = await prisma.billingCheckoutIntent.findUnique({
+    where: { id: checkoutIntentId },
+    select: {
+      id: true,
+      userId: true,
+      planId: true,
+      premiumDays: true,
+    },
+  });
+  if (!checkoutIntent) return null;
+  if (expectedUserId && checkoutIntent.userId !== expectedUserId) return null;
+
+  return {
+    paymentId: String(payment.id),
+    userId: checkoutIntent.userId,
+    planId: checkoutIntent.planId,
+    premiumDays: checkoutIntent.premiumDays,
+    checkoutIntentId: checkoutIntent.id,
+  };
 }
 
 function toCents(amount: number | undefined) {

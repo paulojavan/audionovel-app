@@ -16,6 +16,7 @@ type CheckoutUserInput = {
   userId: string;
   userEmail: string;
   userName: string;
+  checkoutReference: string;
   plan: CheckoutPlan;
 };
 
@@ -33,16 +34,15 @@ export function getFixedPremiumDays(plan: Pick<CheckoutPlan, "interval">) {
 
 export function buildMercadoPagoPreferencePayload({
   origin,
-  userId,
   userEmail,
   userName,
+  checkoutReference,
   plan,
 }: CheckoutUserInput): MercadoPagoPreferencePayload {
   const baseOrigin = normalizeCheckoutOrigin(origin);
   const premiumDays = String(getFixedPremiumDays(plan));
   const metadata = {
-    user_id: userId,
-    plan_id: plan.id,
+    checkout_reference: checkoutReference,
     premium_days: premiumDays,
   };
 
@@ -61,13 +61,13 @@ export function buildMercadoPagoPreferencePayload({
       email: userEmail,
       name: userName,
     },
-    external_reference: buildCheckoutReference(userId, plan.id, premiumDays),
+    external_reference: checkoutReference,
     metadata,
     notification_url: `${baseOrigin}/api/billing/webhook`,
     back_urls: {
-      success: `${baseOrigin}/assinaturas?checkout=success`,
-      failure: `${baseOrigin}/assinaturas?checkout=cancel`,
-      pending: `${baseOrigin}/assinaturas?checkout=pending`,
+      success: `${baseOrigin}/api/billing/return?checkout=success`,
+      failure: `${baseOrigin}/api/billing/return?checkout=cancel`,
+      pending: `${baseOrigin}/api/billing/return?checkout=pending`,
     },
     auto_return: "approved",
     payment_methods: getPaymentMethods(plan),

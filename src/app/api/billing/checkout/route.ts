@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
-import { buildMercadoPagoPreferencePayload, getCheckoutErrorMessage } from "@/lib/billing-checkout";
+import { buildMercadoPagoPreferencePayload, getCheckoutErrorMessage, getFixedPremiumDays } from "@/lib/billing-checkout";
 import { createMercadoPagoPreference, isMercadoPagoConfigured } from "@/lib/mercado-pago";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -45,12 +45,24 @@ export async function POST(request: Request) {
   const origin = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
   try {
+    const premiumDays = getFixedPremiumDays(plan);
+    const expiresAt = new Date(Date.now() + 60 * 60_000);
+    const checkoutIntent = await prisma.billingCheckoutIntent.create({
+      data: {
+        userId: auth.user.id,
+        planId: plan.id,
+        premiumDays,
+        expiresAt,
+      },
+    });
+
     const preference = await createMercadoPagoPreference(
       buildMercadoPagoPreferencePayload({
         origin,
         userId: auth.user.id,
         userEmail: auth.user.email,
         userName: auth.user.name,
+        checkoutReference: checkoutIntent.id,
         plan,
       }),
       { idempotencyKey: `checkout-${auth.user.id}-${plan.id}-${Date.now()}` },

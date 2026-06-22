@@ -13,3 +13,9 @@ export function getApprovedCheckoutReturnPaymentId(params: CheckoutReturnParams)
   const status = params.status ?? params.collection_status;
   return status === "approved" ? paymentId : null;
 }
+
+export function getCleanCheckoutReturnPath(params: CheckoutReturnParams) {
+  if (params.checkout === "pending") return "/assinaturas?checkout=pending";
+  if (params.checkout === "cancel") return "/assinaturas?checkout=cancel";
+  return "/assinaturas";
+}
