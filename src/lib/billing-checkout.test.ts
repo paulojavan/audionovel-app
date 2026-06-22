@@ -32,7 +32,10 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
   assert.ok(!params.external_reference.includes("plan:"));
   assert.equal(params.metadata.premium_days, "30");
   assert.equal(params.notification_url, `${origin}/api/billing/webhook`);
-  assert.ok(params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "credit_card"));
+  assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "credit_card"));
+  assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "debit_card"));
+  assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "credit_card"));
+  assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "debit_card"));
   assert.ok(!params.payment_methods?.excluded_payment_methods?.some((method) => method.id === "pix"));
 });
 
