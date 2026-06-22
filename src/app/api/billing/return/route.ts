@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
-import { getApprovedCheckoutReturnPaymentId, getCleanCheckoutReturnPath } from "@/lib/billing-return";
+import { getCheckoutReturnPaymentId, getCleanCheckoutReturnPath, isApprovedCheckoutReturn } from "@/lib/billing-return";
 import { getMercadoPagoPayment } from "@/lib/mercado-pago";
 import { getPublicOrigin } from "@/lib/public-origin";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -12,15 +12,17 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const params = Object.fromEntries(url.searchParams.entries());
   const session = await getActiveServerSession();
-  const paymentId = getApprovedCheckoutReturnPaymentId(params);
+  const paymentId = getCheckoutReturnPaymentId(params);
+  let paymentApplied = false;
 
   if (paymentId && session?.user?.id) {
     try {
       const payment = await getMercadoPagoPayment(paymentId);
-      await applyApprovedMercadoPagoPayment(payment, {
+      const result = await applyApprovedMercadoPagoPayment(payment, {
         expectedUserId: session.user.id,
         eventId: `mp-return-${paymentId}`,
       });
+      paymentApplied = result.status === "applied" || result.status === "duplicate";
     } catch (error) {
       console.error("Nao foi possivel reconciliar retorno do Mercado Pago.", error);
     }
@@ -32,5 +34,6 @@ export async function GET(request: Request) {
     fallbackOrigin: url.origin,
   });
 
-  return NextResponse.redirect(new URL(getCleanCheckoutReturnPath(params), origin));
+  const returnPath = paymentApplied || isApprovedCheckoutReturn(params) ? "/assinaturas?checkout=success" : getCleanCheckoutReturnPath(params);
+  return NextResponse.redirect(new URL(returnPath, origin));
 }
