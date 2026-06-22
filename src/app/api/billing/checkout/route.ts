@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/api";
 import { buildMercadoPagoPreferencePayload, getCheckoutErrorMessage, getFixedPremiumDays } from "@/lib/billing-checkout";
 import { createMercadoPagoPreference, isMercadoPagoConfigured } from "@/lib/mercado-pago";
 import { prisma } from "@/lib/prisma";
+import { getPublicOrigin } from "@/lib/public-origin";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
@@ -42,7 +43,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Mercado Pago nao configurado." }, { status: 503 });
   }
 
-  const origin = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const origin = getPublicOrigin({
+    headers: request.headers,
+    envOrigin: process.env.NEXTAUTH_URL,
+    fallbackOrigin: request.url,
+  });
 
   try {
     const premiumDays = getFixedPremiumDays(plan);

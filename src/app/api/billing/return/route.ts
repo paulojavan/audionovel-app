@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
 import { getApprovedCheckoutReturnPaymentId, getCleanCheckoutReturnPath } from "@/lib/billing-return";
 import { getMercadoPagoPayment } from "@/lib/mercado-pago";
+import { getPublicOrigin } from "@/lib/public-origin";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export const runtime = "nodejs";
@@ -25,5 +26,11 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(new URL(getCleanCheckoutReturnPath(params), url.origin));
+  const origin = getPublicOrigin({
+    headers: request.headers,
+    envOrigin: process.env.NEXTAUTH_URL,
+    fallbackOrigin: url.origin,
+  });
+
+  return NextResponse.redirect(new URL(getCleanCheckoutReturnPath(params), origin));
 }
