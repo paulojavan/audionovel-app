@@ -20,7 +20,7 @@ O objetivo principal e permitir que usuarios descubram, acompanhem e oucam novel
 - Continuar a escuta de onde parou.
 - Salvar capitulos offline de forma criptografada para usuarios premium.
 - Organizar obras por volumes, capitulos, tags e autores.
-- Monetizar capitulos premium com Stripe.
+- Monetizar capitulos premium com Mercado Pago.
 - Moderar comunidade com comentarios, respostas, edicoes e notificacoes.
 - Administrar usuarios, planos, financas e conteudo em uma unica area.
 
@@ -30,7 +30,7 @@ O objetivo principal e permitir que usuarios descubram, acompanhem e oucam novel
 - UI: React 19, Tailwind CSS 4 e lucide-react.
 - Autenticacao: NextAuth com Google OAuth e provider local de desenvolvimento.
 - Banco: Prisma ORM com SQLite.
-- Pagamentos: Stripe Checkout e Stripe Webhook.
+- Pagamentos: Mercado Pago Checkout Pro e webhook de pagamentos.
 - Validacao: Zod.
 - Audio/cache: IndexedDB, Web Crypto API AES-GCM, Service Worker para pagina offline.
 - Testes: node:test com tsx.
@@ -423,7 +423,6 @@ Cada plano possui:
 - Ativo/inativo.
 - Aceita cartao.
 - Aceita Pix.
-- Stripe Price ID opcional.
 - Ordem de exibicao.
 
 ### 20.2 Pagina de Assinaturas
@@ -438,17 +437,17 @@ Usuarios podem ver:
 
 Se o usuario ja for premium, a aba de assinaturas pode ficar oculta na navegacao principal.
 
-### 20.3 Stripe
+### 20.3 Mercado Pago
 
 Fluxo:
 
 1. Usuario clica em contratar.
-2. API cria Stripe Checkout Session.
-3. Stripe redireciona para pagamento.
+2. API cria preferencia de pagamento Mercado Pago.
+3. Mercado Pago redireciona para pagamento.
 4. Webhook registra pagamento.
 5. Usuario e liberado como premium.
 
-Em ambiente local, se Stripe nao estiver disponivel, o sistema pode ativar assinatura de teste para validar o fluxo.
+Em ambiente local, se Mercado Pago nao estiver disponivel, o sistema pode ativar assinatura de teste para validar o fluxo.
 
 ### 20.4 Premium Manual
 
@@ -510,7 +509,6 @@ Admin pode:
 - Configurar moeda.
 - Configurar periodo.
 - Definir cartao e/ou Pix.
-- Informar Stripe Price ID.
 
 ### 21.4 Usuarios
 
@@ -706,8 +704,7 @@ O produto ja cobre:
 - Offline criptografado.
 - Comentarios com respostas e moderacao.
 - Notificacoes.
-- Assinaturas via Stripe/teste local.
+- Assinaturas via Mercado Pago/teste local.
 - Painel admin multiabas.
 - Gestao financeira.
 - Responsividade mobile.
-

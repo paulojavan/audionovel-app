@@ -1,6 +1,6 @@
 # Deploy no Coolify
 
-Este projeto e um app Next.js 16 com Prisma, NextAuth e Stripe. O build de producao usa um servidor Node, entao nao use export estatico.
+Este projeto e um app Next.js 16 com Prisma, NextAuth e Mercado Pago. O build de producao usa um servidor Node, entao nao use export estatico.
 
 ## Opcao recomendada: Postgres no Coolify
 
@@ -35,9 +35,8 @@ NEXTAUTH_SECRET=<segredo forte>
 GOOGLE_CLIENT_ID=<client id do Google OAuth>
 GOOGLE_CLIENT_SECRET=<client secret do Google OAuth>
 GOOGLE_ADMIN_EMAILS=<emails admins separados por virgula>
-STRIPE_SECRET_KEY=<secret key da Stripe>
-STRIPE_WEBHOOK_SECRET=<webhook secret da Stripe>
-STRIPE_PREMIUM_PRICE_ID=<price id da assinatura>
+MERCADO_PAGO_ACCESS_TOKEN=<access token do Mercado Pago>
+MERCADO_PAGO_WEBHOOK_SECRET=<segredo do webhook do Mercado Pago>
 DEV_AUTH_BYPASS=false
 ```
 
@@ -47,7 +46,7 @@ DEV_AUTH_BYPASS=false
 https://seu-dominio.com/api/auth/callback/google
 ```
 
-8. Na Stripe, crie um webhook apontando para:
+8. No Mercado Pago, crie um webhook apontando para:
 
 ```text
 https://seu-dominio.com/api/billing/webhook
@@ -82,9 +81,8 @@ NEXTAUTH_SECRET=<segredo forte>
 GOOGLE_CLIENT_ID=<client id do Google OAuth>
 GOOGLE_CLIENT_SECRET=<client secret do Google OAuth>
 GOOGLE_ADMIN_EMAILS=<emails admins separados por virgula>
-STRIPE_SECRET_KEY=<secret key da Stripe>
-STRIPE_WEBHOOK_SECRET=<webhook secret da Stripe>
-STRIPE_PREMIUM_PRICE_ID=<price id da assinatura>
+MERCADO_PAGO_ACCESS_TOKEN=<access token do Mercado Pago>
+MERCADO_PAGO_WEBHOOK_SECRET=<segredo do webhook do Mercado Pago>
 DEV_AUTH_BYPASS=false
 ```
 

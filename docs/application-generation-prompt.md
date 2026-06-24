@@ -35,7 +35,7 @@ Administradores devem conseguir:
 - Bloquear/desbloquear usuarios.
 - Conceder premium manualmente.
 - Configurar planos.
-- Configurar pagamentos Stripe por cartao e Pix.
+- Configurar pagamentos Mercado Pago por cartao e Pix.
 - Moderar comentarios.
 - Ver financeiro.
 - Ativar/desativar cadastros.
@@ -63,7 +63,7 @@ Administradores devem conseguir:
 - Prisma ORM.
 - SQLite para desenvolvimento.
 - NextAuth com Google OAuth.
-- Stripe Checkout e Webhooks.
+- Mercado Pago Checkout Pro e Webhooks.
 - Zod para validacao.
 - lucide-react para icones.
 - IndexedDB + Web Crypto API para cache local criptografado.
@@ -95,8 +95,8 @@ Campos:
 - role: USER ou ADMIN.
 - plan: FREE ou PREMIUM.
 - subscriptionStatus.
-- stripeCustomerId.
-- stripeSubscriptionId.
+- paymentProviderCustomerId.
+- paymentProviderSubscriptionId.
 - premiumUntil.
 - isBlocked.
 - blockedReason.
@@ -247,8 +247,8 @@ Relacionamentos:
 ### PaymentTransaction
 
 - userId opcional.
-- stripeEventId unico.
-- stripePaymentId.
+- providerEventId unico.
+- providerPaymentId.
 - amountCents.
 - currency.
 - status.
@@ -266,7 +266,6 @@ Relacionamentos:
 - active.
 - allowCard.
 - allowPix.
-- stripePriceId.
 - sortOrder.
 
 ### ManualSubscription
@@ -588,9 +587,9 @@ Pagina `/assinaturas`:
 - Se premium ativo, mostrar Premium ativo.
 - Se compras desativadas, bloquear compra.
 
-Stripe:
+Mercado Pago:
 
-- Criar Checkout Session.
+- Criar preferencia de pagamento.
 - Suportar payment_method_types conforme plano.
 - Webhook para checkout/session/payment.
 - Registrar PaymentTransaction.
@@ -598,7 +597,7 @@ Stripe:
 
 Fallback local:
 
-- Em desenvolvimento, permitir assinatura de teste se Stripe nao estiver configurado, para validar fluxo.
+- Em desenvolvimento, permitir assinatura de teste se Mercado Pago nao estiver configurado, para validar fluxo.
 
 ## Admin
 
@@ -663,7 +662,6 @@ Permitir:
 - Ativo.
 - Cartao.
 - Pix.
-- Stripe Price ID.
 - Ordem.
 
 ### Usuarios
@@ -722,7 +720,7 @@ Mostrar:
 Implemente:
 
 - Variaveis de ambiente para segredos.
-- Nunca expor STRIPE_SECRET_KEY, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET.
+- Nunca expor MERCADO_PAGO_ACCESS_TOKEN, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET.
 - Validacao server-side em todas as APIs.
 - Role guard para admin.
 - Protecao para usuario bloqueado.
@@ -731,7 +729,7 @@ Implemente:
 - Bloquear localhost, IP privado e URLs nao HTTPS para midia remota.
 - Offline com cacheKey e expiracao.
 - Provider dev desativado em producao.
-- Webhook Stripe validando assinatura.
+- Webhook Mercado Pago validando assinatura.
 
 ## Responsividade
 
@@ -770,7 +768,7 @@ Entregar projeto funcional com:
 - Rotas Next App Router.
 - Componentes React.
 - APIs protegidas.
-- Stripe integrado.
+- Mercado Pago integrado.
 - Google OAuth.
 - Offline criptografado.
 - Service Worker.
@@ -791,9 +789,8 @@ GOOGLE_CLIENT_SECRET="..."
 GOOGLE_ADMIN_EMAILS="admin@gmail.com"
 DEV_AUTH_BYPASS="true"
 DEV_AUTH_EMAIL="teste@audio-novel-br.local"
-STRIPE_SECRET_KEY="..."
-STRIPE_WEBHOOK_SECRET="..."
-STRIPE_PREMIUM_PRICE_ID="..."
+MERCADO_PAGO_ACCESS_TOKEN="..."
+MERCADO_PAGO_WEBHOOK_SECRET="..."
 ALLOWED_MEDIA_HOSTS="cdn.exemplo.com,media.exemplo.com"
 ```
 
@@ -804,4 +801,3 @@ ALLOWED_MEDIA_HOSTS="cdn.exemplo.com,media.exemplo.com"
 - O usuario deve conseguir usar a aplicacao em mobile com conforto.
 - O fluxo offline deve priorizar seguranca e expiracao.
 - O produto deve estar pronto para evoluir para banco PostgreSQL em producao.
-
