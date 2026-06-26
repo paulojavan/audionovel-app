@@ -1,100 +1,157 @@
+// Audio Novel BR - Service Worker v4
+// Estratégia: Cache-first para assets estáticos, Network-first para navegação
+
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_NAME = `${CACHE_PREFIX}-v3`;
+const CACHE_VERSION = "v4";
+const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
+
+// Assets críticos para funcionamento offline
 const STATIC_ASSETS = [
   "/favicon-32x32.png",
+  "/favicon-16x16.png",
   "/apple-touch-icon.png",
   "/icon.png",
+  "/icons/icon-72x72.png",
+  "/icons/icon-96x96.png",
+  "/icons/icon-128x128.png",
+  "/icons/icon-144x144.png",
+  "/icons/icon-152x152.png",
+  "/icons/icon-180x180.png",
   "/icons/icon-192x192.png",
+  "/icons/icon-384x384.png",
   "/icons/icon-512x512.png",
   "/icons/maskable-512x512.png",
   "/offline-fallback.html",
 ];
 
+// ─── INSTALL ────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting()),
+      .then(() => self.skipWaiting())
+      .catch((err) => {
+        console.warn("[SW] Cache install error:", err);
+        return self.skipWaiting();
+      }),
   );
 });
 
+// ─── ACTIVATE ───────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
 
+// ─── MESSAGES ────────────────────────────────────────────────────────────────
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+
+  if (event.data?.type === "GET_VERSION") {
+    event.ports?.[0]?.postMessage({ version: CACHE_VERSION });
+  }
 });
 
+// ─── FETCH ───────────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+
+  // Ignorar métodos não-GET
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return;
-  if (url.pathname === "/manifest.webmanifest") return;
-  if (url.pathname.startsWith("/_next/")) return;
 
-  if (isStaticAssetRequest(request, url)) {
+  // Ignorar origens externas
+  if (url.origin !== self.location.origin) return;
+
+  // Ignorar APIs - sempre buscar da rede
+  if (url.pathname.startsWith("/api/")) return;
+
+  // Ignorar manifest - sempre buscar da rede
+  if (url.pathname === "/manifest.webmanifest") return;
+
+  // Ignorar arquivos Next.js internos (HMR, etc)
+  if (url.pathname.startsWith("/_next/webpack-hmr")) return;
+
+  // Assets _next/ estáticos: cache-first com fallback de rede
+  if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
+  // Assets estáticos (imagens, fontes, scripts, estilos)
+  if (isStaticAsset(request, url)) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+
+  // Navegação de páginas: network-first com fallback offline
   if (request.mode === "navigate") {
     event.respondWith(networkFirstWithOfflineFallback(request));
     return;
   }
 });
 
-function isStaticAssetRequest(request, url) {
-  if (url.pathname.startsWith("/_next/")) return false;
-  return ["font", "image", "script", "style"].includes(request.destination);
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function isStaticAsset(request, url) {
+  const staticDests = ["font", "image", "script", "style", "manifest", "worker"];
+  if (staticDests.includes(request.destination)) return true;
+
+  // Extensões de arquivo estático
+  const staticExts = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".css", ".js"];
+  return staticExts.some((ext) => url.pathname.endsWith(ext));
 }
 
 async function cacheFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone()).catch(() => undefined);
-    }
-    return response;
-  } catch {
-    return new Response("Offline", { status: 503 });
-  }
-}
-
-async function networkFirstWithOfflineFallback(request) {
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone()).catch(() => undefined);
-    }
-    return response;
-  } catch {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(request);
     if (cached) return cached;
 
+    const response = await fetch(request);
+    if (response.ok && response.status < 400) {
+      cache.put(request, response.clone()).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    return new Response("", { status: 503, statusText: "Offline" });
+  }
+}
+
+async function networkFirstWithOfflineFallback(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone()).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    // Tentar cache
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    // Fallback offline
     const offlinePage = await cache.match("/offline-fallback.html");
     if (offlinePage) return offlinePage;
 
-    return new Response("Offline", {
-      status: 503,
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+    return new Response(
+      `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - Audio Novel BR</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#e4e4e7;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}h1{font-size:1.5rem;font-weight:900;margin-bottom:.75rem;color:#22d3dc}p{color:#a1a1aa;max-width:28rem;line-height:1.6;margin-bottom:1.5rem}button{background:#18b7bd;color:#021114;border:none;padding:.75rem 1.5rem;border-radius:9999px;font-weight:900;cursor:pointer}</style></head><body><h1>Você está offline</h1><p>Conecte-se à internet para acessar o catálogo completo de novels.</p><button onclick="window.location.reload()">Tentar novamente</button></body></html>`,
+      { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+    );
   }
 }

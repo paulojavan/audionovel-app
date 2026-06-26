@@ -8,38 +8,46 @@ export function ServiceWorkerRegister() {
 
     let refreshing = false;
 
-    navigator.serviceWorker
-      .register("/sw.js", {
-        scope: "/",
-        updateViaCache: "none",
-      })
-      .then((registration) => {
+    async function registerSW() {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
+
+        // Força checagem imediata de atualização
         registration.update().catch(() => undefined);
 
-        if (registration.waiting) {
+        // SW aguardando para ativar (atualização pendente ao carregar)
+        if (registration.waiting && navigator.serviceWorker.controller) {
           window.dispatchEvent(new CustomEvent("pwa-update-available"));
         }
 
+        // Listener para novas atualizações durante a sessão
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           if (!worker) return;
 
-          let hasDispatched = false;
+          let dispatched = false;
+
           worker.addEventListener("statechange", () => {
-            if (worker.state === "installed") {
-              if (navigator.serviceWorker.controller && !hasDispatched) {
-                hasDispatched = true;
-                window.dispatchEvent(new CustomEvent("pwa-update-available"));
-              }
-              if (!navigator.serviceWorker.controller) {
+            if (worker.state === "installed" && !dispatched) {
+              dispatched = true;
+              // Só avisa de update se já há um SW controlando a página
+              if (navigator.serviceWorker.controller) {
                 window.dispatchEvent(new CustomEvent("pwa-update-available"));
               }
             }
           });
         });
-      })
-      .catch(() => undefined);
+      } catch {
+        // Falha silenciosa - PWA continua funcional como app web
+      }
+    }
 
+    registerSW();
+
+    // Recarrega a página quando o SW ativo muda (após skipWaiting)
     const handleControllerChange = () => {
       if (refreshing) return;
       refreshing = true;

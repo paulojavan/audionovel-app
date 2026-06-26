@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* ─── Design Tokens ──────────────────────────────────────────────────────── */
 :root {
   --background: #03191c;
   --foreground: #f8ffff;
@@ -9,34 +10,57 @@
   --accent: #18b7bd;
   --accent-strong: #22d3dc;
   --accent-dark: #075e64;
+
+  /* Safe area insets (iOS notch support) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: Arial, Helvetica, sans-serif;
+  --font-sans: "Inter", "Outfit", Arial, Helvetica, sans-serif;
   --font-mono: "Cascadia Mono", Consolas, monospace;
 }
 
-* {
+/* ─── Reset & Base ───────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html {
   min-height: 100%;
+  min-height: -webkit-fill-available;
   background: #020b0d;
+  /* Evita zoom ao focar inputs em iOS */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
   min-height: 100svh;
+  min-height: -webkit-fill-available;
   background:
     radial-gradient(circle at top left, rgba(24, 183, 189, 0.16), transparent 34rem),
     linear-gradient(180deg, #03191c 0%, #020b0d 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", "Outfit", Arial, Helvetica, sans-serif;
+
+  /* Evita pull-to-refresh e bounce no mobile */
   overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
+
+  /* Remove highlight de tap azul no Android */
   -webkit-tap-highlight-color: transparent;
+
+  /* Suaviza rendering de fontes */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -46,11 +70,73 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
 
+/* Inputs — evita zoom em iOS ao focar (mínimo 16px) */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+textarea,
+select {
+  font-size: max(1rem, 16px);
+}
+
+/* ─── Scroll customizado ─────────────────────────────────────────────────── */
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: #147a80 transparent;
 }
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #147a80;
+  border-radius: 2px;
+}
+
+/* ─── Utilitários de Safe Area ───────────────────────────────────────────── */
+.safe-top    { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left   { padding-left: env(safe-area-inset-left, 0px); }
+.safe-right  { padding-right: env(safe-area-inset-right, 0px); }
+
+/* ─── Touch / Mobile UX ──────────────────────────────────────────────────── */
+/* Elementos clicáveis devem ter mínimo de 44px (guideline Apple/Google) */
+button,
+a[role="button"],
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Animações globais ──────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in  { animation: fade-in  0.3s ease forwards; }
+.animate-slide-up { animation: slide-up 0.4s ease forwards; }

@@ -18,33 +18,58 @@ export const metadata: Metadata = {
     default: "Audio Novel BR",
     template: "%s | Audio Novel BR",
   },
-  description: "Ouça novels com audio, texto sincronizado, assinatura premium e modo offline.",
+  description: "Ouça novels com áudio, texto sincronizado, assinatura premium e modo offline. Plataforma brasileira de audiolivros e web novels.",
   manifest: "/manifest.webmanifest",
+  keywords: ["audio novel", "audiolivro", "web novel", "novels brasileiras", "ouvir novel"],
   icons: {
     icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-96x96.png", sizes: "96x96", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: "/favicon-32x32.png",
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+      { url: "/icons/icon-144x144.png", sizes: "144x144", type: "image/png" },
+      { url: "/icons/icon-128x128.png", sizes: "128x128", type: "image/png" },
+    ],
   },
   appleWebApp: {
     capable: true,
     title: "Audio Novel BR",
     statusBarStyle: "black-translucent",
+    startupImage: [
+      {
+        url: "/icons/icon-512x512.png",
+        media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)",
+      },
+    ],
   },
   formatDetection: {
     telephone: false,
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "msapplication-TileColor": "#03191c",
+    "msapplication-TileImage": "/icons/icon-144x144.png",
+    "msapplication-config": "none",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  minimumScale: 1,
   maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
-  themeColor: "#18b7bd",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#03191c" },
+    { media: "(prefers-color-scheme: light)", color: "#18b7bd" },
+  ],
 };
 
 export default async function RootLayout({
