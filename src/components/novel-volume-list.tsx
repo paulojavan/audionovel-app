@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, Lock, Play, PlaySquare } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
+import { getChapterPartsForDisplay, type ChapterPart } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { OfflineChapterButton } from "./offline-chapter-button";
 
@@ -17,6 +18,8 @@ type NovelVolume = {
     positionEnd: number | null;
     contentType: string;
     durationSec: number;
+    startSec: number;
+    chapterPartsJson: string;
     viewCount: number;
     premiumOnly: boolean;
     createdAt: string;
@@ -24,6 +27,15 @@ type NovelVolume = {
     lastListened: boolean;
   }>;
 };
+
+function getOfflineChapterParts(chapter: { title: string; position: number; positionEnd: number | null; startSec: number; durationSec: number; chapterPartsJson: string }): ChapterPart[] {
+  return getChapterPartsForDisplay(chapter).map((part) => ({
+    position: part.position,
+    title: part.title,
+    startSec: part.startSec,
+    endSec: part.endSec,
+  }));
+}
 
 export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volumes: NovelVolume[]; canUseOffline: boolean; novelTitle: string }) {
   const scrollContainers = useRef<Array<HTMLDivElement | null>>([]);
@@ -99,6 +111,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                         volumeTitle: volume.title,
                         chapterPosition: chapter.position,
                         chapterPositionLabel: getChapterPositionLabel(chapter.position, chapter.positionEnd),
+                        chapterParts: getOfflineChapterParts(chapter),
                       }}
                     />
                   </div>
@@ -168,6 +181,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                             volumeTitle: volume.title,
                             chapterPosition: chapter.position,
                             chapterPositionLabel: getChapterPositionLabel(chapter.position, chapter.positionEnd),
+                            chapterParts: getOfflineChapterParts(chapter),
                           }}
                         />
                       </td>

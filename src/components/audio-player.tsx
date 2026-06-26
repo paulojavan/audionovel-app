@@ -10,6 +10,13 @@ type Cue = {
   text: string;
 };
 
+type ChapterPartPlayback = {
+  position: number;
+  title: string;
+  startSec: number;
+  endSec: number;
+};
+
 export function AudioPlayer({
   chapterId,
   src,
@@ -20,6 +27,7 @@ export function AudioPlayer({
   chapterTitle,
   novelTitle,
   coverUrl,
+  chapterParts = [],
 }: {
   chapterId: string;
   src: string;
@@ -30,6 +38,7 @@ export function AudioPlayer({
   chapterTitle: string;
   novelTitle: string;
   coverUrl: string;
+  chapterParts?: ChapterPartPlayback[];
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingStartRef = useRef<number | null>(null);
@@ -46,6 +55,7 @@ export function AudioPlayer({
   const [audioSrc, setAudioSrc] = useState(src);
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
+  const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
 
   const activeIndex = useMemo(() => {
     if (!transcript.length) return -1;
@@ -63,6 +73,7 @@ export function AudioPlayer({
   const nextCue = activeIndex >= 0 && activeIndex < transcript.length - 1 ? transcript[activeIndex + 1] : null;
   const progressDuration = resolvedDuration || duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (current / progressDuration) * 100));
+  const groupedChapterParts = chapterParts.length > 1 ? chapterParts : [];
   const karaokeFont = [
     {
       active: "clamp(0.82rem, 1.55vw, 1.2rem)",
@@ -225,6 +236,23 @@ export function AudioPlayer({
     if (audio) audio.playbackRate = nextRate;
   }
 
+  function pauseIfNeededAtGroupedChapterEnd(audio: HTMLAudioElement) {
+    if (!pauseAtChapterEnd || groupedChapterParts.length === 0) return;
+
+    const absoluteCurrent = audio.currentTime;
+    const activePart = groupedChapterParts.find((part) => absoluteCurrent >= part.startSec && absoluteCurrent < part.endSec);
+    if (!activePart) return;
+    if (activePart.endSec >= startOffset + progressDuration) return;
+    if (absoluteCurrent < activePart.endSec - 0.25) return;
+
+    audio.pause();
+    audio.currentTime = activePart.endSec;
+    setPlaying(false);
+    setKaraokeMode(false);
+    setCurrent(Math.max(0, activePart.endSec - startOffset));
+    void saveProgress(false);
+  }
+
   return (
     <>
       <div id="chapter-player" className="grid gap-5 rounded-lg bg-[#06272b] p-4">
@@ -242,7 +270,10 @@ export function AudioPlayer({
             event.currentTarget.playbackRate = playbackRate;
             setPlaybackError("");
           }}
-          onTimeUpdate={(event) => setCurrent(Math.max(0, event.currentTarget.currentTime - startOffset))}
+          onTimeUpdate={(event) => {
+            setCurrent(Math.max(0, event.currentTarget.currentTime - startOffset));
+            pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
+          }}
           onEnded={() => {
             setPlaying(false);
             setKaraokeMode(false);
@@ -250,6 +281,26 @@ export function AudioPlayer({
             void saveProgress(true);
           }}
         />
+
+        {groupedChapterParts.length > 0 ? (
+          <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold">Pausar entre capitulos</p>
+              <p className="text-xs text-zinc-400">Quando ligado, a reproducao pausa ao fim de cada capitulo dentro deste bloco.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pauseAtChapterEnd}
+              onClick={() => setPauseAtChapterEnd((value) => !value)}
+              className={`flex min-h-11 w-20 items-center rounded-full p-1 transition ${
+                pauseAtChapterEnd ? "justify-end bg-[#18b7bd]" : "justify-start bg-white/15"
+              }`}
+            >
+              <span className={`h-9 w-9 rounded-full bg-white shadow ${pauseAtChapterEnd ? "text-[#021114]" : "text-zinc-500"}`} />
+            </button>
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

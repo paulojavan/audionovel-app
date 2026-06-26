@@ -9,7 +9,7 @@ const KEY_NAME = "audio-novel-br-audio-cache-key";
 const TWO_DAYS_MS = 1000 * 60 * 60 * 24 * 2;
 const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
 
-type AudioCacheMode = "temporary" | "offline";
+export type AudioCacheMode = "temporary" | "offline";
 
 type AudioCacheOptions = {
   mode?: AudioCacheMode;
@@ -125,6 +125,10 @@ function getCacheId(chapterId: string, mode: AudioCacheMode) {
   return `${mode}:chapter:${chapterId}`;
 }
 
+export function getReusableAudioCacheModes(mode: AudioCacheMode): AudioCacheMode[] {
+  return mode === "offline" ? ["offline", "temporary"] : ["offline", "temporary"];
+}
+
 function getCacheTtl(mode: AudioCacheMode) {
   return mode === "offline" ? SEVEN_DAYS_MS : TWO_DAYS_MS;
 }
@@ -213,6 +217,30 @@ export async function hasValidEncryptedAudio(chapterId: string, mode: AudioCache
   return false;
 }
 
+async function getValidCachedRecord(chapterId: string, mode: AudioCacheMode) {
+  const cacheId = getCacheId(chapterId, mode);
+  const cached = await readRecord(cacheId);
+
+  if (!cached) return null;
+  if (cached.expiresAt > Date.now()) return cached;
+
+  await deleteRecord(cacheId);
+  return null;
+}
+
+async function saveRecordForMode(chapterId: string, mode: AudioCacheMode, record: AudioRecord) {
+  await writeRecord({
+    ...record,
+    id: getCacheId(chapterId, mode),
+    expiresAt: Date.now() + getCacheTtl(mode),
+  });
+}
+
+async function createObjectUrlFromRecord(record: AudioRecord, key: CryptoKey) {
+  const decrypted = await globalThis.crypto.subtle.decrypt({ name: "AES-GCM", iv: record.iv }, key, record.data);
+  return URL.createObjectURL(new Blob([decrypted], { type: record.mimeType }));
+}
+
 export async function saveOfflineItem(item: OfflineItem) {
   await cleanupExpiredAudioCache();
   await cleanupExpiredOfflineItems();
@@ -240,16 +268,18 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
   const cryptoApi = globalThis.crypto;
   await cleanupExpiredAudioCache();
   const mode = options.mode ?? "temporary";
-  const cacheId = getCacheId(chapterId, mode);
   const key = await getCryptoKey();
-  const cached = await readRecord(cacheId);
 
-  if (cached && cached.expiresAt > Date.now()) {
-    const decrypted = await cryptoApi.subtle.decrypt({ name: "AES-GCM", iv: cached.iv }, key, cached.data);
-    return URL.createObjectURL(new Blob([decrypted], { type: cached.mimeType }));
+  for (const cachedMode of getReusableAudioCacheModes(mode)) {
+    const cached = await getValidCachedRecord(chapterId, cachedMode);
+    if (!cached) continue;
+
+    if (cachedMode !== mode) {
+      await saveRecordForMode(chapterId, mode, cached);
+    }
+
+    return createObjectUrlFromRecord(cached, key);
   }
-
-  if (cached) await deleteRecord(cacheId);
 
   const response = await fetch(sourceUrl, { credentials: "include" });
   if (!response.ok) throw new Error("Nao foi possivel baixar o audio.");
@@ -260,7 +290,7 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
   const encrypted = await cryptoApi.subtle.encrypt({ name: "AES-GCM", iv }, key, buffer);
 
   await writeRecord({
-    id: cacheId,
+    id: getCacheId(chapterId, mode),
     data: encrypted,
     iv: iv.buffer,
     mimeType,

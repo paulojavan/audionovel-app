@@ -1,7 +1,8 @@
-export type PwaInstallPromptState = "hidden" | "ios-instructions" | "native-prompt";
+export type PwaInstallPromptState = "hidden" | "ios-instructions" | "browser-instructions" | "native-prompt";
 
 type PwaInstallPromptInput = {
   isIos: boolean;
+  isMobile: boolean;
   isStandalone: boolean;
   hasNativeInstallPrompt: boolean;
   dismissed: boolean;
@@ -9,6 +10,7 @@ type PwaInstallPromptInput = {
 
 export function getPwaInstallPromptState({
   isIos,
+  isMobile,
   isStandalone,
   hasNativeInstallPrompt,
   dismissed,
@@ -16,6 +18,7 @@ export function getPwaInstallPromptState({
   if (isStandalone || dismissed) return "hidden";
   if (hasNativeInstallPrompt) return "native-prompt";
   if (isIos) return "ios-instructions";
+  if (isMobile) return "browser-instructions";
   return "hidden";
 }
 
@@ -23,4 +26,8 @@ export function isIosUserAgent(userAgent: string) {
   if (/iPad|iPhone|iPod/.test(userAgent)) return true;
   if (userAgent.includes("Mac") && "ontouchstart" in globalThis) return true;
   return false;
+}
+
+export function isMobileUserAgent(userAgent: string) {
+  return /Android|iPad|iPhone|iPod|Mobile/i.test(userAgent);
 }

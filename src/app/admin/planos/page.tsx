@@ -29,7 +29,7 @@ export default async function AdminPlansPage() {
                   <div>
                     <p className="font-black">{plan.name}</p>
                     <p className="text-sm text-zinc-400">
-                      {formatPlanPrice(plan.amountCents, plan.currency)} / {formatPlanInterval(plan.interval)} - {paymentMethodLabels(plan).join(", ")}
+                      {formatPlanPrice(plan.amountCents, plan.currency)} / {formatPlanInterval(plan.interval)} - {plan.premiumDays} dias - {paymentMethodLabels(plan).join(", ")}
                     </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${plan.active ? "bg-[#18b7bd]/15 text-[#b8fbff]" : "bg-red-500/10 text-red-200"}`}>
@@ -45,6 +45,7 @@ export default async function AdminPlansPage() {
                   amountCents: plan.amountCents,
                   currency: plan.currency,
                   interval: plan.interval,
+                  premiumDays: plan.premiumDays,
                   active: plan.active,
                   allowCard: plan.allowCard,
                   allowPix: plan.allowPix,

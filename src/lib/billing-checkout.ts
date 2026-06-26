@@ -7,6 +7,7 @@ type CheckoutPlan = {
   amountCents: number;
   currency: string;
   interval: string;
+  premiumDays: number;
   allowCard: boolean;
   allowPix: boolean;
 };
@@ -28,7 +29,8 @@ export function isCardOnlyPlan(plan: Pick<CheckoutPlan, "allowCard" | "allowPix"
   return plan.allowCard && !plan.allowPix;
 }
 
-export function getFixedPremiumDays(plan: Pick<CheckoutPlan, "interval">) {
+export function getFixedPremiumDays(plan: Pick<CheckoutPlan, "interval" | "premiumDays">) {
+  if (Number.isFinite(plan.premiumDays) && plan.premiumDays > 0) return plan.premiumDays;
   return plan.interval === "year" ? 365 : 30;
 }
 

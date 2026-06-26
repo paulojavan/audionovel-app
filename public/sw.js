@@ -1,7 +1,6 @@
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_NAME = `${CACHE_PREFIX}-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}-v3`;
 const STATIC_ASSETS = [
-  "/manifest.webmanifest",
   "/favicon-32x32.png",
   "/apple-touch-icon.png",
   "/icon.png",
@@ -42,6 +41,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname === "/manifest.webmanifest") return;
+  if (url.pathname.startsWith("/_next/")) return;
 
   if (isStaticAssetRequest(request, url)) {
     event.respondWith(cacheFirst(request));
@@ -55,7 +56,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 function isStaticAssetRequest(request, url) {
-  if (url.pathname.startsWith("/_next/static/")) return true;
+  if (url.pathname.startsWith("/_next/")) return false;
   return ["font", "image", "script", "style"].includes(request.destination);
 }
 

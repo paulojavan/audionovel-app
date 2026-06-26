@@ -21,6 +21,7 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
       amountCents: 800,
       currency: "brl",
       interval: "month",
+      premiumDays: 45,
       allowCard: false,
       allowPix: true,
     },
@@ -30,7 +31,7 @@ test("plano apenas pix cria preferencia Mercado Pago sem cartao", () => {
   assert.equal(params.external_reference, "checkout_intent_123");
   assert.ok(!params.external_reference.includes("user:"));
   assert.ok(!params.external_reference.includes("plan:"));
-  assert.equal(params.metadata.premium_days, "30");
+  assert.equal(params.metadata.premium_days, "45");
   assert.equal(params.notification_url, `${origin}/api/billing/webhook`);
   assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "credit_card"));
   assert.ok(params.payment_methods?.excluded_payment_types?.some((method) => method.id === "debit_card"));
@@ -55,6 +56,7 @@ test("plano de cartao cria preferencia Mercado Pago sem pix", () => {
       amountCents: 1000,
       currency: "brl",
       interval: "month",
+      premiumDays: 30,
       allowCard: true,
       allowPix: false,
     },
@@ -79,6 +81,7 @@ test("normaliza origem com barra final nas urls do Mercado Pago", () => {
       amountCents: 800,
       currency: "brl",
       interval: "month",
+      premiumDays: 30,
       allowCard: false,
       allowPix: true,
     },

@@ -16,6 +16,7 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
   const [message, setMessage] = useState("");
   const [availableItems, setAvailableItems] = useState<OfflineItem[] | null>(null);
   const [pending, startTransition] = useTransition();
@@ -23,6 +24,7 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
   const checkedItems = availableItems ?? [];
   const checkingCache = offlineCryptoSupported && availableItems === null;
   const activeItem = checkedItems.find((item) => item.id === activeId);
+  const activeChapterParts = activeItem?.chapterParts && activeItem.chapterParts.length > 1 ? activeItem.chapterParts : [];
   const groupedItems = groupByNovel(checkedItems);
 
   useEffect(() => {
@@ -101,11 +103,14 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
         if (audioSrc.startsWith("blob:")) URL.revokeObjectURL(audioSrc);
         setAudioSrc(url);
         setActiveId(item.id);
+        const playbackStart = getPlaybackStart(item);
+        setCurrentTime(playbackStart);
         requestAnimationFrame(() => {
           if (audioRef.current) {
             audioRef.current.volume = volume;
             audioRef.current.playbackRate = playbackRate;
             audioRef.current.load();
+            audioRef.current.currentTime = playbackStart;
             audioRef.current
               .play()
               .then(() => setPlaying(true))
@@ -149,6 +154,22 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
     setCurrentTime(value);
   }
 
+  function pauseIfNeededAtGroupedChapterEnd(audio: HTMLAudioElement) {
+    if (!pauseAtChapterEnd || activeChapterParts.length === 0) return;
+
+    const activePart = activeChapterParts.find((part) => audio.currentTime >= part.startSec && audio.currentTime < part.endSec);
+    if (!activePart) return;
+
+    const lastPartEnd = Math.max(...activeChapterParts.map((part) => part.endSec));
+    if (activePart.endSec >= lastPartEnd) return;
+    if (audio.currentTime < activePart.endSec - 0.25) return;
+
+    audio.pause();
+    audio.currentTime = activePart.endSec;
+    setCurrentTime(activePart.endSec);
+    setPlaying(false);
+  }
+
   const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   return (
@@ -160,7 +181,10 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onEnded={() => setPlaying(false)}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onTimeUpdate={(event) => {
+            setCurrentTime(event.currentTarget.currentTime);
+            pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
+          }}
           onLoadedMetadata={(event) => {
             const nextDuration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
             setDuration(nextDuration);
@@ -173,6 +197,25 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
               <h2 className="mt-1 text-xl font-black">{activeItem.title}</h2>
               <p className="text-sm text-zinc-400">{activeItem.novelTitle} - {activeItem.volumeTitle}</p>
             </div>
+            {activeChapterParts.length > 0 ? (
+              <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold">Pausar entre capitulos</p>
+                  <p className="text-xs text-zinc-400">Quando ligado, o audio pausa ao fim de cada capitulo dentro deste bloco.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={pauseAtChapterEnd}
+                  onClick={() => setPauseAtChapterEnd((value) => !value)}
+                  className={`flex min-h-11 w-20 items-center rounded-full p-1 transition ${
+                    pauseAtChapterEnd ? "justify-end bg-[#18b7bd]" : "justify-start bg-white/15"
+                  }`}
+                >
+                  <span className="h-9 w-9 rounded-full bg-white shadow" />
+                </button>
+              </div>
+            ) : null}
             <div className="grid gap-2">
               <div className="h-2 overflow-hidden rounded-full bg-black/50">
                 <div className="h-full bg-[#18b7bd]" style={{ width: `${progressPercent}%` }} />
@@ -280,6 +323,10 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
       </div>
     </div>
   );
+}
+
+function getPlaybackStart(item: OfflineItem) {
+  return item.chapterParts?.[0]?.startSec ?? 0;
 }
 
 function formatTime(value: number) {

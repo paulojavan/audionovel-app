@@ -78,6 +78,7 @@ export default async function SubscriptionsPage({
             current={isPremium}
             features={[
               plan.description ?? "Acesso premium aos capitulos",
+              `${plan.premiumDays} dias de acesso premium`,
               "Modo offline protegido",
               "Player karaoke",
               `Pagamento: ${paymentMethodLabels(plan).join(", ")}`,

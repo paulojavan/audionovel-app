@@ -6,6 +6,12 @@ export type OfflineItem = {
   volumeTitle: string;
   chapterPosition: number;
   chapterPositionLabel?: string;
+  chapterParts?: Array<{
+    position: number;
+    title: string;
+    startSec: number;
+    endSec: number;
+  }>;
   cacheKey: string;
   expiresAt: string;
 };
@@ -18,7 +24,12 @@ export function mergeOfflineItems(serverItems: OfflineItem[], localItems: Offlin
   }
 
   for (const item of localItems) {
-    byChapter.set(item.chapterId, item);
+    const serverItem = byChapter.get(item.chapterId);
+    byChapter.set(item.chapterId, {
+      ...serverItem,
+      ...item,
+      chapterParts: item.chapterParts ?? serverItem?.chapterParts,
+    });
   }
 
   return Array.from(byChapter.values()).sort((a, b) => {

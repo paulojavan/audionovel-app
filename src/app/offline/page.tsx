@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
+import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -50,17 +51,27 @@ export default async function OfflinePage() {
       </section>
 
       <OfflineListenPanel
-        items={downloads.map((download) => ({
-          id: download.id,
-          chapterId: download.chapterId,
-          title: download.chapter.title,
-          novelTitle: download.chapter.volume.novel.title,
-          volumeTitle: download.chapter.volume.title,
-          chapterPosition: download.chapter.position,
-          chapterPositionLabel: getChapterPositionLabel(download.chapter.position, download.chapter.positionEnd),
-          cacheKey: download.cacheKey,
-          expiresAt: download.expiresAt.toISOString(),
-        }))}
+        items={downloads.map((download) => {
+          const chapterParts = getChapterPartsForDisplay(download.chapter).map((part) => ({
+            position: part.position,
+            title: part.title,
+            startSec: part.startSec,
+            endSec: part.endSec,
+          }));
+
+          return {
+            id: download.id,
+            chapterId: download.chapterId,
+            title: download.chapter.title,
+            novelTitle: download.chapter.volume.novel.title,
+            volumeTitle: download.chapter.volume.title,
+            chapterPosition: download.chapter.position,
+            chapterPositionLabel: getChapterPositionLabel(download.chapter.position, download.chapter.positionEnd),
+            chapterParts,
+            cacheKey: download.cacheKey,
+            expiresAt: download.expiresAt.toISOString(),
+          };
+        })}
       />
     </div>
   );

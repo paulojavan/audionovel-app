@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Download, RefreshCw, Share2, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { getPwaInstallPromptState, isIosUserAgent } from "@/lib/pwa-install";
+import { getPwaInstallPromptState, isIosUserAgent, isMobileUserAgent } from "@/lib/pwa-install";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -16,6 +16,7 @@ const INSTALL_DISMISSED_KEY = "audio-novel-br-install-dismissed";
 export function PwaLifecycle() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [installDismissed, setInstallDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -30,6 +31,7 @@ export function PwaLifecycle() {
 
       setIsStandalone(standalone);
       setIsIos(isIosUserAgent(navigator.userAgent));
+      setIsMobile(isMobileUserAgent(navigator.userAgent));
       setInstallDismissed(localStorage.getItem(INSTALL_DISMISSED_KEY) === "1");
       setMounted(true);
     });
@@ -60,11 +62,12 @@ export function PwaLifecycle() {
     () =>
       getPwaInstallPromptState({
         isIos,
+        isMobile,
         isStandalone,
         hasNativeInstallPrompt: Boolean(promptEvent),
         dismissed: installDismissed,
       }),
-    [installDismissed, isIos, isStandalone, promptEvent],
+    [installDismissed, isIos, isMobile, isStandalone, promptEvent],
   );
 
   if (!mounted) return null;
@@ -111,6 +114,19 @@ export function PwaLifecycle() {
         onAction={() => dismissInstallPrompt(setInstallDismissed)}
         onDismiss={() => dismissInstallPrompt(setInstallDismissed)}
         secondaryIcon={<Share2 size={16} />}
+      />
+    );
+  }
+
+  if (installState === "browser-instructions") {
+    return (
+      <PwaNotice
+        icon={<Download size={20} />}
+        title="Instale o Audio Novel BR"
+        body="No Chrome Android, abra o menu do navegador e toque em Instalar app."
+        actionLabel="Entendi"
+        onAction={() => dismissInstallPrompt(setInstallDismissed)}
+        onDismiss={() => dismissInstallPrompt(setInstallDismissed)}
       />
     );
   }

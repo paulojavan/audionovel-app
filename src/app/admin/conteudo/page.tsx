@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Plus, Search, X } from "lucide-react";
+import { getTotalStoredChapterCount } from "@/lib/chapter-count";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminContentPage({
@@ -62,7 +63,7 @@ export default async function AdminContentPage({
       <div className="grid gap-3">
         {novels.length ? (
           novels.map((novel) => {
-            const chapterCount = novel.volumes.reduce((sum, volume) => sum + volume.chapters.length, 0);
+            const chapterCount = novel.volumes.reduce((sum, volume) => sum + getTotalStoredChapterCount(volume.chapters), 0);
             const premiumCount = novel.volumes.reduce(
               (sum, volume) => sum + volume.chapters.filter((chapter) => chapter.premiumOnly).length,
               0,

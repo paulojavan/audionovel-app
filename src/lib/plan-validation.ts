@@ -7,6 +7,7 @@ export const subscriptionPlanSchema = z
     amountCents: z.number().int().min(50).max(10000000),
     currency: z.enum(["brl"]).default("brl"),
     interval: z.enum(["month", "year"]).default("month"),
+    premiumDays: z.number().int().min(1).max(3650).default(30),
     active: z.boolean().default(true),
     allowCard: z.boolean().default(true),
     allowPix: z.boolean().default(false),

@@ -26,12 +26,13 @@ export function PasswordResetRequestForm() {
         body: JSON.stringify({ email }),
       })
         .then(async (response) => {
-          const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string; resetUrl?: string | null };
+          const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string; resetUrl?: string | null; deliveryError?: string | null };
           if (!response.ok) throw new Error(data.error ?? "Nao foi possivel solicitar a recuperacao.");
 
           setMessage(data.message ?? "Se existir uma conta com este e-mail, enviaremos um link de recuperacao.");
+          if (data.deliveryError) setError(data.deliveryError);
           setDevResetUrl(data.resetUrl ?? null);
-          form.reset();
+          if (!data.deliveryError) form.reset();
         })
         .catch((requestError: Error) => {
           setError(requestError.message);

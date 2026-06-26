@@ -5,6 +5,7 @@ import { AdminNovelPanelForms } from "@/components/admin-content-forms";
 import { AdminDeleteButton } from "@/components/admin-delete-button";
 import { AdminVolumeAccordion } from "@/components/admin-volume-accordion";
 import { getNextChapterPosition } from "@/lib/admin-chapter-sequence";
+import { getTotalStoredChapterCount } from "@/lib/chapter-count";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminNovelPanelPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +23,7 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
 
   if (!novel) notFound();
 
-  const chapterCount = novel.volumes.reduce((sum, volume) => sum + volume.chapters.length, 0);
+  const chapterCount = novel.volumes.reduce((sum, volume) => sum + getTotalStoredChapterCount(volume.chapters), 0);
 
   return (
     <div className="grid gap-8">

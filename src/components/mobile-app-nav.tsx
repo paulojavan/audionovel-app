@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CreditCard, Download, Home, Library, Search, Shield } from "lucide-react";
+import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield } from "lucide-react";
 
 type MobileAppNavProps = {
   role?: string | null;
@@ -18,6 +18,7 @@ export function MobileAppNav({ role, showSubscriptionsLink, unreadNotificationCo
     { href: "/biblioteca", label: "Biblioteca", icon: Library },
     { href: "/offline", label: "Offline", icon: Download },
     { href: "/notificacoes", label: "Avisos", icon: Bell, badge: unreadNotificationCount },
+    { href: "/reportar-bug", label: "Bug", icon: Bug },
     ...(showSubscriptionsLink ? [{ href: "/assinaturas", label: "Planos", icon: CreditCard }] : []),
     ...(role === "ADMIN" ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];

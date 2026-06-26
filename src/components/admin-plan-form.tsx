@@ -10,6 +10,7 @@ type PlanFormData = {
   amountCents: number;
   currency: string;
   interval: string;
+  premiumDays: number;
   active: boolean;
   allowCard: boolean;
   allowPix: boolean;
@@ -22,6 +23,7 @@ const blankPlan: PlanFormData = {
   amountCents: 1990,
   currency: "brl",
   interval: "month",
+  premiumDays: 30,
   active: true,
   allowCard: true,
   allowPix: false,
@@ -71,7 +73,7 @@ export function AdminPlanForm({ plan }: { plan?: PlanFormData }) {
 
   return (
     <form onSubmit={submit} className="grid gap-3 rounded-lg border border-white/10 bg-[#06272b] p-4">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_140px]">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_140px_150px]">
         <label className="grid gap-1 text-sm font-bold text-zinc-300">
           Nome
           <input
@@ -101,6 +103,18 @@ export function AdminPlanForm({ plan }: { plan?: PlanFormData }) {
             <option value="month">Mensal</option>
             <option value="year">Anual</option>
           </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold text-zinc-300">
+          Dias de acesso
+          <input
+            type="number"
+            min={1}
+            max={3650}
+            value={form.premiumDays}
+            onChange={(event) => updateField("premiumDays", Number(event.target.value))}
+            required
+            className="rounded-md border border-white/10 bg-black px-3 py-2 text-white outline-none focus:border-[#18b7bd]"
+          />
         </label>
       </div>
 

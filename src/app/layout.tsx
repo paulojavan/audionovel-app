@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
+import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
 import { getCachedUnreadNotificationCount } from "@/lib/notifications";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -103,6 +103,11 @@ export default async function RootLayout({
                   <Link className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/10" href="/notificacoes">
                     <Bell size={18} /> Notificacoes
                     {unreadNotificationCount ? <span className="ml-auto rounded-full bg-[#18b7bd] px-2 py-0.5 text-xs font-black text-[#021114]">{unreadNotificationCount}</span> : null}
+                  </Link>
+                ) : null}
+                {activeSession?.user ? (
+                  <Link className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/10" href="/reportar-bug">
+                    <Bug size={18} /> Reportar bug
                   </Link>
                 ) : null}
                 {showSubscriptionsLink ? (

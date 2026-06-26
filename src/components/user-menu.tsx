@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, Bug, LogOut, User } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 type UserMenuProps = {
@@ -36,6 +36,13 @@ export function UserMenu({ user, unreadNotificationCount = 0 }: UserMenuProps) {
             {unreadNotificationCount}
           </span>
         ) : null}
+      </Link>
+      <Link
+        href="/reportar-bug"
+        className="flex min-h-10 items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-sm font-bold text-zinc-200 hover:bg-white/10"
+      >
+        <Bug size={16} />
+        <span className="hidden sm:inline">Bug</span>
       </Link>
       <button
         type="button"

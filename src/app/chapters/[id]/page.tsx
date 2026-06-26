@@ -163,6 +163,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           chapterTitle={access.chapter.title}
           novelTitle={access.chapter.volume.novel.title}
           coverUrl={chapterCoverUrl}
+          chapterParts={chapterParts}
         />
       )}
       <section className="mt-8">

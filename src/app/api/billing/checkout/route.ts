@@ -98,9 +98,9 @@ export async function POST(request: Request) {
   }
 }
 
-async function activateDevSubscription(userId: string, plan: { id: string; name: string; interval: string; amountCents: number; currency: string }) {
+async function activateDevSubscription(userId: string, plan: { id: string; name: string; interval: string; premiumDays: number; amountCents: number; currency: string }) {
   const premiumUntil = new Date();
-  premiumUntil.setDate(premiumUntil.getDate() + (plan.interval === "year" ? 365 : 30));
+  premiumUntil.setDate(premiumUntil.getDate() + getFixedPremiumDays(plan));
 
   await prisma.$transaction([
     prisma.user.update({

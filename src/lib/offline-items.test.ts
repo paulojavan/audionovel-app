@@ -24,6 +24,18 @@ test("mergeOfflineItems keeps one entry per chapter preferring local metadata", 
   assert.equal(merged[0].title, "Local");
 });
 
+test("mergeOfflineItems preserves server chapter parts for older local metadata", () => {
+  const chapterParts = [{ position: 1, title: "Parte 1", startSec: 10, endSec: 20 }];
+  const merged = mergeOfflineItems(
+    [{ ...baseItem, id: "server", title: "Servidor", chapterParts }],
+    [{ ...baseItem, id: "local", title: "Local" }],
+  );
+
+  assert.equal(merged[0].id, "local");
+  assert.equal(merged[0].title, "Local");
+  assert.deepEqual(merged[0].chapterParts, chapterParts);
+});
+
 test("removeExpiredOfflineItems removes expired metadata", () => {
   const items = removeExpiredOfflineItems(
     [

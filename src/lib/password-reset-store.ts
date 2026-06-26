@@ -5,6 +5,8 @@ import { createRandomSessionId } from "./device-session";
 
 const RESET_REQUEST_OK_MESSAGE = "Se existir uma conta com este e-mail, enviaremos um link de recuperacao.";
 const RESET_CONFIRM_OK_MESSAGE = "Senha redefinida com sucesso. Entre novamente com sua nova senha.";
+const RESET_EMAIL_NOT_CONFIGURED_MESSAGE =
+  "Envio de recuperacao de senha nao configurado no servidor. Avise o administrador.";
 
 type PasswordResetUser = {
   id: string;
@@ -35,6 +37,11 @@ export async function ensurePasswordResetTable() {
 }
 
 export async function createPasswordResetRequest(email: string, origin: string) {
+  const deliveryConfig = getPasswordResetDeliveryConfig();
+  if (!deliveryConfig.configured) {
+    return { message: RESET_REQUEST_OK_MESSAGE, resetUrl: null, deliveryError: RESET_EMAIL_NOT_CONFIGURED_MESSAGE };
+  }
+
   await ensurePasswordResetTable();
 
   const user = await prisma.user.findUnique({
@@ -70,6 +77,7 @@ export async function createPasswordResetRequest(email: string, origin: string) 
   return {
     message: RESET_REQUEST_OK_MESSAGE,
     resetUrl: process.env.NODE_ENV === "production" ? null : resetUrl.toString(),
+    deliveryError: null,
   };
 }
 
@@ -148,4 +156,10 @@ async function deliverPasswordResetLink(user: PasswordResetUser, resetUrl: strin
   if (process.env.NODE_ENV !== "production") {
     console.info(`[password-reset] Link para ${user.email}: ${resetUrl}`);
   }
+}
+
+export function getPasswordResetDeliveryConfig(env = process.env) {
+  return {
+    configured: Boolean(env.PASSWORD_RESET_WEBHOOK_URL) || env.NODE_ENV !== "production",
+  };
 }
