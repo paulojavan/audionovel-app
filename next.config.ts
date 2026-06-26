@@ -20,14 +20,13 @@ const nextConfig: NextConfig = {
         ],
       },
 
-      // ── Manifest ──────────────────────────────────────────────────────────
+      // ── Manifest ────────────────────────────────────────────────────────────────────────────────────
       {
         source: "/manifest.webmanifest",
         headers: [
-          { key: "Cache-Control", value: "public, max-age=3600, must-revalidate" },
-          { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
-          // CORS para manifest (necessário em alguns cenários)
-          { key: "Access-Control-Allow-Origin", value: "*" },
+          // Sem cache para garantir que browsers sempre busquem o manifest atualizado
+          { key: "Cache-Control", value: "no-cache, must-revalidate" },
+          // Não sobrescrever Content-Type — o Next.js já gera correto para webmanifest
         ],
       },
 
