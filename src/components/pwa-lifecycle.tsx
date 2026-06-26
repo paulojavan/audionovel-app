@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { CheckCircle, Download, RefreshCw, Share2, Smartphone, X } from "lucide-react";
+import { CheckCircle, Download, RefreshCw, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getPwaInstallPromptState, isIosUserAgent, isMobileUserAgent } from "@/lib/pwa-install";

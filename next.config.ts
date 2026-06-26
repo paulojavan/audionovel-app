@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
         headers: [
           // Sem cache para garantir que browsers sempre busquem o manifest atualizado
           { key: "Cache-Control", value: "no-cache, must-revalidate" },
-          // Não sobrescrever Content-Type — o Next.js já gera correto para webmanifest
+          { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
         ],
       },
 

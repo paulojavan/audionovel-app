@@ -7,16 +7,24 @@ import { isDecodedSessionTokenUsable } from "./lib/session-token";
 const publicPages = new Set(["/", "/login", "/cadastro", "/recuperar-senha", "/redefinir-senha"]);
 const publicApiPrefixes = ["/api/auth", "/api/register", "/api/password-reset"];
 const publicApiSuffixes = ["/api/billing/webhook", "/api/billing/return"];
-const publicFiles = new Set(["/favicon.ico", "/logo-audio-novel-br.png"]);
+const publicFiles = new Set([
+  "/favicon.ico",
+  "/manifest.webmanifest",
+  "/apple-touch-icon.png",
+  "/logo-audio-novel-br.png",
+  "/offline-fallback.html",
+  "/sw.js",
+]);
 
 function isPublicPath(pathname: string) {
   if (publicPages.has(pathname)) return true;
   if (publicFiles.has(pathname)) return true;
   if (pathname.startsWith("/_next/")) return true;
+  if (pathname.startsWith("/icons/")) return true;
   if (pathname.startsWith("/images/")) return true;
   if (publicApiPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
   if (publicApiSuffixes.some((suffix) => pathname.startsWith(suffix))) return true;
-  return /\.(png|jpg|jpeg|webp|svg|ico|css|js|map|txt|xml)$/i.test(pathname);
+  return /\.(png|jpg|jpeg|webp|svg|ico|css|js|map|txt|xml|webmanifest)$/i.test(pathname);
 }
 
 export async function proxy(request: NextRequest) {

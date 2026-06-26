@@ -6,7 +6,7 @@ import { test } from "node:test";
 const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 const staticAssetsBlock = serviceWorkerSource.match(/const STATIC_ASSETS = \[[\s\S]*?\];/)?.[0] ?? "";
 
-test("service worker nao pre-cacheia o manifest dinamico do Next", () => {
+test("service worker nao pre-cacheia o manifest publico", () => {
   assert.doesNotMatch(staticAssetsBlock, /["']\/manifest\.webmanifest["']/);
   assert.match(serviceWorkerSource, /url\.pathname === "\/manifest\.webmanifest"/);
 });

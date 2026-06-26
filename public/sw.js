@@ -2,7 +2,7 @@
 // Estratégia: Cache-first para assets estáticos, Network-first para navegação
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 // Assets críticos para funcionamento offline
@@ -83,14 +83,8 @@ self.addEventListener("fetch", (event) => {
   // Ignorar manifest - sempre buscar da rede
   if (url.pathname === "/manifest.webmanifest") return;
 
-  // Ignorar arquivos Next.js internos (HMR, etc)
-  if (url.pathname.startsWith("/_next/webpack-hmr")) return;
-
-  // Assets _next/ estáticos: cache-first com fallback de rede
-  if (url.pathname.startsWith("/_next/static/")) {
-    event.respondWith(cacheFirst(request));
-    return;
-  }
+  // Ignorar arquivos internos do Next.js; o navegador deve sempre buscar os chunks atuais.
+  if (url.pathname.startsWith("/_next/")) return;
 
   // Assets estáticos (imagens, fontes, scripts, estilos)
   if (isStaticAsset(request, url)) {
