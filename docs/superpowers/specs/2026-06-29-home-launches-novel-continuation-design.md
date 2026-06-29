@@ -15,7 +15,7 @@ Melhorar a experiência do usuário autenticado em três pontos:
 - Capítulos Premium aparecem para todos os usuários autenticados e recebem identificação visual.
 - Quando mais de um dos oito capítulos pertence à mesma novel, a interface mostra capa e título uma vez e lista os capítulos dessa obra no mesmo grupo.
 - O agrupamento não altera a seleção nem a ordem global: continuam sendo exatamente os oito capítulos mais recentes.
-- Usuários Premium veem os dias restantes no cabeçalho. Usuários gratuitos não veem texto substituto.
+- Todos os usuários autenticados veem a contagem de dias Premium no cabeçalho. Usuários gratuitos veem `0 dias de Premium`.
 - Cada novel pode apontar para no máximo uma continuação. O modelo aceita cadeias como Livro 1 → Livro 2 → Livro 3.
 - A chamada da continuação fica abaixo dos volumes e antes dos comentários.
 - A direção visual escolhida é a opção A editorial, refinada com o agrupamento da imagem de referência.
@@ -40,12 +40,11 @@ Se não houver capítulos publicados, a seção exibe “Nenhum capítulo public
 
 Um helper em `src/lib/subscription.ts` recebe `premiumUntil` e um instante de referência. Ele retorna zero para valores ausentes, inválidos ou expirados e usa arredondamento para cima para datas futuras. Assim, uma assinatura com menos de 24 horas restantes ainda mostra um dia.
 
-O cabeçalho só renderiza o texto quando `hasPremiumAccess` for verdadeiro e o helper retornar um valor positivo. O texto respeita singular e plural:
+O cabeçalho sempre renderiza a contagem para usuários autenticados. Quando não houver acesso Premium ativo, exibe zero. O texto respeita singular e plural:
 
+- `0 dias de Premium`;
 - `1 dia de Premium`;
 - `N dias de Premium`.
-
-Para usuários gratuitos, o espaço fica vazio.
 
 ### Relação de continuação
 
