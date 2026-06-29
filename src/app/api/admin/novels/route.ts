@@ -15,6 +15,7 @@ const novelSchema = z.object({
   coverUrl: z.string().url().refine((value) => isSafePublicHttpsUrl(value), "Use uma URL HTTPS publica permitida."),
   status: z.string().trim().default("ONGOING"),
   tagIds: z.array(z.string()).optional().default([]),
+  continuationId: z.string().trim().min(1).nullable().optional().default(null),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +27,19 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
 
   try {
+    if (parsed.data.continuationId) {
+      const continuation = await prisma.novel.findUnique({
+        where: { id: parsed.data.continuationId },
+        select: { id: true },
+      });
+      if (!continuation) {
+        return NextResponse.json(
+          { error: "A continuação selecionada não existe." },
+          { status: 400 },
+        );
+      }
+    }
+
     const slug = await createUniqueSlug(parsed.data.slug ?? parsed.data.title);
     const { tagIds, ...novelData } = parsed.data;
     const novel = await prisma.novel.create({

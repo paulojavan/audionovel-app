@@ -85,26 +85,29 @@ model SecurityEvent {
 }
 
 model Novel {
-  id           String          @id @default(cuid())
-  slug         String          @unique
-  title        String
-  author       String
-  narrator     String?
-  synopsis     String
-  coverUrl     String
-  status       String          @default("ONGOING")
-  viewCount    Int             @default(0)
-  likeCount    Int             @default(0)
-  dislikeCount Int             @default(0)
-  ratingScore  Float           @default(0)
-  ratingCount  Int             @default(0)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  volumes      Volume[]
-  comments     Comment[]
-  favorites    Favorite[]
-  reactions    NovelReaction[]
-  tags         NovelTag[]
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  title          String
+  author         String
+  narrator       String?
+  synopsis       String
+  coverUrl       String
+  status         String          @default("ONGOING")
+  continuationId String?         @unique
+  viewCount      Int             @default(0)
+  likeCount      Int             @default(0)
+  dislikeCount   Int             @default(0)
+  ratingScore    Float           @default(0)
+  ratingCount    Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  continuation   Novel?          @relation("NovelContinuation", fields: [continuationId], references: [id], onDelete: SetNull)
+  previousNovel  Novel?          @relation("NovelContinuation")
+  volumes        Volume[]
+  comments       Comment[]
+  favorites      Favorite[]
+  reactions      NovelReaction[]
+  tags           NovelTag[]
 }
 
 model Tag {
@@ -343,15 +346,15 @@ model SystemSetting {
 }
 
 model BugReport {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   description String
   pageUrl     String?
-  status      String    @default("OPEN")
+  status      String   @default("OPEN")
   userId      String?
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([userId, createdAt])

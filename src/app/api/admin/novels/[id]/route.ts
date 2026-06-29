@@ -3,6 +3,10 @@ import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
+import {
+  getNovelContinuationErrorMessage,
+  validateNovelContinuation,
+} from "@/lib/novel-continuation";
 import { prisma } from "@/lib/prisma";
 import { isSafePublicHttpsUrl } from "@/lib/url-security";
 
@@ -13,6 +17,7 @@ const novelUpdateSchema = z.object({
   coverUrl: z.string().url().refine((value) => isSafePublicHttpsUrl(value), "Use uma URL HTTPS publica permitida."),
   status: z.string().trim().default("ONGOING"),
   tagIds: z.array(z.string()).max(30).optional().default([]),
+  continuationId: z.string().trim().min(1).nullable().optional().default(null),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -27,6 +32,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const tagIds = Array.from(new Set(parsed.data.tagIds));
 
   try {
+    const continuationError = validateNovelContinuation(
+      id,
+      parsed.data.continuationId,
+      await prisma.novel.findMany({
+        select: { id: true, continuationId: true },
+      }),
+    );
+    if (continuationError) {
+      return NextResponse.json(
+        { error: getNovelContinuationErrorMessage(continuationError) },
+        { status: 400 },
+      );
+    }
+
     const novel = await prisma.novel.update({
       where: { id },
       data: {
@@ -35,6 +54,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         synopsis: parsed.data.synopsis,
         coverUrl: parsed.data.coverUrl,
         status: parsed.data.status,
+        continuationId: parsed.data.continuationId,
         tags: {
           deleteMany: {},
           create: tagIds.map((tagId) => ({ tagId })),

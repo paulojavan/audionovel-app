@@ -20,6 +20,14 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
         include: { chapters: { orderBy: { position: "asc" } } },
       },
       tags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
+      continuation: {
+        select: {
+          slug: true,
+          title: true,
+          coverUrl: true,
+          synopsis: true,
+        },
+      },
       comments: {
         where: { parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
         take: 20,
@@ -129,6 +137,32 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
         }))}
         canUseOffline={canUseOffline}
       />
+
+      {novel.continuation ? (
+        <aside className="mt-10 overflow-hidden rounded-xl border border-[#18b7bd]/40 bg-[linear-gradient(115deg,#07343a,#06272b_55%,#031316)]">
+          <Link
+            href={`/novels/${novel.continuation.slug}`}
+            className="grid gap-4 p-4 transition hover:bg-white/5 sm:grid-cols-[96px_1fr_auto] sm:items-center"
+          >
+            <Image
+              src={novel.continuation.coverUrl}
+              alt={`Capa de ${novel.continuation.title}`}
+              width={240}
+              height={320}
+              className="aspect-[3/4] w-24 rounded-md object-cover shadow-xl"
+            />
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8ff7ff]">A jornada continua</p>
+              <h2 className="mt-2 text-xl font-black">Terminou de ouvir? O próximo mundo já está chamando.</h2>
+              <p className="mt-2 font-bold text-white">{novel.continuation.title}</p>
+              <p className="mt-1 line-clamp-2 text-sm text-zinc-300">{novel.continuation.synopsis}</p>
+            </div>
+            <span className="justify-self-start rounded-full bg-[#18b7bd] px-4 py-2 text-sm font-black text-[#021114] sm:justify-self-end">
+              Conhecer continuação
+            </span>
+          </Link>
+        </aside>
+      ) : null}
 
       <section className="mt-10">
         <h2 className="mb-3 text-xl font-bold">Comentarios da novel</h2>

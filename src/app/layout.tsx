@@ -4,7 +4,10 @@ import Link from "next/link";
 import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
 import { getCachedUnreadNotificationCount } from "@/lib/notifications";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
-import { hasPremiumAccess } from "@/lib/subscription";
+import {
+  getPremiumDaysLabel,
+  hasPremiumAccess,
+} from "@/lib/subscription";
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { PwaLifecycle } from "@/components/pwa-lifecycle";
@@ -83,6 +86,7 @@ export default async function RootLayout({
     ? await getCachedUnreadNotificationCount(activeSession.user.id)
     : 0;
   const showSubscriptionsLink = !activeSession?.user || !hasPremiumAccess(activeSession.user);
+  const premiumDaysLabel = getPremiumDaysLabel(activeSession?.user);
 
   return (
     <html lang="pt-BR">
@@ -170,7 +174,9 @@ export default async function RootLayout({
                   />
                   <span>Audio Novel BR</span>
                 </Link>
-                <div className="hidden text-sm text-zinc-400 md:block">{activeSession?.user ? "Sessao ativa" : "Voce ainda nao entrou"}</div>
+                <div className="hidden text-sm font-bold text-[#8ff7ff] md:block">
+                  {premiumDaysLabel}
+                </div>
                 {activeSession?.user ? (
                   <UserMenu user={activeSession.user} unreadNotificationCount={unreadNotificationCount} />
                 ) : (

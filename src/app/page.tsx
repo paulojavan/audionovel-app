@@ -1,7 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Download, Headphones, Play, ShieldCheck, Star } from "lucide-react";
+import { BookOpen, Download, Headphones, LockKeyhole, Play, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { HomeRankingSwitcher } from "@/components/home-ranking-switcher";
+import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { formatLaunchAge, groupLatestChapters } from "@/lib/latest-chapters";
 import { prisma } from "@/lib/prisma";
 import { getCachedHomeData } from "@/lib/public-data";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -13,7 +15,7 @@ export default async function Home() {
     return <LandingPage />;
   }
 
-  const [{ novels, rankingByViews, rankingByRating }, ratedNovelIds] = await Promise.all([
+  const [{ novels, rankingByViews, rankingByRating, latestChapters }, ratedNovelIds] = await Promise.all([
     getCachedHomeData(),
     prisma.novelReaction.findMany({
       where: { userId: session.user.id, rating: { gte: 4 } },
@@ -25,6 +27,7 @@ export default async function Home() {
   const recommendations = ratedIds.length
     ? novels.filter((novel) => !ratedIds.includes(novel.id)).sort((a, b) => b.ratingScore - a.ratingScore)
     : novels.slice(0, 6);
+  const launchGroups = groupLatestChapters(latestChapters);
 
   return (
     <div className="px-4 py-5 md:px-8">
@@ -32,6 +35,65 @@ export default async function Home() {
         <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-[#021114]">Web novels em audio</p>
         <h1 className="max-w-3xl text-4xl font-black tracking-tight md:text-6xl">Ouca capitulos, acompanhe o texto e continue de onde parou.</h1>
         <p className="mt-4 max-w-2xl text-zinc-100">Streaming online, modo offline autenticado, historico, favoritos, comentarios e capitulos premium.</p>
+      </section>
+
+      <section className="mb-10">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="text-[#18b7bd]" size={22} />
+          <h2 className="text-2xl font-bold">Lançamentos</h2>
+        </div>
+        {launchGroups.length ? (
+          <div className="overflow-hidden rounded-lg border border-white/10">
+            {launchGroups.map((group) => (
+              <article
+                key={group.novel.id}
+                className="grid grid-cols-[76px_1fr] gap-3 border-b border-white/10 bg-[#06272b] p-3 last:border-b-0 sm:grid-cols-[96px_1fr] sm:gap-4 sm:p-4"
+              >
+                <Link href={`/novels/${group.novel.slug}`} className="self-start">
+                  <Image
+                    src={group.novel.coverUrl}
+                    alt={`Capa de ${group.novel.title}`}
+                    width={240}
+                    height={320}
+                    className="aspect-[3/4] w-full rounded-md object-cover shadow-lg"
+                  />
+                </Link>
+                <div className="min-w-0">
+                  <Link href={`/novels/${group.novel.slug}`} className="font-black hover:text-[#8ff7ff]">
+                    {group.novel.title}
+                  </Link>
+                  <div className="mt-3 grid gap-2">
+                    {group.chapters.map((chapter) => (
+                      <div
+                        key={chapter.id}
+                        className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3"
+                      >
+                        <Link
+                          href={`/chapters/${chapter.id}`}
+                          className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-zinc-200 hover:text-white"
+                        >
+                          <span className="rounded-full bg-black/35 px-3 py-1 font-bold text-[#baf9fc]">
+                            Vol. {chapter.volume.position} · Cap. {getChapterPositionLabel(chapter.position, chapter.positionEnd)}
+                          </span>
+                          <span className="min-w-0 truncate text-zinc-300">{chapter.title}</span>
+                          {chapter.premiumOnly ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-yellow-200">
+                              <LockKeyhole size={12} />
+                              Premium
+                            </span>
+                          ) : null}
+                        </Link>
+                        <span className="text-xs italic text-zinc-500">{formatLaunchAge(chapter.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg bg-[#06272b] p-5 text-sm text-zinc-400">Nenhum capítulo publicado ainda.</p>
+        )}
       </section>
 
       <section className="mb-10">

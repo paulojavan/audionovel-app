@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export default async function EditNovelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [novel, tags] = await Promise.all([
+  const [novel, tags, novels] = await Promise.all([
     prisma.novel.findUnique({
       where: { id },
       include: {
@@ -13,6 +13,11 @@ export default async function EditNovelPage({ params }: { params: Promise<{ id: 
       },
     }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
+    prisma.novel.findMany({
+      where: { id: { not: id } },
+      orderBy: { title: "asc" },
+      select: { id: true, title: true },
+    }),
   ]);
 
   if (!novel) notFound();
@@ -27,6 +32,7 @@ export default async function EditNovelPage({ params }: { params: Promise<{ id: 
       <AdminNovelEditForm
         backHref={backHref}
         tags={tags}
+        novels={novels}
         novel={{
           id: novel.id,
           title: novel.title,
@@ -34,6 +40,7 @@ export default async function EditNovelPage({ params }: { params: Promise<{ id: 
           synopsis: novel.synopsis,
           coverUrl: novel.coverUrl,
           status: novel.status,
+          continuationId: novel.continuationId,
           tagIds: novel.tags.map((item) => item.tagId),
         }}
       />

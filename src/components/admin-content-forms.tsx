@@ -20,6 +20,11 @@ type TagOption = {
   slug: string;
 };
 
+type NovelOption = {
+  id: string;
+  title: string;
+};
+
 type MediaType = "AUDIO" | "YOUTUBE";
 
 type ChapterEditData = {
@@ -46,6 +51,7 @@ type NovelEditData = {
   synopsis: string;
   coverUrl: string;
   status: string;
+  continuationId: string | null;
   tagIds: string[];
 };
 
@@ -199,7 +205,13 @@ export function AdminChapterEditForm({
   );
 }
 
-export function AdminNovelForm({ tags }: { tags: TagOption[] }) {
+export function AdminNovelForm({
+  tags,
+  novels,
+}: {
+  tags: TagOption[];
+  novels: NovelOption[];
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [availableTags, setAvailableTags] = useState(tags);
@@ -251,6 +263,7 @@ export function AdminNovelForm({ tags }: { tags: TagOption[] }) {
               synopsis: data.get("synopsis"),
               coverUrl: data.get("coverUrl"),
               status: data.get("status"),
+              continuationId: getString(data, "continuationId") || null,
               tagIds: selectedTagIds,
             });
             setMessage("Novel cadastrada com sucesso.");
@@ -275,6 +288,17 @@ export function AdminNovelForm({ tags }: { tags: TagOption[] }) {
         <option value="COMPLETED">Concluida</option>
         <option value="PAUSED">Pausada</option>
       </select>
+      <label className="grid gap-1 text-sm text-zinc-300">
+        Continuação
+        <select name="continuationId" className="rounded-md border border-white/10 bg-black px-3 py-2" defaultValue="">
+          <option value="">Sem continuação</option>
+          {novels.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.title}
+            </option>
+          ))}
+        </select>
+      </label>
       <section className="grid gap-3 rounded-md border border-white/10 bg-black/40 p-3">
         <div>
           <p className="text-sm font-bold text-zinc-300">Tags</p>
@@ -323,10 +347,12 @@ export function AdminNovelForm({ tags }: { tags: TagOption[] }) {
 export function AdminNovelEditForm({
   novel,
   tags,
+  novels,
   backHref,
 }: {
   novel: NovelEditData;
   tags: TagOption[];
+  novels: NovelOption[];
   backHref: string;
 }) {
   const router = useRouter();
@@ -379,6 +405,7 @@ export function AdminNovelEditForm({
               synopsis: data.get("synopsis"),
               coverUrl: data.get("coverUrl"),
               status: data.get("status"),
+              continuationId: getString(data, "continuationId") || null,
               tagIds: selectedTagIds,
             });
             setMessage("Novel atualizada com sucesso.");
@@ -401,6 +428,21 @@ export function AdminNovelEditForm({
         <option value="COMPLETED">Concluida</option>
         <option value="PAUSED">Pausada</option>
       </select>
+      <label className="grid gap-1 text-sm text-zinc-300">
+        Continuação
+        <select
+          name="continuationId"
+          className="rounded-md border border-white/10 bg-black px-3 py-2"
+          defaultValue={novel.continuationId ?? ""}
+        >
+          <option value="">Sem continuação</option>
+          {novels.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.title}
+            </option>
+          ))}
+        </select>
+      </label>
       <section className="grid gap-3 rounded-md border border-white/10 bg-black/40 p-3">
         <div>
           <p className="text-sm font-bold text-zinc-300">Tags</p>
