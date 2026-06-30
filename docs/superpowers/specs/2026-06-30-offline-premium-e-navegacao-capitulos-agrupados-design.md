@@ -60,3 +60,13 @@ fornecida.
 No cabeçalho mobile, o texto “Audio Novel BR” ao lado da logo será removido. O
 mesmo espaço exibirá `X dias de Premium`, inclusive `0 dias de Premium` para
 usuários free. A apresentação desktop existente permanece inalterada.
+
+## Contagem Premium no perfil
+
+A tela de perfil exibirá um segundo selo ao lado de “Plano: Premium/Free” com o
+resultado de `getPremiumDaysLabel(user)`. A mesma regra do cabeçalho será
+reutilizada, incluindo `0 dias de Premium` para usuários free, sem criar um
+cálculo paralelo.
+
+O selo será renderizado para todo usuário autenticado. Os campos necessários,
+`subscriptionStatus` e `premiumUntil`, já pertencem à seleção mínima do perfil.
