@@ -6,6 +6,8 @@ export const REQUIRE_USER_SELECT = {
   email: true,
   name: true,
   isBlocked: true,
+  subscriptionStatus: true,
+  premiumUntil: true,
 } as const satisfies Prisma.UserSelect;
 
 export const COMMENT_THREAD_SELECT = {

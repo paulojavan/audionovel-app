@@ -92,13 +92,15 @@ test("detalhe administrativo do usuario nao carrega senha nem transcricoes", () 
   assert.equal(chapter.volume.select.novel.select.slug, true);
 });
 
-test("autorizacao de APIs carrega apenas identidade, papel e bloqueio", () => {
+test("autorizacao de APIs carrega identidade, bloqueio e estado Premium", () => {
   assert.deepEqual(Object.keys(REQUIRE_USER_SELECT).sort(), [
     "email",
     "id",
     "isBlocked",
     "name",
+    "premiumUntil",
     "role",
+    "subscriptionStatus",
   ]);
 });
 
