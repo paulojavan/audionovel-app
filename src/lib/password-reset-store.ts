@@ -1,4 +1,8 @@
 import { hashPassword } from "./password";
+import {
+  deliverPasswordResetLinkSafely,
+  getPasswordResetDeliveryConfig,
+} from "./password-reset-delivery";
 import { createPlainResetToken, getPasswordResetExpiry, hashResetToken } from "./password-reset-token";
 import { prisma } from "./prisma";
 import { createRandomSessionId } from "./device-session";
@@ -7,12 +11,6 @@ const RESET_REQUEST_OK_MESSAGE = "Se existir uma conta com este e-mail, enviarem
 const RESET_CONFIRM_OK_MESSAGE = "Senha redefinida com sucesso. Entre novamente com sua nova senha.";
 const RESET_EMAIL_NOT_CONFIGURED_MESSAGE =
   "Envio de recuperacao de senha nao configurado no servidor. Avise o administrador.";
-
-type PasswordResetUser = {
-  id: string;
-  email: string;
-  isBlocked: boolean;
-};
 
 type PasswordResetTokenRow = {
   id: string;
@@ -38,7 +36,7 @@ export async function ensurePasswordResetTable() {
 
 export async function createPasswordResetRequest(email: string, origin: string) {
   const deliveryConfig = getPasswordResetDeliveryConfig();
-  if (!deliveryConfig.configured) {
+  if (deliveryConfig.mode === "unconfigured") {
     return { message: RESET_REQUEST_OK_MESSAGE, resetUrl: null, deliveryError: RESET_EMAIL_NOT_CONFIGURED_MESSAGE };
   }
 
@@ -72,7 +70,11 @@ export async function createPasswordResetRequest(email: string, origin: string) 
     `,
   ]);
 
-  await deliverPasswordResetLink(user, resetUrl.toString());
+  await deliverPasswordResetLinkSafely({
+    email: user.email,
+    resetUrl: resetUrl.toString(),
+    config: deliveryConfig,
+  });
 
   return {
     message: RESET_REQUEST_OK_MESSAGE,
@@ -135,31 +137,4 @@ export async function confirmPasswordReset(token: string, password: string) {
   }
 
   return { success: true as const, message: RESET_CONFIRM_OK_MESSAGE };
-}
-
-async function deliverPasswordResetLink(user: PasswordResetUser, resetUrl: string) {
-  const webhookUrl = process.env.PASSWORD_RESET_WEBHOOK_URL;
-
-  if (webhookUrl) {
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        to: user.email,
-        subject: "Recuperacao de senha - Audio Novel BR",
-        resetUrl,
-      }),
-    });
-    return;
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    console.info(`[password-reset] Link para ${user.email}: ${resetUrl}`);
-  }
-}
-
-export function getPasswordResetDeliveryConfig(env = process.env) {
-  return {
-    configured: Boolean(env.PASSWORD_RESET_WEBHOOK_URL) || env.NODE_ENV !== "production",
-  };
 }
