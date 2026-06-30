@@ -1,20 +1,20 @@
 "use client";
 
-import { Gauge, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
+import { Gauge, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getEncryptedAudioUrl } from "@/lib/audio-cache";
+import {
+  getActiveChapterPartIndex,
+  getAdjacentChapterPart,
+  type ChapterNavigationDirection,
+  type ChapterPlaybackPart,
+  type ChapterSeekDetail,
+} from "@/lib/chapter-playback";
 
 type Cue = {
   start: number;
   end: number;
   text: string;
-};
-
-type ChapterPartPlayback = {
-  position: number;
-  title: string;
-  startSec: number;
-  endSec: number;
 };
 
 export function AudioPlayer({
@@ -38,7 +38,7 @@ export function AudioPlayer({
   chapterTitle: string;
   novelTitle: string;
   coverUrl: string;
-  chapterParts?: ChapterPartPlayback[];
+  chapterParts?: ChapterPlaybackPart[];
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingStartRef = useRef<number | null>(null);
@@ -74,6 +74,10 @@ export function AudioPlayer({
   const progressDuration = resolvedDuration || duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (current / progressDuration) * 100));
   const groupedChapterParts = chapterParts.length > 1 ? chapterParts : [];
+  const absoluteCurrent = startOffset + current;
+  const activeChapterPartIndex = getActiveChapterPartIndex(groupedChapterParts, absoluteCurrent);
+  const hasPreviousChapterPart = activeChapterPartIndex > 0;
+  const hasNextChapterPart = activeChapterPartIndex >= 0 && activeChapterPartIndex < groupedChapterParts.length - 1;
   const karaokeFont = [
     {
       active: "clamp(0.82rem, 1.55vw, 1.2rem)",
@@ -186,14 +190,30 @@ export function AudioPlayer({
     setCurrent(nextRelativeTime);
   }
 
-  const seekToAbsoluteTime = useCallback((startSec: number) => {
+  const seekToAbsoluteTime = useCallback((startSec: number, autoplay = false) => {
     const audio = audioRef.current;
     const nextRelativeTime = Math.max(0, startSec - startOffset);
     pendingStartRef.current = startSec;
     shouldScrollActiveCueRef.current = true;
     if (audio) audio.currentTime = startSec;
     setCurrent(nextRelativeTime);
-  }, [startOffset]);
+
+    if (!audio || !autoplay) return;
+
+    setPlaybackError("");
+    setKaraokeMode(playMode === "karaoke");
+    audio.playbackRate = playbackRate;
+    audio.volume = volume;
+    audio.muted = muted;
+    audio
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => {
+        setPlaying(false);
+        setKaraokeMode(false);
+        setPlaybackError("Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.");
+      });
+  }, [muted, playbackRate, playMode, startOffset, volume]);
 
   useEffect(() => {
     if (!shouldScrollActiveCueRef.current || activeIndex < 0) return;
@@ -204,13 +224,23 @@ export function AudioPlayer({
 
   useEffect(() => {
     function seekFromChapterTitle(event: Event) {
-      const startSec = (event as CustomEvent<{ startSec?: number }>).detail?.startSec;
-      if (typeof startSec === "number") seekToAbsoluteTime(startSec);
+      const { startSec, autoplay } = (event as CustomEvent<Partial<ChapterSeekDetail>>).detail ?? {};
+      if (typeof startSec === "number") seekToAbsoluteTime(startSec, autoplay);
     }
 
     window.addEventListener("audio-novel-seek", seekFromChapterTitle);
     return () => window.removeEventListener("audio-novel-seek", seekFromChapterTitle);
   }, [seekToAbsoluteTime]);
+
+  function navigateGroupedChapter(direction: ChapterNavigationDirection) {
+    const audio = audioRef.current;
+    const target = getAdjacentChapterPart(
+      groupedChapterParts,
+      audio?.currentTime ?? absoluteCurrent,
+      direction,
+    );
+    if (target) seekToAbsoluteTime(target.startSec, true);
+  }
 
   function updateVolume(nextVolume: number) {
     const normalized = Math.min(1, Math.max(0, nextVolume));
@@ -325,7 +355,18 @@ export function AudioPlayer({
           </div>
         </div>
 
-        <div className="grid grid-cols-[auto_auto_auto] items-center gap-3 sm:flex sm:flex-wrap">
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+          {groupedChapterParts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => navigateGroupedChapter("previous")}
+              disabled={!hasPreviousChapterPart}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Capítulo agrupado anterior"
+            >
+              <SkipBack size={22} fill="currentColor" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => seekBy(-10)}
@@ -350,7 +391,18 @@ export function AudioPlayer({
           >
             +10s
           </button>
-          <div className="col-span-3 min-w-0 sm:flex-1">
+          {groupedChapterParts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => navigateGroupedChapter("next")}
+              disabled={!hasNextChapterPart}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Próximo capítulo agrupado"
+            >
+              <SkipForward size={22} fill="currentColor" />
+            </button>
+          ) : null}
+          <div className="w-full min-w-0 sm:flex-1">
             <div className="h-3 overflow-hidden rounded-full bg-white/10">
               <div className="h-full bg-[#18b7bd]" style={{ width: `${progressPercent}%` }} />
             </div>
@@ -444,6 +496,17 @@ export function AudioPlayer({
               </div>
               <div className="grid min-w-0 gap-2">
                 <div className="flex items-center justify-center gap-2">
+                {groupedChapterParts.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigateGroupedChapter("previous")}
+                    disabled={!hasPreviousChapterPart}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Capítulo agrupado anterior"
+                  >
+                    <SkipBack size={20} fill="currentColor" />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => seekBy(-10)}
@@ -468,6 +531,17 @@ export function AudioPlayer({
                 >
                   +10s
                 </button>
+                {groupedChapterParts.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigateGroupedChapter("next")}
+                    disabled={!hasNextChapterPart}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Próximo capítulo agrupado"
+                  >
+                    <SkipForward size={20} fill="currentColor" />
+                  </button>
+                ) : null}
                 </div>
                 <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
                 <span className="text-right text-xs text-zinc-400">{formatTime(current)}</span>
