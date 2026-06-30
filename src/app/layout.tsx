@@ -172,7 +172,7 @@ export default async function RootLayout({
                     height={36}
                     className="h-9 w-9 rounded object-cover"
                   />
-                  <span>Audio Novel BR</span>
+                  <span className="text-sm text-[#8ff7ff]">{premiumDaysLabel}</span>
                 </Link>
                 <div className="hidden text-sm font-bold text-[#8ff7ff] md:block">
                   {premiumDaysLabel}

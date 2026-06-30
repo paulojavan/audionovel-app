@@ -10,6 +10,52 @@
 
 ---
 
+### Task 0: Corrigir referência de tempo e cabeçalho Premium mobile
+
+**Files:**
+- Modify: `src/lib/subscription.ts`
+- Modify: `src/lib/subscription.test.ts`
+- Create: `src/lib/layout-premium.test.ts`
+- Modify: `src/app/layout.tsx`
+
+- [ ] **Step 1: Confirm the existing failing clock test**
+
+Run: `npx tsx --test src/lib/subscription.test.ts`
+
+Expected: FAIL em `getPremiumDaysLabel mantem a contagem para usuario premium`,
+pois a validação usa o relógio real em vez do `now` fornecido.
+
+- [ ] **Step 2: Write the mobile-header failing test**
+
+Criar um teste que leia `src/app/layout.tsx` e exija que o link mobile contenha
+`premiumDaysLabel`, não contenha `<span>Audio Novel BR</span>` e mantenha a
+apresentação desktop.
+
+- [ ] **Step 3: Run the mobile-header test to verify it fails**
+
+Run: `npx tsx --test src/lib/layout-premium.test.ts`
+
+Expected: FAIL porque o texto da marca ainda ocupa o espaço mobile.
+
+- [ ] **Step 4: Write minimal implementation**
+
+Permitir que `hasPremiumAccess()` receba `now`, repassar esse valor a
+`hasPremiumAccessAt()` e usá-lo em `getPremiumDaysLabel()`. No link mobile do
+layout, substituir “Audio Novel BR” por `{premiumDaysLabel}` com estilo compacto.
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `npx tsx --test src/lib/subscription.test.ts src/lib/layout-premium.test.ts`
+
+Expected: todos PASS.
+
+- [ ] **Step 6: Commit**
+
+```powershell
+git add src/lib/subscription.ts src/lib/subscription.test.ts src/lib/layout-premium.test.ts src/app/layout.tsx
+git commit -m "fix: show deterministic premium days on mobile"
+```
+
 ### Task 1: Restaurar os dados de autorização Premium
 
 **Files:**

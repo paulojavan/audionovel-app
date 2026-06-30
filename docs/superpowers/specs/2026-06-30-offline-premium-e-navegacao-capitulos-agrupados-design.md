@@ -49,3 +49,14 @@ Os testes automatizados devem cobrir:
 - intenção de autoplay enviada ao clicar no título de uma parte.
 
 Depois dos testes focados, a verificação final deve executar a suíte completa, lint e build.
+
+## Contagem Premium no mobile
+
+O cálculo de `getPremiumDaysLabel` deve usar a mesma referência de tempo tanto
+para validar o acesso quanto para calcular os dias restantes. Isso evita
+resultados dependentes do relógio real quando uma referência explícita é
+fornecida.
+
+No cabeçalho mobile, o texto “Audio Novel BR” ao lado da logo será removido. O
+mesmo espaço exibirá `X dias de Premium`, inclusive `0 dias de Premium` para
+usuários free. A apresentação desktop existente permanece inalterada.

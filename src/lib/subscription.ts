@@ -6,8 +6,8 @@ export function hasPremiumAccess(user?: {
   role?: string | null;
   subscriptionStatus?: string | null;
   premiumUntil?: Date | string | null;
-} | null) {
-  return hasPremiumAccessAt(user);
+} | null, now = new Date()) {
+  return hasPremiumAccessAt(user, now);
 }
 
 export function getRemainingPremiumDays(
@@ -37,7 +37,7 @@ export function getPremiumDaysLabel(
   } | null,
   now = new Date(),
 ) {
-  const days = hasPremiumAccess(user)
+  const days = hasPremiumAccess(user, now)
     ? getRemainingPremiumDays(user?.premiumUntil, now)
     : 0;
 
