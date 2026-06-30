@@ -4,7 +4,7 @@ import { ProfileEditForm } from "@/components/profile-edit-form";
 import { PROFILE_USER_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
-import { hasPremiumAccess } from "@/lib/subscription";
+import { getPremiumDaysLabel, hasPremiumAccess } from "@/lib/subscription";
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
 export default async function ProfilePage() {
@@ -27,6 +27,7 @@ export default async function ProfilePage() {
 
   if (!user) redirect("/login");
   const premium = hasPremiumAccess(user);
+  const premiumDaysLabel = getPremiumDaysLabel(user);
 
   return (
     <div className="px-4 py-6 md:px-8">
@@ -36,6 +37,7 @@ export default async function ProfilePage() {
         <p className="mt-2 text-zinc-400">{user.email}</p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <span className="rounded-full bg-white/10 px-4 py-2 text-sm font-bold">Plano: {premium ? "Premium" : "Free"}</span>
+          <span className="rounded-full bg-[#18b7bd]/15 px-4 py-2 text-sm font-bold text-[#8ff7ff]">{premiumDaysLabel}</span>
           {!premium && subscriptionsEnabled && firstActivePlan ? <BillingButton planId={firstActivePlan.id} label={`Assinar ${firstActivePlan.name}`} /> : null}
         </div>
       </section>

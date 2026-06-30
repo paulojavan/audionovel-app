@@ -264,3 +264,45 @@ Expected: nenhuma saída.
 Run: `git status --short`
 
 Expected: apenas alterações preexistentes e não relacionadas, se houver.
+
+### Task 5: Exibir dias Premium no perfil
+
+**Files:**
+- Create: `src/lib/profile-premium.test.ts`
+- Modify: `src/app/perfil/page.tsx`
+
+- [ ] **Step 1: Write the failing integration contract**
+
+Criar um teste que leia `src/app/perfil/page.tsx` e exija o uso de
+`getPremiumDaysLabel(user)` e a renderização de `{premiumDaysLabel}` ao lado do
+selo do plano.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx tsx --test src/lib/profile-premium.test.ts`
+
+Expected: FAIL porque o perfil ainda não usa `getPremiumDaysLabel`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Importar `getPremiumDaysLabel`, calcular o texto com o usuário já selecionado e
+renderizar um segundo selo no grupo que contém “Plano: Premium/Free”.
+
+- [ ] **Step 4: Run focused tests**
+
+Run: `npx tsx --test src/lib/profile-premium.test.ts src/lib/subscription.test.ts`
+
+Expected: todos PASS.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `npm test`
+
+Run: `npm run lint`
+
+Run: `npm run build`
+
+```powershell
+git add src/app/perfil/page.tsx src/lib/profile-premium.test.ts docs/superpowers/plans/2026-06-30-offline-premium-e-navegacao-capitulos-agrupados.md
+git commit -m "feat: show premium days on profile"
+```
