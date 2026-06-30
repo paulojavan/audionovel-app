@@ -10,6 +10,7 @@ import { ReactionButtons } from "@/components/reaction-buttons";
 import { canPlayChapter } from "@/lib/api";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { CHAPTER_PROGRESS_SELECT, COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
@@ -61,20 +62,16 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
 
   const [progress, comments, novelChapters] = await Promise.all([
     session?.user?.id
-      ? prisma.listeningProgress.findUnique({ where: { userId_chapterId: { userId: session.user.id, chapterId: id } } })
+      ? prisma.listeningProgress.findUnique({
+          where: { userId_chapterId: { userId: session.user.id, chapterId: id } },
+          select: CHAPTER_PROGRESS_SELECT,
+        })
       : Promise.resolve(null),
     prisma.comment.findMany({
       where: { chapterId: id, parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
       take: 20,
       orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { name: true } },
-        replies: {
-          where: { status: { in: ["APPROVED", "REMOVED"] } },
-          orderBy: { createdAt: "asc" },
-          include: { user: { select: { name: true } } },
-        },
-      },
+      select: COMMENT_THREAD_SELECT,
     }),
     prisma.chapter.findMany({
       where: {

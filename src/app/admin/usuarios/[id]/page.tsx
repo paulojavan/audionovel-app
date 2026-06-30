@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminUserDetailActions } from "@/components/admin-user-detail-actions";
+import { ADMIN_USER_DETAIL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { hasPremiumAccess } from "@/lib/subscription";
 
@@ -8,27 +9,7 @@ export default async function AdminUserStatsPage({ params }: { params: Promise<{
   const { id } = await params;
   const user = await prisma.user.findUnique({
     where: { id },
-    include: {
-      favorites: {
-        orderBy: { createdAt: "desc" },
-        include: { novel: true },
-      },
-      listeningProgress: {
-        orderBy: { updatedAt: "desc" },
-        include: { chapter: { include: { volume: { include: { novel: true } } } } },
-      },
-      comments: {
-        take: 50,
-        orderBy: { createdAt: "desc" },
-        include: {
-          novel: { select: { title: true, slug: true } },
-          chapter: { select: { id: true, title: true, volume: { select: { novel: { select: { title: true, slug: true } } } } } },
-        },
-      },
-      payments: { orderBy: { createdAt: "desc" } },
-      manualSubscriptionLogs: { orderBy: { createdAt: "desc" } },
-      _count: { select: { comments: true, favorites: true, listeningProgress: true } },
-    },
+    select: ADMIN_USER_DETAIL_SELECT,
   });
 
   if (!user) notFound();
@@ -56,7 +37,7 @@ export default async function AdminUserStatsPage({ params }: { params: Promise<{
   }
 
   const premiumPurchases = user.payments.filter((payment) => payment.status === "SUCCEEDED" && payment.amountCents > 0).length;
-  const manualPremiumCount = user.manualSubscriptionLogs.length;
+  const manualPremiumCount = user._count.manualSubscriptionLogs;
   const totalPaid = user.payments
     .filter((payment) => payment.status === "SUCCEEDED")
     .reduce((sum, payment) => sum + payment.amountCents, 0);

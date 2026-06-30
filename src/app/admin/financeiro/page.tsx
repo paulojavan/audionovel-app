@@ -1,3 +1,4 @@
+import { ADMIN_PAYMENT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getFinanceMonthPeriod } from "@/lib/finance-period";
 
@@ -10,7 +11,12 @@ export default async function AdminFinancePage({
   const period = getFinanceMonthPeriod(month);
   const createdAt = { gte: period.start, lt: period.end };
   const [payments, stats] = await Promise.all([
-    prisma.paymentTransaction.findMany({ where: { createdAt }, take: 100, orderBy: { createdAt: "desc" }, include: { user: true } }),
+    prisma.paymentTransaction.findMany({
+      where: { createdAt },
+      take: 100,
+      orderBy: { createdAt: "desc" },
+      select: ADMIN_PAYMENT_SELECT,
+    }),
     getPaymentStats(period.start, period.end),
   ]);
 

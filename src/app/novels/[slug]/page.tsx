@@ -6,49 +6,23 @@ import { CommentThread } from "@/components/comment-thread";
 import { FavoriteNovelButton } from "@/components/favorite-novel-button";
 import { NovelVolumeList } from "@/components/novel-volume-list";
 import { StarRating } from "@/components/star-rating";
+import { COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
+import { getCachedPublicNovel } from "@/lib/public-data";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 
 export default async function NovelPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const novel = await prisma.novel.findUnique({
-    where: { slug },
-    include: {
-      volumes: {
-        orderBy: { position: "asc" },
-        include: { chapters: { orderBy: { position: "asc" } } },
-      },
-      tags: { include: { tag: true }, orderBy: { tag: { name: "asc" } } },
-      continuation: {
-        select: {
-          slug: true,
-          title: true,
-          coverUrl: true,
-          synopsis: true,
-        },
-      },
-      comments: {
-        where: { parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
-        take: 20,
-        orderBy: { createdAt: "desc" },
-        include: {
-          user: { select: { name: true } },
-          replies: {
-            where: { status: { in: ["APPROVED", "REMOVED"] } },
-            orderBy: { createdAt: "asc" },
-            include: { user: { select: { name: true } } },
-          },
-        },
-      },
-    },
-  });
+  const [novel, session] = await Promise.all([
+    getCachedPublicNovel(slug),
+    getActiveServerSession(),
+  ]);
 
   if (!novel) notFound();
 
-  const session = await getActiveServerSession();
   const chapterIds = novel.volumes.flatMap((volume) => volume.chapters.map((chapter) => chapter.id));
-  const [listenedProgress, currentRating, favorite] = await Promise.all([
+  const [listenedProgress, currentRating, favorite, comments] = await Promise.all([
     session?.user?.id
       ? prisma.listeningProgress.findMany({
           where: { userId: session.user.id, chapterId: { in: chapterIds } },
@@ -67,6 +41,12 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
           select: { id: true },
         })
       : Promise.resolve(null),
+    prisma.comment.findMany({
+      where: { novelId: novel.id, parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
+      take: 20,
+      orderBy: { createdAt: "desc" },
+      select: COMMENT_THREAD_SELECT,
+    }),
   ]);
   const listenedChapterIds = new Set(listenedProgress.map((item) => item.chapterId));
   const lastListenedChapterId = listenedProgress.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.chapterId ?? null;
@@ -130,7 +110,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
             chapterPartsJson: chapter.chapterPartsJson,
             viewCount: chapter.viewCount,
             premiumOnly: chapter.premiumOnly,
-            createdAt: chapter.createdAt.toISOString(),
+            createdAt: new Date(chapter.createdAt).toISOString(),
             listened: listenedChapterIds.has(chapter.id),
             lastListened: lastListenedChapterId === chapter.id,
           })),
@@ -172,7 +152,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
           targetId={novel.id}
           isLoggedIn={isLoggedIn}
           currentUserId={session?.user?.id}
-          comments={novel.comments}
+          comments={comments}
         />
       </section>
     </div>

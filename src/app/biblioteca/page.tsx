@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { LIBRARY_USER_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
@@ -12,14 +13,7 @@ export default async function LibraryPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      favorites: { include: { novel: true }, orderBy: { createdAt: "desc" } },
-      listeningProgress: {
-        take: 20,
-        orderBy: { updatedAt: "desc" },
-        include: { chapter: { include: { volume: { include: { novel: true } } } } },
-      },
-    },
+    select: LIBRARY_USER_SELECT,
   });
 
   if (!user) redirect("/login");

@@ -4,7 +4,10 @@ import { prisma } from "@/lib/prisma";
 
 export default async function NewNovelPage() {
   const [tags, novels] = await Promise.all([
-    prisma.tag.findMany({ orderBy: { name: "asc" } }),
+    prisma.tag.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
     prisma.novel.findMany({
       orderBy: { title: "asc" },
       select: { id: true, title: true },

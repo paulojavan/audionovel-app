@@ -1,23 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminChapterEditForm } from "@/components/admin-content-forms";
+import { ADMIN_EDIT_CHAPTER_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 export default async function EditChapterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const chapter = await prisma.chapter.findUnique({
     where: { id },
-    include: {
-      volume: {
-        include: {
-          novel: {
-            include: {
-              volumes: { orderBy: { position: "asc" } },
-            },
-          },
-        },
-      },
-    },
+    select: ADMIN_EDIT_CHAPTER_SELECT,
   });
 
   if (!chapter) notFound();

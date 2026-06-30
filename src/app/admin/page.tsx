@@ -1,11 +1,16 @@
 import Link from "next/link";
+import { ADMIN_DASHBOARD_PAYMENT_SELECT, ADMIN_TOP_NOVEL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
   const [stats, topNovels, recentPayments] = await Promise.all([
     getAdminDashboardStats(),
-    prisma.novel.findMany({ take: 5, orderBy: { viewCount: "desc" } }),
-    prisma.paymentTransaction.findMany({ take: 5, orderBy: { createdAt: "desc" }, include: { user: true } }),
+    prisma.novel.findMany({ take: 5, orderBy: { viewCount: "desc" }, select: ADMIN_TOP_NOVEL_SELECT }),
+    prisma.paymentTransaction.findMany({
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      select: ADMIN_DASHBOARD_PAYMENT_SELECT,
+    }),
   ]);
 
   const totalRevenue = stats.revenueCents / 100;

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Plus, Search, X } from "lucide-react";
 import { getTotalStoredChapterCount } from "@/lib/chapter-count";
+import { ADMIN_CONTENT_NOVEL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminContentPage({
@@ -23,7 +24,7 @@ export default async function AdminContentPage({
         }
       : undefined,
     orderBy: { updatedAt: "desc" },
-    include: { volumes: { include: { chapters: true } }, tags: { include: { tag: true } } },
+    select: ADMIN_CONTENT_NOVEL_SELECT,
   });
 
   return (

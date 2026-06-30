@@ -1,10 +1,12 @@
 import { AdminPlanForm } from "@/components/admin-plan-form";
+import { ADMIN_PLAN_SELECT } from "@/lib/page-data-select";
 import { formatPlanInterval, formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminPlansPage() {
   const plans = await prisma.subscriptionPlan.findMany({
     orderBy: [{ sortOrder: "asc" }, { amountCents: "asc" }],
+    select: ADMIN_PLAN_SELECT,
   });
 
   return (

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { BillingButton } from "@/components/billing-button";
 import { ProfileEditForm } from "@/components/profile-edit-form";
+import { PROFILE_USER_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -14,9 +15,7 @@ export default async function ProfilePage() {
   const [user, firstActivePlan, subscriptionsEnabled] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: {
-        payments: { take: 10, orderBy: { createdAt: "desc" } },
-      },
+      select: PROFILE_USER_SELECT,
     }),
     prisma.subscriptionPlan.findFirst({
       where: { active: true },

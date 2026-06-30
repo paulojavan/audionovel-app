@@ -1,4 +1,5 @@
 import { AdminBugReportStatusForm } from "@/components/admin-bug-report-status-form";
+import { ADMIN_BUG_REPORT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 const statusLabels: Record<string, string> = {
@@ -11,7 +12,7 @@ export default async function AdminBugReportsPage() {
   const reports = await prisma.bugReport.findMany({
     take: 100,
     orderBy: { createdAt: "desc" },
-    include: { user: { select: { name: true, email: true } } },
+    select: ADMIN_BUG_REPORT_SELECT,
   });
 
   return (

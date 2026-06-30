@@ -6,19 +6,14 @@ import { AdminDeleteButton } from "@/components/admin-delete-button";
 import { AdminVolumeAccordion } from "@/components/admin-volume-accordion";
 import { getNextChapterPosition } from "@/lib/admin-chapter-sequence";
 import { getTotalStoredChapterCount } from "@/lib/chapter-count";
+import { ADMIN_NOVEL_PANEL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminNovelPanelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const novel = await prisma.novel.findUnique({
     where: { id },
-    include: {
-      volumes: {
-        orderBy: { position: "asc" },
-        include: { chapters: { orderBy: { position: "asc" } } },
-      },
-      tags: { include: { tag: true } },
-    },
+    select: ADMIN_NOVEL_PANEL_SELECT,
   });
 
   if (!novel) notFound();

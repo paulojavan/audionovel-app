@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NotificationReadButton } from "@/components/notification-read-button";
+import { NOTIFICATION_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 
@@ -14,10 +15,12 @@ export default async function NotificationsPage() {
       where: { userId: session.user.id },
       take: 20,
       orderBy: { createdAt: "desc" },
+      select: NOTIFICATION_SELECT,
     }),
     prisma.notification.findMany({
       where: { userId: session.user.id, readAt: null },
       orderBy: { createdAt: "desc" },
+      select: NOTIFICATION_SELECT,
     }),
   ]);
 

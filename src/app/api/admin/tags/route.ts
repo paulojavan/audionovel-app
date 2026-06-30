@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       update: { name: parsed.data.name },
     });
     revalidateTag(CACHE_TAGS.tags, "max");
+    revalidateTag(CACHE_TAGS.content, "max");
     return NextResponse.json(tag, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Nao foi possivel cadastrar a tag." }, { status: 409 });

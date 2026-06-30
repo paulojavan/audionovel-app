@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AdminCommentModerationActions } from "@/components/admin-comment-moderation-actions";
+import { ADMIN_MODERATION_COMMENT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 type AdminModerationPageProps = {
@@ -16,18 +17,7 @@ export default async function AdminModerationPage({ searchParams }: AdminModerat
     where: { status },
     take: 100,
     orderBy: { updatedAt: "desc" },
-    include: {
-      user: { select: { name: true, email: true } },
-      novel: { select: { slug: true, title: true } },
-      chapter: {
-        select: {
-          id: true,
-          title: true,
-          volume: { select: { title: true, novel: { select: { title: true, slug: true } } } },
-        },
-      },
-      parent: { select: { id: true, user: { select: { name: true } } } },
-    },
+    select: ADMIN_MODERATION_COMMENT_SELECT,
   });
 
   return (

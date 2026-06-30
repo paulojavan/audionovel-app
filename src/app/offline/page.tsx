@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { OFFLINE_DOWNLOAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -33,13 +34,7 @@ export default async function OfflinePage() {
   const downloads = await prisma.offlineDownload.findMany({
     where: { userId: session.user.id, expiresAt: { gt: new Date() } },
     orderBy: { lastUsedAt: "desc" },
-    include: {
-      chapter: {
-        include: {
-          volume: { include: { novel: true } },
-        },
-      },
-    },
+    select: OFFLINE_DOWNLOAD_SELECT,
   });
 
   return (

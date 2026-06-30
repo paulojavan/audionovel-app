@@ -4,6 +4,7 @@ import { BillingButton } from "@/components/billing-button";
 import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
 import { getApprovedCheckoutReturnPaymentId } from "@/lib/billing-return";
 import { getMercadoPagoPayment } from "@/lib/mercado-pago";
+import { SUBSCRIPTION_PLAN_SELECT } from "@/lib/page-data-select";
 import { formatPlanInterval, formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -36,6 +37,7 @@ export default async function SubscriptionsPage({
     prisma.subscriptionPlan.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { amountCents: "asc" }],
+      select: SUBSCRIPTION_PLAN_SELECT,
     }),
   ]);
   const isPremium = hasPremiumAccess(user);

@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Search, Star, X } from "lucide-react";
-import { prisma } from "@/lib/prisma";
-import { getCachedCatalogTags } from "@/lib/public-data";
+import { normalizeCatalogQuery } from "@/lib/catalog-query";
+import { getCachedCatalogPage, getCachedCatalogTags } from "@/lib/public-data";
 
 const PAGE_SIZE = 12;
 
@@ -11,39 +11,14 @@ export default async function NovelsPage({
 }: {
   searchParams: Promise<{ q?: string; tag?: string; author?: string; page?: string }>;
 }) {
-  const { q, tag, author, page } = await searchParams;
-  const query = q?.trim() ?? "";
-  const currentPage = Math.max(1, Number(page ?? 1) || 1);
-  const selectedTag = tag?.trim() || "";
-  const selectedAuthor = author?.trim() || "";
+  const filters = normalizeCatalogQuery(await searchParams);
+  const { query, currentPage, selectedTag, selectedAuthor } = filters;
 
-  const where = {
-    AND: [
-      query
-        ? {
-            OR: [
-              { title: { contains: query } },
-              { author: { contains: query } },
-              { synopsis: { contains: query } },
-            ],
-          }
-        : {},
-      selectedTag ? { tags: { some: { tag: { slug: selectedTag } } } } : {},
-      selectedAuthor ? { author: selectedAuthor } : {},
-    ],
-  };
-
-  const [tags, total, novels] = await Promise.all([
+  const [tags, catalog] = await Promise.all([
     getCachedCatalogTags(),
-    prisma.novel.count({ where }),
-    prisma.novel.findMany({
-      where,
-      include: { tags: { include: { tag: true } } },
-      orderBy: [{ ratingScore: "desc" }, { updatedAt: "desc" }],
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
+    getCachedCatalogPage(query, selectedTag, selectedAuthor, currentPage, PAGE_SIZE),
   ]);
+  const { total, novels } = catalog;
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -118,7 +93,7 @@ export default async function NovelsPage({
               </p>
               {novel.tags.length ? (
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {novel.tags.slice(0, 3).map(({ tag: item }) => (
+                  {novel.tags.map(({ tag: item }) => (
                     <Link key={item.id} href={`/novels?tag=${item.slug}`} className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-bold text-zinc-300 hover:bg-white/20">
                       {item.name}
                     </Link>
