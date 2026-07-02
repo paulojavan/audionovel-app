@@ -13,13 +13,12 @@ type UserMenuProps = {
     name?: string | null;
     email?: string | null;
     role?: string | null;
-    plan?: string | null;
-    subscriptionStatus?: string | null;
   } | null;
+  planLabel?: string;
   unreadNotificationCount?: number;
 };
 
-export function UserMenu({ user, unreadNotificationCount = 0 }: UserMenuProps) {
+export function UserMenu({ user, planLabel, unreadNotificationCount = 0 }: UserMenuProps) {
   const pathname = usePathname();
   const profileNavigationGuardRef = useRef(createSingleFlightGuard());
   const profileNavigationTimeoutRef = useRef<number | null>(null);
@@ -56,7 +55,7 @@ export function UserMenu({ user, unreadNotificationCount = 0 }: UserMenuProps) {
         }}
         className="flex min-h-10 min-w-0 items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
       >
-        <ProfileLinkContent user={user} />
+        <ProfileLinkContent user={user} planLabel={planLabel} />
       </Link>
       <Link
         href="/notificacoes"
@@ -92,7 +91,13 @@ export function UserMenu({ user, unreadNotificationCount = 0 }: UserMenuProps) {
   );
 }
 
-function ProfileLinkContent({ user }: { user: NonNullable<UserMenuProps["user"]> }) {
+function ProfileLinkContent({
+  user,
+  planLabel,
+}: {
+  user: NonNullable<UserMenuProps["user"]>;
+  planLabel?: string;
+}) {
   const { pending } = useLinkStatus();
 
   return (
@@ -101,7 +106,9 @@ function ProfileLinkContent({ user }: { user: NonNullable<UserMenuProps["user"]>
       <span className="hidden max-w-28 truncate font-bold sm:inline">
         {pending ? "Abrindo..." : user.name ?? user.email}
       </span>
-      <span className="hidden text-zinc-400 lg:inline">- {user.role === "ADMIN" ? "Admin" : user.plan ?? "Free"}</span>
+      <span className="hidden text-zinc-400 lg:inline">
+        - {user.role === "ADMIN" ? "Admin" : planLabel ?? "Free"}
+      </span>
     </>
   );
 }

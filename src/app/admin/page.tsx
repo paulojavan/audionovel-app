@@ -90,7 +90,7 @@ async function getAdminDashboardStats() {
   }>>`
     SELECT
       (SELECT COUNT(*) FROM "User") AS "userCount",
-      (SELECT COUNT(*) FROM "User" WHERE "plan" = 'PREMIUM' OR "subscriptionStatus" = 'ACTIVE') AS "premiumCount",
+      (SELECT COUNT(*) FROM "User" WHERE "subscriptionStatus" IN ('ACTIVE', 'TRIALING') AND "premiumUntil" > CURRENT_TIMESTAMP) AS "premiumCount",
       (SELECT COUNT(*) FROM "Novel") AS "novelCount",
       (SELECT COALESCE(SUM(CASE WHEN "positionEnd" IS NOT NULL AND "positionEnd" > "position" THEN "positionEnd" - "position" + 1 ELSE 1 END), 0) FROM "Chapter") AS "chapterCount",
       (SELECT COUNT(*) FROM "Comment") AS "commentCount",

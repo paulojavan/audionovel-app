@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { getSubscriptionDisplayState } from "@/lib/subscription";
 
 const PAGE_SIZE = 50;
 
@@ -91,31 +92,35 @@ export default async function AdminUsersPage({
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b border-white/10 last:border-b-0">
-                  <td className="px-3 py-3 font-bold">{user.name}</td>
-                  <td className="px-3 py-3 text-zinc-300">{user.email}</td>
-                  <td className="px-3 py-3">{user.role}</td>
-                  <td className="px-3 py-3">{user.plan}</td>
-                  <td className="px-3 py-3">
-                    {user.subscriptionStatus}
-                    {user.premiumUntil ? <span className="block text-xs text-zinc-500">Até {user.premiumUntil.toLocaleDateString("pt-BR")}</span> : null}
-                  </td>
-                  <td className="px-3 py-3">
-                    {user.isBlocked ? <span className="font-bold text-red-400">Bloqueado</span> : <span className="font-bold text-[#18b7bd]">Ativo</span>}
-                    {user.blockedAt ? <span className="block text-xs text-zinc-500">{user.blockedAt.toLocaleDateString("pt-BR")}</span> : null}
-                  </td>
-                  <td className="px-3 py-3 text-zinc-400">
-                    {user._count.listeningProgress} ouvidos • {user._count.favorites} favoritos • {user._count.comments} comentários
-                  </td>
-                  <td className="px-3 py-3 text-zinc-400">{user.createdAt.toLocaleDateString("pt-BR")}</td>
-                  <td className="px-3 py-3">
-                    <Link href={`/admin/usuarios/${user.id}`} className="rounded-full bg-[#18b7bd] px-3 py-2 text-xs font-black text-[#021114] hover:bg-[#22d3dc]">
-                      Ver estatisticas
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {users.map((user) => {
+                const subscriptionDisplay = getSubscriptionDisplayState(user);
+
+                return (
+                  <tr key={user.id} className="border-b border-white/10 last:border-b-0">
+                    <td className="px-3 py-3 font-bold">{user.name}</td>
+                    <td className="px-3 py-3 text-zinc-300">{user.email}</td>
+                    <td className="px-3 py-3">{user.role}</td>
+                    <td className="px-3 py-3">{subscriptionDisplay.planLabel}</td>
+                    <td className="px-3 py-3">
+                      {subscriptionDisplay.statusLabel}
+                      {user.premiumUntil ? <span className="block text-xs text-zinc-500">Até {user.premiumUntil.toLocaleDateString("pt-BR")}</span> : null}
+                    </td>
+                    <td className="px-3 py-3">
+                      {user.isBlocked ? <span className="font-bold text-red-400">Bloqueado</span> : <span className="font-bold text-[#18b7bd]">Ativo</span>}
+                      {user.blockedAt ? <span className="block text-xs text-zinc-500">{user.blockedAt.toLocaleDateString("pt-BR")}</span> : null}
+                    </td>
+                    <td className="px-3 py-3 text-zinc-400">
+                      {user._count.listeningProgress} ouvidos • {user._count.favorites} favoritos • {user._count.comments} comentários
+                    </td>
+                    <td className="px-3 py-3 text-zinc-400">{user.createdAt.toLocaleDateString("pt-BR")}</td>
+                    <td className="px-3 py-3">
+                      <Link href={`/admin/usuarios/${user.id}`} className="rounded-full bg-[#18b7bd] px-3 py-2 text-xs font-black text-[#021114] hover:bg-[#22d3dc]">
+                        Ver estatisticas
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (

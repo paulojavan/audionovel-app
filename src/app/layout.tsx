@@ -6,6 +6,7 @@ import { getCachedUnreadNotificationCount } from "@/lib/notifications";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import {
   getPremiumDaysLabel,
+  getSubscriptionDisplayState,
   hasPremiumAccess,
 } from "@/lib/subscription";
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
@@ -87,6 +88,7 @@ export default async function RootLayout({
     : 0;
   const showSubscriptionsLink = !activeSession?.user || !hasPremiumAccess(activeSession.user);
   const premiumDaysLabel = getPremiumDaysLabel(activeSession?.user);
+  const subscriptionDisplay = getSubscriptionDisplayState(activeSession?.user);
 
   return (
     <html lang="pt-BR">
@@ -178,7 +180,11 @@ export default async function RootLayout({
                   {premiumDaysLabel}
                 </div>
                 {activeSession?.user ? (
-                  <UserMenu user={activeSession.user} unreadNotificationCount={unreadNotificationCount} />
+                  <UserMenu
+                    user={activeSession.user}
+                    planLabel={subscriptionDisplay.planLabel}
+                    unreadNotificationCount={unreadNotificationCount}
+                  />
                 ) : (
                   <div className="flex items-center gap-2">
                     <Link className="rounded-full px-4 py-2 text-sm font-bold text-zinc-200 hover:bg-white/10" href="/cadastro">

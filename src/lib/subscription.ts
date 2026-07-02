@@ -2,6 +2,12 @@ import { hasPremiumAccessAt } from "./billing";
 
 const DAY_MS = 86_400_000;
 
+type SubscriptionDisplayUser = {
+  plan?: string | null;
+  subscriptionStatus?: string | null;
+  premiumUntil?: Date | string | null;
+};
+
 export function hasPremiumAccess(user?: {
   role?: string | null;
   subscriptionStatus?: string | null;
@@ -42,6 +48,37 @@ export function getPremiumDaysLabel(
     : 0;
 
   return formatPremiumDaysLabel(days);
+}
+
+export function getSubscriptionDisplayState(
+  user: SubscriptionDisplayUser | null | undefined,
+  now = new Date(),
+) {
+  const isPremium = hasPremiumAccessAt(user, now);
+  if (isPremium) {
+    return {
+      isPremium: true,
+      planLabel: "Premium",
+      statusLabel: "Ativo",
+    } as const;
+  }
+
+  const expiresAt = user?.premiumUntil ? new Date(user.premiumUntil) : null;
+  const hadPremium =
+    user?.plan === "PREMIUM" ||
+    user?.subscriptionStatus === "ACTIVE" ||
+    user?.subscriptionStatus === "TRIALING";
+  const expired =
+    hadPremium &&
+    expiresAt !== null &&
+    !Number.isNaN(expiresAt.getTime()) &&
+    expiresAt.getTime() <= now.getTime();
+
+  return {
+    isPremium: false,
+    planLabel: "Free",
+    statusLabel: expired ? "Expirado" : "Inativo",
+  } as const;
 }
 
 export function assertSameUserOrAdmin(

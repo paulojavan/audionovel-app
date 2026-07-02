@@ -4,6 +4,7 @@ import {
   formatPremiumDaysLabel,
   getPremiumDaysLabel,
   getRemainingPremiumDays,
+  getSubscriptionDisplayState,
   hasPremiumAccess,
 } from "./subscription";
 
@@ -59,5 +60,46 @@ test("getPremiumDaysLabel mantem a contagem para usuario premium", () => {
       now,
     ),
     "1 dia de Premium",
+  );
+});
+
+test("estado visual marca Premium vigente como ativo", () => {
+  const now = new Date("2026-07-02T12:00:00Z");
+
+  assert.deepEqual(
+    getSubscriptionDisplayState(
+      {
+        plan: "PREMIUM",
+        subscriptionStatus: "ACTIVE",
+        premiumUntil: "2026-07-03T12:00:00Z",
+      },
+      now,
+    ),
+    { isPremium: true, planLabel: "Premium", statusLabel: "Ativo" },
+  );
+});
+
+test("estado visual marca Premium vencido como Free e Expirado", () => {
+  const now = new Date("2026-07-02T12:00:00Z");
+
+  for (const premiumUntil of ["2026-07-01T23:59:59Z", "2026-07-02T12:00:00Z"]) {
+    assert.deepEqual(
+      getSubscriptionDisplayState(
+        { plan: "PREMIUM", subscriptionStatus: "ACTIVE", premiumUntil },
+        now,
+      ),
+      { isPremium: false, planLabel: "Free", statusLabel: "Expirado" },
+    );
+  }
+});
+
+test("estado visual marca conta sem Premium como Free e Inativo", () => {
+  assert.deepEqual(
+    getSubscriptionDisplayState({
+      plan: "FREE",
+      subscriptionStatus: "NONE",
+      premiumUntil: null,
+    }),
+    { isPremium: false, planLabel: "Free", statusLabel: "Inativo" },
   );
 });
