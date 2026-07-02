@@ -219,7 +219,6 @@ export const CHAPTER_PAGE_SELECT = {
   positionEnd: true,
   contentType: true,
   durationSec: true,
-  audioUrl: true,
   youtubeVideoId: true,
   coverUrl: true,
   startSec: true,
@@ -241,6 +240,12 @@ export const CHAPTER_PAGE_SELECT = {
       },
     },
   },
+} as const satisfies Prisma.ChapterSelect;
+
+export const CHAPTER_MEDIA_SOURCE_SELECT = {
+  id: true,
+  contentType: true,
+  audioUrl: true,
 } as const satisfies Prisma.ChapterSelect;
 
 export const ADMIN_CONTENT_NOVEL_SELECT = {

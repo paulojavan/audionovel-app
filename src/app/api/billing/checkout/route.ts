@@ -17,7 +17,7 @@ const allowDevBilling = process.env.NODE_ENV !== "production" && process.env.ALL
 export async function POST(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
-  const limited = enforceRateLimit({ key: `checkout:${auth.user.id}`, limit: 5, windowMs: 10 * 60_000 });
+  const limited = await enforceRateLimit({ key: `checkout:${auth.user.id}`, limit: 5, windowMs: 10 * 60_000 });
   if (limited) return limited;
 
   const subscriptionsEnabled = await getSystemSettingBoolean(SYSTEM_SETTING_KEYS.subscriptionsEnabled, true);

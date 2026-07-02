@@ -7,7 +7,7 @@ import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio, sav
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import { mergeOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
-export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
+export function OfflineListenPanel({ accountScope, items }: { accountScope: string; items: OfflineItem[] }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeId, setActiveId] = useState("");
   const [audioSrc, setAudioSrc] = useState("");
@@ -42,19 +42,19 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
       };
     }
 
-    getSavedOfflineItems()
+    getSavedOfflineItems(accountScope)
       .then(async (localItems) => {
         const mergedItems = mergeOfflineItems(items, localItems);
         const validItems = await Promise.all(
           mergedItems.map(async (item) => {
-            const valid = await hasValidEncryptedAudio(item.chapterId, "offline");
+            const valid = await hasValidEncryptedAudio(accountScope, item.chapterId, "offline");
             return valid ? item : null;
           }),
         );
         return validItems.filter((item): item is OfflineItem => Boolean(item));
       })
       .then(async (validItems) => {
-        await Promise.all(validItems.map((item) => saveOfflineItem(item)));
+        await Promise.all(validItems.map((item) => saveOfflineItem(accountScope, item)));
         return validItems;
       })
       .then((validItems) => {
@@ -70,7 +70,7 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
     return () => {
       active = false;
     };
-  }, [items, offlineCryptoSupported]);
+  }, [accountScope, items, offlineCryptoSupported]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -92,14 +92,14 @@ export function OfflineListenPanel({ items }: { items: OfflineItem[] }) {
 
       try {
         if (!offlineCryptoSupported) throw new OfflineCryptoUnavailableError();
-        const hasCache = await hasValidEncryptedAudio(item.chapterId, "offline");
+        const hasCache = await hasValidEncryptedAudio(accountScope, item.chapterId, "offline");
         if (!hasCache) {
           setAvailableItems((current) => (current ?? []).filter((savedItem) => savedItem.id !== item.id));
           setMessage("Este audio offline expirou. Salve o capitulo novamente na pagina da novel.");
           return;
         }
 
-        const url = await getEncryptedAudioUrl(item.chapterId, source, { mode: "offline" });
+        const url = await getEncryptedAudioUrl(item.chapterId, source, { accountScope, mode: "offline" });
         if (audioSrc.startsWith("blob:")) URL.revokeObjectURL(audioSrc);
         setAudioSrc(url);
         setActiveId(item.id);

@@ -8,13 +8,14 @@ import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } fro
 import type { OfflineItem } from "@/lib/offline-items";
 
 type OfflineChapterButtonProps = {
+  accountScope: string;
   chapterId: string;
   contentType: string;
   canUseOffline: boolean;
   metadata: Omit<OfflineItem, "id" | "cacheKey" | "expiresAt">;
 };
 
-export function OfflineChapterButton({ chapterId, contentType, canUseOffline, metadata }: OfflineChapterButtonProps) {
+export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, metadata }: OfflineChapterButtonProps) {
   const [message, setMessage] = useState("");
   const [ready, setReady] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
@@ -81,10 +82,11 @@ export function OfflineChapterButton({ chapterId, contentType, canUseOffline, me
         }
 
         await getEncryptedAudioUrl(chapterId, payload.audioUrl, {
+          accountScope,
           mode: "offline",
           onProgress: (progress) => setDownloadProgress(progress.percent),
         });
-        await saveOfflineItem({
+        await saveOfflineItem(accountScope, {
           ...metadata,
           id: chapterId,
           cacheKey: payload.cacheKey,

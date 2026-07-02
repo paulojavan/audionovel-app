@@ -2,40 +2,51 @@ import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
+const PAGE_SIZE = 50;
+
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, page } = await searchParams;
   const query = q?.trim();
-  const users = await prisma.user.findMany({
-    where: query
-      ? {
-          OR: [
-            { name: { contains: query } },
-            { email: { contains: query } },
-            { role: { contains: query } },
-            { plan: { contains: query } },
-            { subscriptionStatus: { contains: query } },
-          ],
-        }
-      : undefined,
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      plan: true,
-      subscriptionStatus: true,
-      premiumUntil: true,
-      isBlocked: true,
-      blockedAt: true,
-      createdAt: true,
-      _count: { select: { comments: true, favorites: true, listeningProgress: true } },
-    },
-  });
+  const parsedPage = Number.parseInt(page ?? "1", 10);
+  const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const where = query
+    ? {
+        OR: [
+          { name: { contains: query } },
+          { email: { contains: query } },
+          { role: { contains: query } },
+          { plan: { contains: query } },
+          { subscriptionStatus: { contains: query } },
+        ],
+      }
+    : undefined;
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip: (currentPage - 1) * PAGE_SIZE,
+      take: 50,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        plan: true,
+        subscriptionStatus: true,
+        premiumUntil: true,
+        isBlocked: true,
+        blockedAt: true,
+        createdAt: true,
+        _count: { select: { comments: true, favorites: true, listeningProgress: true } },
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <section className="grid gap-4">
@@ -111,6 +122,28 @@ export default async function AdminUsersPage({
           <p className="p-4 text-zinc-400">{query ? `Nenhum usuário encontrado para "${query}".` : "Nenhum usuário cadastrado."}</p>
         )}
       </div>
+      <nav className="flex items-center justify-center gap-3">
+        <PageLink href={buildPageHref(query, currentPage - 1)} disabled={currentPage <= 1}>
+          Anterior
+        </PageLink>
+        <span className="text-sm font-bold text-zinc-300">Pagina {currentPage} de {totalPages}</span>
+        <PageLink href={buildPageHref(query, currentPage + 1)} disabled={currentPage >= totalPages}>
+          Proxima
+        </PageLink>
+      </nav>
     </section>
   );
+}
+
+function buildPageHref(query: string | undefined, page: number) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const suffix = params.toString();
+  return suffix ? `/admin/usuarios?${suffix}` : "/admin/usuarios";
+}
+
+function PageLink({ href, disabled, children }: { href: string; disabled: boolean; children: React.ReactNode }) {
+  if (disabled) return <span className="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-600">{children}</span>;
+  return <Link href={href} className="rounded-full border border-white/10 px-4 py-2 text-sm font-bold hover:bg-white/10">{children}</Link>;
 }

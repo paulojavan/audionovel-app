@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { createDeviceSession, revokeDeviceSession, validateDeviceSession } from "./device-session";
 import { verifyPassword } from "./password";
 import { prisma } from "./prisma";
+import { consumeRateLimit, getRequestIdentifierFromHeaders } from "./rate-limit";
 
 const SESSION_VALIDATION_INTERVAL_MS = 30_000;
 
@@ -34,6 +35,17 @@ export const authOptions: NextAuthOptions = {
         const deviceName = credentials?.deviceName?.trim();
 
         if (!email || !password || !deviceId) return null;
+
+        const requestIdentifier = getRequestIdentifierFromHeaders(
+          (request as AuthRequestLike | undefined)?.headers,
+        );
+        const [ipLimit, emailLimit] = await Promise.all([
+          consumeRateLimit({ key: `login:ip:${requestIdentifier}`, limit: 12, windowMs: 15 * 60_000 }),
+          consumeRateLimit({ key: `login:email:${email}`, limit: 8, windowMs: 15 * 60_000 }),
+        ]);
+        if (!ipLimit.allowed || !emailLimit.allowed) {
+          throw new Error("RATE_LIMITED");
+        }
 
         const dbUser = await prisma.user.findUnique({ where: { email } });
         if (!dbUser || dbUser.isBlocked) return null;

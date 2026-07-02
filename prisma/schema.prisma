@@ -345,6 +345,15 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+model RateLimitBucket {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
 model BugReport {
   id          String   @id @default(cuid())
   title       String

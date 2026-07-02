@@ -39,7 +39,9 @@ export function LoginForm({
         setError(
           result?.error === "DEVICE_LIMIT_EXCEEDED"
             ? "Limite de dispositivos excedido. Todas as sessoes foram encerradas; entre novamente neste dispositivo."
-            : "E-mail ou senha invalidos.",
+            : result?.error === "RATE_LIMITED"
+              ? "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
+              : "E-mail ou senha invalidos.",
         );
       });
     });

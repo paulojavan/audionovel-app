@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { calculateFixedPremiumUntil } from "./billing";
-import { parseCheckoutReference } from "./billing-checkout";
 import type { MercadoPagoPaymentResponse } from "./mercado-pago";
 import { prisma } from "./prisma";
 
@@ -14,23 +13,18 @@ export type ApprovedPaymentReference = {
   userId: string;
   planId: string;
   premiumDays: number;
-  checkoutIntentId?: string;
+  checkoutIntentId: string;
+  usedAt: Date | null;
+  expiresAt: Date;
 };
 
 export function resolveApprovedPaymentReference(
   payment: Pick<MercadoPagoPaymentResponse, "id" | "status" | "external_reference">,
   expectedUserId?: string,
 ): ApprovedPaymentReference | null {
-  if (payment.status !== "approved") return null;
-
-  const reference = parseCheckoutReference(payment.external_reference);
-  if (!reference) return null;
-  if (expectedUserId && reference.userId !== expectedUserId) return null;
-
-  return {
-    paymentId: String(payment.id),
-    ...reference,
-  };
+  void payment;
+  void expectedUserId;
+  return null;
 }
 
 export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymentResponse, options: ApplyPaymentOptions = {}) {
@@ -45,6 +39,7 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
 
   try {
     return await prisma.$transaction(async (tx) => {
+      const now = new Date();
       const user = await tx.user.findUnique({
         where: { id: reference.userId },
         select: { premiumUntil: true },
@@ -54,6 +49,19 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
         select: { name: true, amountCents: true, currency: true },
       });
       if (!user || !plan) return { status: "missing-target" as const, userId: reference.userId };
+      if (!validateCheckoutPayment(payment, reference, plan, now, options.expectedUserId)) {
+        return { status: "ignored" as const };
+      }
+
+      const claimed = await tx.billingCheckoutIntent.updateMany({
+        where: {
+          id: reference.checkoutIntentId,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
+      if (claimed.count !== 1) return { status: "duplicate" as const, userId: reference.userId };
 
       await tx.user.update({
         where: { id: reference.userId },
@@ -70,20 +78,13 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
           providerEventId: options.eventId ?? `mp-payment-${reference.paymentId}-approved`,
           providerPaymentId: reference.paymentId,
           userId: reference.userId,
-          amountCents: toCents(payment.transaction_amount) || plan.amountCents,
-          currency: (payment.currency_id ?? plan.currency).toLowerCase(),
+          amountCents: toCents(payment.transaction_amount),
+          currency: payment.currency_id!.toLowerCase(),
           status: "SUCCEEDED",
           description: `Mercado Pago - ${plan.name} (${reference.premiumDays} dias)`,
         },
         update: {},
       });
-
-      if (reference.checkoutIntentId) {
-        await tx.billingCheckoutIntent.update({
-          where: { id: reference.checkoutIntentId },
-          data: { usedAt: new Date() },
-        });
-      }
 
       return { status: "applied" as const, userId: reference.userId };
     });
@@ -96,8 +97,6 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
 }
 
 async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expectedUserId?: string) {
-  const legacyReference = resolveApprovedPaymentReference(payment, expectedUserId);
-  if (legacyReference) return legacyReference;
   if (payment.status !== "approved") return null;
 
   const checkoutIntentId = payment.external_reference?.trim();
@@ -110,6 +109,8 @@ async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expe
       userId: true,
       planId: true,
       premiumDays: true,
+      usedAt: true,
+      expiresAt: true,
     },
   });
   if (!checkoutIntent) return null;
@@ -121,7 +122,23 @@ async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expe
     planId: checkoutIntent.planId,
     premiumDays: checkoutIntent.premiumDays,
     checkoutIntentId: checkoutIntent.id,
+    usedAt: checkoutIntent.usedAt,
+    expiresAt: checkoutIntent.expiresAt,
   };
+}
+
+export function validateCheckoutPayment(
+  payment: Pick<MercadoPagoPaymentResponse, "status" | "transaction_amount" | "currency_id">,
+  intent: Pick<ApprovedPaymentReference, "userId" | "usedAt" | "expiresAt">,
+  plan: { amountCents: number; currency: string },
+  now = new Date(),
+  expectedUserId?: string,
+) {
+  if (payment.status !== "approved") return false;
+  if (intent.usedAt || intent.expiresAt.getTime() <= now.getTime()) return false;
+  if (expectedUserId && intent.userId !== expectedUserId) return false;
+  if (toCents(payment.transaction_amount) !== plan.amountCents) return false;
+  return payment.currency_id?.toLowerCase() === plan.currency.toLowerCase();
 }
 
 function toCents(amount: number | undefined) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
 const moderationSchema = z.object({
@@ -8,9 +8,8 @@ const moderationSchema = z.object({
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const { id } = await context.params;
   const parsed = moderationSchema.safeParse(await request.json());

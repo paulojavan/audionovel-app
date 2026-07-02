@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isSafePublicHttpsUrl } from "./url-security";
+import { isSafeImageHttpsUrl, isSafeMediaHttpsUrl } from "./url-security";
 
 const cueSchema = z.object({
   start: z.number().min(0),
@@ -14,10 +14,17 @@ const chapterPartSchema = z.object({
   endSec: z.number().int().min(0),
 });
 
-const optionalSafeMediaUrl = z
+const optionalSafeAudioUrl = z
   .string()
   .trim()
-  .refine((value) => value === "" || isSafePublicHttpsUrl(value), "Use uma URL HTTPS publica permitida.")
+  .refine((value) => value === "" || isSafeMediaHttpsUrl(value), "Use uma URL de audio HTTPS permitida.")
+  .optional()
+  .or(z.literal(""));
+
+const optionalSafeImageUrl = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || isSafeImageHttpsUrl(value), "Use uma URL de imagem HTTPS permitida.")
   .optional()
   .or(z.literal(""));
 
@@ -27,9 +34,9 @@ export const chapterSchema = z.object({
   position: z.number().int().min(1),
   contentType: z.enum(["AUDIO", "YOUTUBE"]).default("AUDIO"),
   durationSec: z.number().int().min(0).default(0),
-  audioUrl: optionalSafeMediaUrl,
+  audioUrl: optionalSafeAudioUrl,
   youtubeUrl: z.string().url().optional().or(z.literal("")),
-  coverUrl: optionalSafeMediaUrl,
+  coverUrl: optionalSafeImageUrl,
   positionEnd: z.number().int().min(1).nullable().optional(),
   startSec: z.number().int().min(0).default(0),
   chapterParts: z.array(chapterPartSchema).optional().default([]),

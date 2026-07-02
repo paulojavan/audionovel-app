@@ -81,13 +81,15 @@ export function verifyMercadoPagoWebhookSignature({
   requestId,
   signature,
   secret,
+  nowMs = Date.now(),
 }: {
   dataId: string;
   requestId: string | null;
   signature: string | null;
   secret: string | undefined;
+  nowMs?: number;
 }) {
-  if (!secret) return true;
+  if (!secret) return false;
   if (!requestId || !signature) return false;
 
   const signatureParts = Object.fromEntries(
@@ -99,6 +101,9 @@ export function verifyMercadoPagoWebhookSignature({
   const timestamp = signatureParts.ts;
   const expected = signatureParts.v1;
   if (!timestamp || !expected) return false;
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  if (Math.abs(Math.floor(nowMs / 1000) - timestampSeconds) > 300) return false;
 
   const manifest = `id:${dataId};request-id:${requestId};ts:${timestamp};`;
   const calculated = createHmac("sha256", secret).update(manifest).digest("hex");

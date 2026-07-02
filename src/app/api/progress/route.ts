@@ -7,7 +7,7 @@ import { progressSchema } from "@/lib/validators";
 export async function POST(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
-  const limited = enforceRateLimit({ key: `progress:${auth.user.id}`, limit: 120, windowMs: 60_000 });
+  const limited = await enforceRateLimit({ key: `progress:${auth.user.id}`, limit: 120, windowMs: 60_000 });
   if (limited) return limited;
 
   const parsed = progressSchema.safeParse(await request.json());
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     update: {
       positionSec: parsed.data.positionSec,
       durationSec: parsed.data.durationSec,
-      completed: parsed.data.completed,
+      completed: parsed.data.completed ? true : undefined,
     },
   });
 

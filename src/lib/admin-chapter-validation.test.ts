@@ -8,7 +8,7 @@ const baseChapter = {
   positionEnd: 10,
   contentType: "AUDIO" as const,
   durationSec: 600,
-  audioUrl: "https://cdn.example.com/audio.mp3",
+  audioUrl: "https://pub-975120676aa7420e9b84ddf23e7919b5.r2.dev/audio.mp3",
   youtubeUrl: "",
   coverUrl: "",
   startSec: 0,

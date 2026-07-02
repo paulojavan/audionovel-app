@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseRegisterPayload } from "./register-validation";
+import * as registerValidation from "./register-validation";
+
+const { parseRegisterPayload } = registerValidation;
 
 test("normaliza nome e email no cadastro", () => {
   const parsed = parseRegisterPayload({
@@ -43,4 +45,24 @@ test("rejeita cadastro com email temporario", () => {
   if (!parsed.success) {
     assert.equal(parsed.error, "Emails temporarios nao sao permitidos.");
   }
+});
+
+test("traduz conflito concorrente de nome para resposta de cadastro", () => {
+  const getRegisterConflictMessage = (
+    registerValidation as typeof registerValidation & {
+      getRegisterConflictMessage?: (error: unknown) => string | null;
+    }
+  ).getRegisterConflictMessage;
+  assert.equal(typeof getRegisterConflictMessage, "function");
+  if (!getRegisterConflictMessage) return;
+
+  assert.equal(
+    getRegisterConflictMessage({ code: "P2002", meta: { target: ["name"] } }),
+    "Este nome de usuario ja esta em uso.",
+  );
+  assert.equal(
+    getRegisterConflictMessage({ code: "P2002", meta: { target: ["email"] } }),
+    "Ja existe uma conta cadastrada com este e-mail.",
+  );
+  assert.equal(getRegisterConflictMessage(new Error("database unavailable")), null);
 });

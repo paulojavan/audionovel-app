@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { canPlayChapter } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
-import { isSafePublicHttpsUrl } from "@/lib/url-security";
+import { isSafeMediaHttpsUrl } from "@/lib/url-security";
 
 type Context = {
   params: Promise<{ id: string }>;
@@ -18,18 +19,23 @@ export async function GET(request: Request, context: Context) {
     return NextResponse.json({ error: access.reason }, { status: access.status });
   }
 
-  if (access.chapter.contentType !== "AUDIO" || !access.chapter.audioUrl) {
+  const media = await prisma.chapter.findUnique({
+    where: { id, published: true },
+    select: CHAPTER_MEDIA_SOURCE_SELECT,
+  });
+
+  if (!media || media.contentType !== "AUDIO" || !media.audioUrl) {
     return NextResponse.json({ error: "Este capitulo nao possui audio hospedado." }, { status: 400 });
   }
 
-  const limited = enforceRateLimit({
+  const limited = await enforceRateLimit({
     key: `audio:${id}:${getRequestIdentifier(request, session?.user?.id)}`,
     limit: 120,
     windowMs: 60_000,
   });
   if (limited) return limited;
 
-  if (!isSafePublicHttpsUrl(access.chapter.audioUrl)) {
+  if (!isSafeMediaHttpsUrl(media.audioUrl)) {
     return NextResponse.json({ error: "URL de audio invalida ou nao permitida." }, { status: 400 });
   }
 
@@ -59,19 +65,26 @@ export async function GET(request: Request, context: Context) {
     });
   }
 
-  await prisma.chapter.update({
-    where: { id },
-    data: {
-      viewCount: { increment: 1 },
-      volume: { update: { novel: { update: { viewCount: { increment: 1 } } } } },
-    },
-  });
-
   const range = request.headers.get("range");
-  const upstream = await fetch(access.chapter.audioUrl, {
-    headers: range ? { range } : {},
-    cache: "no-store",
-  });
+  const upstreamController = new AbortController();
+  const upstreamTimeout = setTimeout(() => upstreamController.abort(), 15_000);
+  let upstream: Response;
+  try {
+    upstream = await fetch(media.audioUrl, {
+      headers: range ? { range } : {},
+      cache: "no-store",
+      redirect: "manual",
+      signal: upstreamController.signal,
+    });
+  } catch {
+    return NextResponse.json({ error: "Audio temporariamente indisponivel." }, { status: 502 });
+  } finally {
+    clearTimeout(upstreamTimeout);
+  }
+
+  if (upstream.status >= 300 && upstream.status < 400) {
+    return NextResponse.json({ error: "Redirecionamento de audio nao permitido." }, { status: 502 });
+  }
 
   if (!upstream.ok || !upstream.body) {
     return NextResponse.json({ error: "Áudio indisponível." }, { status: 502 });

@@ -28,6 +28,17 @@ export async function requireUser() {
   return { session, user };
 }
 
+export async function requireAdmin() {
+  const auth = await requireUser();
+  if ("error" in auth) return auth;
+
+  if (auth.user.role !== "ADMIN") {
+    return { error: NextResponse.json({ error: "Acesso negado." }, { status: 403 }) };
+  }
+
+  return auth;
+}
+
 export async function canPlayChapter(chapterId: string, userId?: string) {
   const chapter = await prisma.chapter.findUnique({
     where: { id: chapterId, published: true },

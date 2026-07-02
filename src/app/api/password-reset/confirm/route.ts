@@ -3,7 +3,7 @@ import { parsePasswordResetConfirmPayload } from "@/lib/password-reset-validatio
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
-  const limited = enforceRateLimit({ key: `password-reset-confirm:${getRequestIdentifier(request)}`, limit: 10, windowMs: 60 * 60_000 });
+  const limited = await enforceRateLimit({ key: `password-reset-confirm:${getRequestIdentifier(request)}`, limit: 10, windowMs: 60 * 60_000 });
   if (limited) return limited;
 
   const parsed = parsePasswordResetConfirmPayload(await request.json().catch(() => null));

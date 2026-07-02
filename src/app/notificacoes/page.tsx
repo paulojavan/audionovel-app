@@ -19,6 +19,7 @@ export default async function NotificationsPage() {
     }),
     prisma.notification.findMany({
       where: { userId: session.user.id, readAt: null },
+      take: 100,
       orderBy: { createdAt: "desc" },
       select: NOTIFICATION_SELECT,
     }),

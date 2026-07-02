@@ -4,7 +4,7 @@ import { getPublicOrigin } from "@/lib/public-origin";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
-  const limited = enforceRateLimit({ key: `password-reset-request:${getRequestIdentifier(request)}`, limit: 5, windowMs: 60 * 60_000 });
+  const limited = await enforceRateLimit({ key: `password-reset-request:${getRequestIdentifier(request)}`, limit: 5, windowMs: 60 * 60_000 });
   if (limited) return limited;
 
   const parsed = parsePasswordResetRequestPayload(await request.json().catch(() => null));

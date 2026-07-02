@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
-import { parseRegisterPayload } from "@/lib/register-validation";
+import { getRegisterConflictMessage, parseRegisterPayload } from "@/lib/register-validation";
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
 export async function POST(request: Request) {
-  const limited = enforceRateLimit({ key: `register:${getRequestIdentifier(request)}`, limit: 8, windowMs: 60 * 60_000 });
+  const limited = await enforceRateLimit({ key: `register:${getRequestIdentifier(request)}`, limit: 8, windowMs: 60 * 60_000 });
   if (limited) return limited;
 
   const registrationsEnabled = await getSystemSettingBoolean(SYSTEM_SETTING_KEYS.registrationsEnabled, true);
@@ -33,14 +33,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error }, { status: 409 });
   }
 
-  const user = await prisma.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash: await hashPassword(parsed.data.password),
-    },
-    select: { id: true, email: true, name: true },
-  });
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        passwordHash: await hashPassword(parsed.data.password),
+      },
+      select: { id: true, email: true, name: true },
+    });
+  } catch (error) {
+    const conflictMessage = getRegisterConflictMessage(error);
+    if (conflictMessage) {
+      return NextResponse.json({ error: conflictMessage }, { status: 409 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ user }, { status: 201 });
 }

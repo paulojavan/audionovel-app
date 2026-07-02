@@ -2,7 +2,7 @@
 
 import { Gauge, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getEncryptedAudioUrl } from "@/lib/audio-cache";
+import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import {
   getActiveChapterPartIndex,
   getAdjacentChapterPart,
@@ -44,6 +44,10 @@ export function AudioPlayer({
   const pendingStartRef = useRef<number | null>(null);
   const transcriptCueRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const shouldScrollActiveCueRef = useRef(false);
+  const lastCheckpointAtRef = useRef(0);
+  const lastProgressPayloadRef = useRef("");
+  const completionSentRef = useRef(false);
+  const playbackStartedRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
@@ -52,7 +56,6 @@ export function AudioPlayer({
   const [muted, setMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [karaokeFontLevel, setKaraokeFontLevel] = useState(1);
-  const [audioSrc, setAudioSrc] = useState(src);
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
   const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
@@ -105,42 +108,46 @@ export function AudioPlayer({
     },
   ][karaokeFontLevel];
 
-  async function saveProgress(completed = false) {
+  const saveProgress = useCallback(async ({
+    completed = false,
+    force = false,
+    keepalive = false,
+  }: {
+    completed?: boolean;
+    force?: boolean;
+    keepalive?: boolean;
+  } = {}) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    await fetch("/api/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chapterId,
-        positionSec: Math.floor(Math.max(0, audio.currentTime - startOffset)),
-        durationSec: Math.floor(resolvedDuration || audio.duration || duration),
-        completed,
-      }),
-    });
-  }
+    const positionSec = Math.floor(Math.max(0, audio.currentTime - startOffset));
+    const durationSec = Math.floor(
+      resolvedDuration || Math.max(0, audio.duration - startOffset) || duration,
+    );
+    const finalCompleted = mergeCompletion(
+      completionSentRef.current,
+      completed || isPlaybackComplete(positionSec, durationSec),
+    );
+    const payload = JSON.stringify({ chapterId, positionSec, durationSec, completed: finalCompleted });
+    if (!force && payload === lastProgressPayloadRef.current) return;
 
-  useEffect(() => {
-    let revokedUrl: string | null = null;
-    let active = true;
+    lastProgressPayloadRef.current = payload;
+    lastCheckpointAtRef.current = Date.now();
+    completionSentRef.current = finalCompleted;
 
-    getEncryptedAudioUrl(chapterId, src)
-      .then((cachedUrl) => {
-        if (!active) {
-          URL.revokeObjectURL(cachedUrl);
-          return;
-        }
-        revokedUrl = cachedUrl;
-        setAudioSrc(cachedUrl);
-      })
-      .catch(() => setAudioSrc(src));
-
-    return () => {
-      active = false;
-      if (revokedUrl) URL.revokeObjectURL(revokedUrl);
-    };
-  }, [chapterId, src]);
+    try {
+      const response = await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive,
+      });
+      if (!response.ok) throw new Error("Nao foi possivel salvar o progresso.");
+    } catch {
+      if (lastProgressPayloadRef.current === payload) lastProgressPayloadRef.current = "";
+      if (finalCompleted) completionSentRef.current = false;
+    }
+  }, [chapterId, duration, resolvedDuration, startOffset]);
 
   function toggle() {
     const audio = audioRef.current;
@@ -159,7 +166,6 @@ export function AudioPlayer({
         .play()
         .then(() => {
           setPlaying(true);
-          void saveProgress(false);
         })
         .catch(() => {
           setPlaying(false);
@@ -169,7 +175,7 @@ export function AudioPlayer({
     } else {
       audio.pause();
       setPlaying(false);
-      void saveProgress(false);
+      void saveProgress({ force: true });
     }
   }
 
@@ -181,14 +187,14 @@ export function AudioPlayer({
     setKaraokeFontLevel((level) => Math.min(5, level + 1));
   }
 
-  function seekBy(seconds: number) {
+  const seekBy = useCallback((seconds: number) => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const nextRelativeTime = Math.min(Math.max(Math.max(0, audio.currentTime - startOffset) + seconds, 0), progressDuration);
     audio.currentTime = startOffset + nextRelativeTime;
     setCurrent(nextRelativeTime);
-  }
+  }, [progressDuration, startOffset]);
 
   const seekToAbsoluteTime = useCallback((startSec: number, autoplay = false) => {
     const audio = audioRef.current;
@@ -280,15 +286,77 @@ export function AudioPlayer({
     setPlaying(false);
     setKaraokeMode(false);
     setCurrent(Math.max(0, activePart.endSec - startOffset));
-    void saveProgress(false);
+    void saveProgress({ force: true });
   }
+
+  useEffect(() => {
+    function saveBeforePageSuspends() {
+      if (!playbackStartedRef.current) return;
+      void saveProgress({ force: true, keepalive: true });
+    }
+
+    function saveOnVisibilityChange() {
+      if (!playbackStartedRef.current) return;
+      void saveProgress({ force: true, keepalive: document.visibilityState === "hidden" });
+    }
+
+    window.addEventListener("pagehide", saveBeforePageSuspends);
+    document.addEventListener("visibilitychange", saveOnVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforePageSuspends);
+      document.removeEventListener("visibilitychange", saveOnVisibilityChange);
+    };
+  }, [saveProgress]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    const mediaSession = navigator.mediaSession;
+    if (typeof MediaMetadata !== "undefined") {
+      mediaSession.metadata = new MediaMetadata({
+        title: chapterTitle,
+        artist: novelTitle,
+        album: "Audio Novel BR",
+        artwork: coverUrl ? [{ src: coverUrl }] : [],
+      });
+    }
+
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+      ["play", () => {
+        const audio = audioRef.current;
+        if (audio) void audio.play();
+      }],
+      ["pause", () => audioRef.current?.pause()],
+      ["seekbackward", (details) => seekBy(-(details.seekOffset ?? 10))],
+      ["seekforward", (details) => seekBy(details.seekOffset ?? 10)],
+    ];
+
+    for (const [action, handler] of handlers) {
+      try {
+        mediaSession.setActionHandler(action, handler);
+      } catch {
+        // Alguns navegadores expõem Media Session sem oferecer todas as ações.
+      }
+    }
+
+    return () => {
+      for (const [action] of handlers) {
+        try {
+          mediaSession.setActionHandler(action, null);
+        } catch {
+          // Ignora ações não suportadas durante a limpeza.
+        }
+      }
+      mediaSession.metadata = null;
+    };
+  }, [chapterTitle, coverUrl, novelTitle, seekBy]);
 
   return (
     <>
       <div id="chapter-player" className="grid gap-5 rounded-lg bg-[#06272b] p-4">
         <audio
           ref={audioRef}
-          src={audioSrc}
+          src={src}
           preload="metadata"
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
@@ -301,14 +369,33 @@ export function AudioPlayer({
             setPlaybackError("");
           }}
           onTimeUpdate={(event) => {
-            setCurrent(Math.max(0, event.currentTarget.currentTime - startOffset));
+            const relativePosition = Math.max(0, event.currentTarget.currentTime - startOffset);
+            const logicalDuration =
+              resolvedDuration || duration || Math.max(0, event.currentTarget.duration - startOffset);
+            setCurrent(relativePosition);
             pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
+            if (isPlaybackComplete(relativePosition, logicalDuration)) {
+              if (!completionSentRef.current) {
+                void saveProgress({ completed: true, force: true, keepalive: true });
+              }
+            } else if (shouldSaveCheckpoint(lastCheckpointAtRef.current, Date.now())) {
+              void saveProgress();
+            }
+          }}
+          onPlay={() => {
+            playbackStartedRef.current = true;
+            setPlaying(true);
+            if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+          }}
+          onPause={() => {
+            setPlaying(false);
+            if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
           }}
           onEnded={() => {
             setPlaying(false);
             setKaraokeMode(false);
             setCurrent(progressDuration);
-            void saveProgress(true);
+            void saveProgress({ completed: true, force: true, keepalive: true });
           }}
         />
 
@@ -341,7 +428,10 @@ export function AudioPlayer({
             <button
               type="button"
               onClick={() => setPlayMode("karaoke")}
-              className={`min-h-11 rounded-full px-4 py-2 ${playMode === "karaoke" ? "bg-[#18b7bd] text-[#021114]" : "text-zinc-300 hover:bg-white/10"}`}
+              disabled={playing && playMode === "page"}
+              aria-disabled={playing && playMode === "page"}
+              title={playing && playMode === "page" ? "Pause o audio antes de ativar o Karaoke." : undefined}
+              className={`min-h-11 rounded-full px-4 py-2 disabled:cursor-not-allowed disabled:opacity-40 ${playMode === "karaoke" ? "bg-[#18b7bd] text-[#021114]" : "text-zinc-300 hover:bg-white/10"}`}
             >
               Karaoke
             </button>

@@ -37,3 +37,17 @@ export function parseRegisterPayload(payload: unknown) {
     data: parsed.data,
   };
 }
+
+export function getRegisterConflictMessage(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") {
+    return null;
+  }
+
+  const meta = "meta" in error && error.meta && typeof error.meta === "object" ? error.meta : null;
+  const target = meta && "target" in meta ? meta.target : null;
+  const fields = Array.isArray(target) ? target.map(String) : typeof target === "string" ? [target] : [];
+
+  if (fields.includes("email")) return "Ja existe uma conta cadastrada com este e-mail.";
+  if (fields.includes("name")) return "Este nome de usuario ja esta em uso.";
+  return "Ja existe uma conta com estes dados.";
+}

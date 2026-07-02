@@ -8,7 +8,7 @@ import { hasPremiumAccess } from "@/lib/subscription";
 export async function POST(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
-  const limited = enforceRateLimit({ key: `offline:${auth.user.id}`, limit: 30, windowMs: 60 * 60_000 });
+  const limited = await enforceRateLimit({ key: `offline:${auth.user.id}`, limit: 30, windowMs: 60 * 60_000 });
   if (limited) return limited;
 
   const { chapterId } = (await request.json()) as { chapterId?: string };

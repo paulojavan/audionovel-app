@@ -1,29 +1,28 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import {
   getNovelContinuationErrorMessage,
   validateNovelContinuation,
 } from "@/lib/novel-continuation";
 import { prisma } from "@/lib/prisma";
-import { isSafePublicHttpsUrl } from "@/lib/url-security";
+import { isSafeImageHttpsUrl } from "@/lib/url-security";
 
 const novelUpdateSchema = z.object({
   title: z.string().trim().min(2).max(160),
   author: z.string().trim().min(2).max(120),
   synopsis: z.string().trim().min(10).max(4000),
-  coverUrl: z.string().url().refine((value) => isSafePublicHttpsUrl(value), "Use uma URL HTTPS publica permitida."),
+  coverUrl: z.string().url().refine((value) => isSafeImageHttpsUrl(value), "Use uma URL de imagem HTTPS permitida."),
   status: z.string().trim().default("ONGOING"),
   tagIds: z.array(z.string()).max(30).optional().default([]),
   continuationId: z.string().trim().min(1).nullable().optional().default(null),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const { id } = await context.params;
   const parsed = novelUpdateSchema.safeParse(await request.json());
@@ -71,9 +70,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 }
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const { id } = await context.params;
 

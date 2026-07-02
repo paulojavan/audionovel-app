@@ -7,6 +7,7 @@ import {
   ADMIN_NOVEL_PANEL_SELECT,
   ADMIN_PAYMENT_SELECT,
   ADMIN_USER_DETAIL_SELECT,
+  CHAPTER_MEDIA_SOURCE_SELECT,
   CHAPTER_PAGE_SELECT,
   CHAPTER_PROGRESS_SELECT,
   CATALOG_TAG_SELECT,
@@ -76,7 +77,8 @@ test("pagina de capitulo restringe a novel relacionada", () => {
   const novel = CHAPTER_PAGE_SELECT.volume.select.novel.select;
 
   assert.deepEqual(Object.keys(novel).sort(), ["coverUrl", "slug", "title"]);
-  assert.equal(CHAPTER_PAGE_SELECT.audioUrl, true);
+  assert.equal("audioUrl" in CHAPTER_PAGE_SELECT, false);
+  assert.deepEqual(Object.keys(CHAPTER_MEDIA_SOURCE_SELECT).sort(), ["audioUrl", "contentType", "id"]);
   assert.equal(CHAPTER_PAGE_SELECT.transcriptJson, true);
 });
 

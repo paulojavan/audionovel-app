@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Audio Novel BR
 
-## Getting Started
+Aplicação Next.js com Prisma/PostgreSQL para publicação e reprodução de áudio novels.
 
-First, run the development server:
+## Desenvolvimento
 
 ```bash
+npm install
+npm run prisma:generate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Antes de enviar mudanças:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Configuração de segurança
 
-## Learn More
+Segredos devem existir apenas nas variáveis do servidor. Nunca use prefixo `NEXT_PUBLIC_` em chaves do banco, autenticação, e-mail ou pagamento.
 
-To learn more about Next.js, take a look at the following resources:
+Variáveis obrigatórias ou recomendadas em produção:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `DATABASE_URL`: conexão PostgreSQL usada pelo Prisma.
+- `NEXTAUTH_SECRET`: segredo forte da sessão e do hash de rate limit.
+- `RATE_LIMIT_SECRET`: segredo opcional dedicado ao hash de rate limit; se ausente, usa `NEXTAUTH_SECRET`.
+- `NEXTAUTH_URL`: origem pública HTTPS.
+- `MEDIA_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer áudio, separados por vírgula.
+- `IMAGE_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer capas, separados por vírgula.
+- `MERCADO_PAGO_ACCESS_TOKEN`: credencial privada da API.
+- `MERCADO_PAGO_WEBHOOK_SECRET`: segredo de assinatura do webhook.
+- `AGENTMAIL_API_KEY` e `AGENTMAIL_INBOX_ID`: entrega de recuperação de senha.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Exemplo de allowlists, sem credenciais:
 
-## Deploy on Vercel
+```dotenv
+MEDIA_URL_ALLOWED_HOSTS=audio.exemplo.com
+IMAGE_URL_ALLOWED_HOSTS=imagens.exemplo.com,images.unsplash.com
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+O navegador recebe somente URLs locais como `/api/chapters/:id/audio`. A URL real do áudio permanece no banco e é buscada pelo servidor depois da autorização.
+Os hosts exatos usados atualmente no banco já fazem parte da allowlist; use as variáveis acima somente ao adicionar um novo provedor.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Banco de dados
+
+Após implantar esta versão no PostgreSQL existente, aplique uma vez:
+
+```bash
+npx prisma db execute --file prisma/aiven-2026-07-01-security-hardening.sql
+```
+
+O script cria a tabela compartilhada de rate limit e os índices usados na recuperação de senha. Downloads offline são criptografados e vinculados ao ID da mesma conta; sair da conta não os transfere para outro usuário.

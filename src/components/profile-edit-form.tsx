@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { createSingleFlightGuard } from "@/lib/single-flight";
 
 type ProfileEditFormProps = {
   user: {
@@ -12,11 +13,12 @@ type ProfileEditFormProps = {
 
 export function ProfileEditForm({ user }: ProfileEditFormProps) {
   const router = useRouter();
+  const submitGuardRef = useRef(createSingleFlightGuard());
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
-  function submitProfile(event: FormEvent<HTMLFormElement>) {
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -30,26 +32,29 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
       return;
     }
 
-    startTransition(() => {
-      setError("");
-      setSuccess("");
-      void fetch("/api/profile", {
+    if (!submitGuardRef.current.tryAcquire()) return;
+    setPending(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, password, confirmPassword }),
-      })
-        .then(async (response) => {
-          const body = (await response.json().catch(() => null)) as { error?: string } | null;
-          if (!response.ok) throw new Error(body?.error ?? "Nao foi possivel atualizar o perfil.");
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(body?.error ?? "Nao foi possivel atualizar o perfil.");
 
-          form.reset();
-          setSuccess("Perfil atualizado com sucesso.");
-          router.refresh();
-        })
-        .catch((requestError: Error) => {
-          setError(requestError.message);
-        });
-    });
+      form.reset();
+      setSuccess("Perfil atualizado com sucesso.");
+      router.refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar o perfil.");
+    } finally {
+      submitGuardRef.current.release();
+      setPending(false);
+    }
   }
 
   return (

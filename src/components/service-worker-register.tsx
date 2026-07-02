@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { buildAccountScopeMessage, normalizeAccountScope, setBrowserAccountScope } from "@/lib/account-scope";
 
-export function ServiceWorkerRegister() {
+export function ServiceWorkerRegister({ accountScope }: { accountScope?: string | null }) {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     let refreshing = false;
+    const normalizedScope = normalizeAccountScope(accountScope);
 
     async function registerSW() {
       try {
@@ -14,6 +16,10 @@ export function ServiceWorkerRegister() {
           scope: "/",
           updateViaCache: "none",
         });
+        setBrowserAccountScope(normalizedScope);
+        (registration.active ?? registration.waiting ?? registration.installing)?.postMessage(
+          buildAccountScopeMessage(normalizedScope),
+        );
 
         // Força checagem imediata de atualização
         registration.update().catch(() => undefined);
@@ -59,7 +65,7 @@ export function ServiceWorkerRegister() {
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
     };
-  }, []);
+  }, [accountScope]);
 
   return null;
 }

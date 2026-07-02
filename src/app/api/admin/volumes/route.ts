@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 
@@ -12,9 +12,8 @@ const volumeSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const parsed = volumeSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });

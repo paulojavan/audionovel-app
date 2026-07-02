@@ -12,35 +12,11 @@ const RESET_CONFIRM_OK_MESSAGE = "Senha redefinida com sucesso. Entre novamente 
 const RESET_EMAIL_NOT_CONFIGURED_MESSAGE =
   "Envio de recuperacao de senha nao configurado no servidor. Avise o administrador.";
 
-type PasswordResetTokenRow = {
-  id: string;
-  userId: string;
-};
-
-export async function ensurePasswordResetTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "PasswordResetToken" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "userId" TEXT NOT NULL,
-      "tokenHash" TEXT NOT NULL,
-      "usedAt" TIMESTAMP(3),
-      "expiresAt" TIMESTAMP(3) NOT NULL,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-    )
-  `);
-  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "PasswordResetToken_tokenHash_key" ON "PasswordResetToken"("tokenHash")`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PasswordResetToken_userId_usedAt_expiresAt_idx" ON "PasswordResetToken"("userId", "usedAt", "expiresAt")`);
-  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt")`);
-}
-
 export async function createPasswordResetRequest(email: string, origin: string) {
   const deliveryConfig = getPasswordResetDeliveryConfig();
   if (deliveryConfig.mode === "unconfigured") {
     return { message: RESET_REQUEST_OK_MESSAGE, resetUrl: null, deliveryError: RESET_EMAIL_NOT_CONFIGURED_MESSAGE };
   }
-
-  await ensurePasswordResetTable();
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -59,15 +35,19 @@ export async function createPasswordResetRequest(email: string, origin: string) 
   resetUrl.searchParams.set("token", token);
 
   await prisma.$transaction([
-    prisma.$executeRaw`
-      UPDATE "PasswordResetToken"
-      SET "usedAt" = ${now}
-      WHERE "userId" = ${user.id} AND "usedAt" IS NULL
-    `,
-    prisma.$executeRaw`
-      INSERT INTO "PasswordResetToken" ("id", "userId", "tokenHash", "usedAt", "expiresAt", "createdAt")
-      VALUES (${createRandomSessionId()}, ${user.id}, ${tokenHash}, NULL, ${expiresAt}, ${now})
-    `,
+    prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: now },
+    }),
+    prisma.passwordResetToken.create({
+      data: {
+        id: createRandomSessionId(),
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+        createdAt: now,
+      },
+    }),
   ]);
 
   await deliverPasswordResetLinkSafely({
@@ -84,17 +64,16 @@ export async function createPasswordResetRequest(email: string, origin: string) 
 }
 
 export async function confirmPasswordReset(token: string, password: string) {
-  await ensurePasswordResetTable();
-
   const now = new Date();
   const tokenHash = hashResetToken(token);
-  const rows = await prisma.$queryRaw<PasswordResetTokenRow[]>`
-    SELECT "id", "userId"
-    FROM "PasswordResetToken"
-    WHERE "tokenHash" = ${tokenHash} AND "usedAt" IS NULL AND "expiresAt" > ${now}
-    LIMIT 1
-  `;
-  const resetToken = rows[0];
+  const resetToken = await prisma.passwordResetToken.findFirst({
+    where: {
+      tokenHash,
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    select: { id: true, userId: true },
+  });
 
   if (!resetToken) {
     return { success: false as const, error: "Link de recuperacao invalido ou expirado." };
@@ -104,30 +83,38 @@ export async function confirmPasswordReset(token: string, password: string) {
 
   try {
     await prisma.$transaction(async (tx) => {
-      const updatedTokenCount = await tx.$executeRaw`
-        UPDATE "PasswordResetToken"
-        SET "usedAt" = ${now}
-        WHERE "id" = ${resetToken.id} AND "usedAt" IS NULL AND "expiresAt" > ${now}
-      `;
+      const updatedToken = await tx.passwordResetToken.updateMany({
+        where: {
+          id: resetToken.id,
+          usedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
 
-      if (Number(updatedTokenCount) !== 1) {
+      if (updatedToken.count !== 1) {
         throw new Error("RESET_TOKEN_ALREADY_USED");
       }
 
-      await tx.$executeRaw`
-        UPDATE "User"
-        SET "passwordHash" = ${passwordHash}, "updatedAt" = ${now}
-        WHERE "id" = ${resetToken.userId}
-      `;
-      await tx.$executeRaw`
-        UPDATE "UserSession"
-        SET "revokedAt" = ${now}
-        WHERE "userId" = ${resetToken.userId} AND "revokedAt" IS NULL
-      `;
-      await tx.$executeRaw`
-        INSERT INTO "SecurityEvent" ("id", "userId", "type", "severity", "message", "metadata", "readAt", "createdAt")
-        VALUES (${createRandomSessionId()}, ${resetToken.userId}, 'PASSWORD_RESET', 'MEDIUM', 'Senha redefinida por link de recuperacao.', '{}', NULL, ${now})
-      `;
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      });
+      await tx.userSession.updateMany({
+        where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.securityEvent.create({
+        data: {
+          id: createRandomSessionId(),
+          userId: resetToken.userId,
+          type: "PASSWORD_RESET",
+          severity: "MEDIUM",
+          message: "Senha redefinida por link de recuperacao.",
+          metadata: "{}",
+          createdAt: now,
+        },
+      });
     });
   } catch (error) {
     if (error instanceof Error && error.message === "RESET_TOKEN_ALREADY_USED") {

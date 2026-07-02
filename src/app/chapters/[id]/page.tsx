@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { PlaySquare } from "lucide-react";
 import { AudioPlayer } from "@/components/audio-player";
 import { ChapterPartLinks } from "@/components/chapter-part-links";
+import { ChapterViewTracker } from "@/components/chapter-view-tracker";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
@@ -30,35 +31,6 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
   if (!access.allowed || !access.chapter) redirect("/assinaturas?premium=required");
 
   const isYouTubeChapter = access.chapter.contentType === "YOUTUBE";
-
-  if (isYouTubeChapter) {
-    await Promise.all([
-      prisma.chapter.update({
-        where: { id },
-        data: {
-          viewCount: { increment: 1 },
-          volume: { update: { novel: { update: { viewCount: { increment: 1 } } } } },
-        },
-      }),
-      session?.user?.id
-        ? prisma.listeningProgress.upsert({
-            where: { userId_chapterId: { userId: session.user.id, chapterId: id } },
-            create: {
-              userId: session.user.id,
-              chapterId: id,
-              positionSec: 0,
-              durationSec: 0,
-              completed: true,
-            },
-            update: {
-              positionSec: 0,
-              durationSec: 0,
-              completed: true,
-            },
-          })
-        : Promise.resolve(null),
-    ]);
-  }
 
   const [progress, comments, novelChapters] = await Promise.all([
     session?.user?.id
@@ -101,6 +73,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="px-4 py-6 md:px-8">
+      <ChapterViewTracker chapterId={id} />
       <Link className="text-sm font-bold text-[#18b7bd]" href={`/novels/${access.chapter.volume.novel.slug}`}>
         Voltar para {access.chapter.volume.novel.title}
       </Link>

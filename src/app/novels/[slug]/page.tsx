@@ -94,6 +94,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
       </section>
 
       <NovelVolumeList
+        accountScope={session?.user?.id ?? "anonymous"}
         novelTitle={novel.title}
         volumes={novel.volumes.map((volume) => ({
           id: volume.id,

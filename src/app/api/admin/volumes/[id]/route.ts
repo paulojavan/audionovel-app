@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 
@@ -11,9 +11,8 @@ const volumeUpdateSchema = z.object({
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const { id } = await context.params;
   const parsed = volumeUpdateSchema.safeParse(await request.json());
@@ -32,9 +31,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 }
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const { id } = await context.params;
 

@@ -26,3 +26,9 @@ test("implementacao antiga de webhook nao permanece no armazenamento", () => {
   assert.doesNotMatch(storeSource, /process\.env\.PASSWORD_RESET_WEBHOOK_URL/);
   assert.doesNotMatch(storeSource, /async function deliverPasswordResetLink/);
 });
+
+test("recuperacao de senha nao executa DDL ou SQL inseguro em runtime", () => {
+  assert.doesNotMatch(storeSource, /CREATE TABLE|CREATE INDEX/);
+  assert.doesNotMatch(storeSource, /\$executeRawUnsafe/);
+  assert.doesNotMatch(storeSource, /ensurePasswordResetTable/);
+});

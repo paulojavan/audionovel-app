@@ -9,7 +9,7 @@ export async function PATCH(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
 
-  const limited = enforceRateLimit({ key: `profile:${auth.user.id}`, limit: 10, windowMs: 10 * 60_000 });
+  const limited = await enforceRateLimit({ key: `profile:${auth.user.id}`, limit: 10, windowMs: 10 * 60_000 });
   if (limited) return limited;
 
   const parsed = parseProfileUpdatePayload(await request.json().catch(() => null));

@@ -15,3 +15,13 @@ test("service worker nao intercepta chunks internos do Next", () => {
   assert.match(serviceWorkerSource, /url\.pathname\.startsWith\("\/_next\/"\)/);
   assert.doesNotMatch(serviceWorkerSource, /url\.pathname\.startsWith\("\/_next\/static\/"\)\s*return true/);
 });
+
+test("service worker limita cache de navegacao ao offline e separa por conta", () => {
+  assert.match(serviceWorkerSource, /SET_ACCOUNT_SCOPE/);
+  assert.match(serviceWorkerSource, /url\.pathname !== "\/offline"/);
+  assert.match(serviceWorkerSource, /getAccountPageCacheName/);
+  assert.doesNotMatch(
+    serviceWorkerSource,
+    /if \(request\.mode === "navigate"\) \{\s*event\.respondWith\(networkFirstWithOfflineFallback\(request\)\)/,
+  );
+});

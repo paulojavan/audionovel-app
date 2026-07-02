@@ -1,27 +1,26 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
-import { isSafePublicHttpsUrl } from "@/lib/url-security";
+import { isSafeImageHttpsUrl } from "@/lib/url-security";
 
 const novelSchema = z.object({
   title: z.string().trim().min(2).max(160),
   slug: z.string().trim().min(2).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
   author: z.string().trim().min(2).max(120),
   synopsis: z.string().trim().min(10).max(4000),
-  coverUrl: z.string().url().refine((value) => isSafePublicHttpsUrl(value), "Use uma URL HTTPS publica permitida."),
+  coverUrl: z.string().url().refine((value) => isSafeImageHttpsUrl(value), "Use uma URL de imagem HTTPS permitida."),
   status: z.string().trim().default("ONGOING"),
   tagIds: z.array(z.string()).optional().default([]),
   continuationId: z.string().trim().min(1).nullable().optional().default(null),
 });
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const parsed = novelSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });

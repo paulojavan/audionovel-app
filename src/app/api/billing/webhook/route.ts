@@ -25,13 +25,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true, ignored: "missing-payment-id" });
   }
 
+  const webhookSecret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json({ error: "Webhook nao configurado." }, { status: 503 });
+  }
+
   const validSignature = verifyMercadoPagoWebhookSignature({
     dataId: paymentId,
     requestId: request.headers.get("x-request-id"),
     signature: request.headers.get("x-signature"),
-    secret: process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    secret: webhookSecret,
   });
-  if (!validSignature) return NextResponse.json({ error: "Webhook invalido." }, { status: 400 });
+  if (!validSignature) return NextResponse.json({ error: "Webhook invalido." }, { status: 401 });
 
   const payment = await getMercadoPagoPayment(paymentId);
   const eventId = buildEventId(request.headers.get("x-request-id"), paymentId, payment.status);

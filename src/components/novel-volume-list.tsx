@@ -37,7 +37,17 @@ function getOfflineChapterParts(chapter: { title: string; position: number; posi
   }));
 }
 
-export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volumes: NovelVolume[]; canUseOffline: boolean; novelTitle: string }) {
+export function NovelVolumeList({
+  volumes,
+  canUseOffline,
+  novelTitle,
+  accountScope,
+}: {
+  volumes: NovelVolume[];
+  canUseOffline: boolean;
+  novelTitle: string;
+  accountScope: string;
+}) {
   const scrollContainers = useRef<Array<HTMLDivElement | null>>([]);
   const hasLastListenedChapter = useMemo(() => volumes.some((volume) => volume.chapters.some((chapter) => chapter.lastListened)), [volumes]);
 
@@ -101,6 +111,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                   </div>
                   <div className="mt-3 flex justify-start">
                     <OfflineChapterButton
+                      accountScope={accountScope}
                       chapterId={chapter.id}
                       contentType={chapter.contentType}
                       canUseOffline={canUseOffline}
@@ -171,6 +182,7 @@ export function NovelVolumeList({ volumes, canUseOffline, novelTitle }: { volume
                       <td className="whitespace-nowrap px-4 py-3 font-bold">{formatDate(chapter.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
                         <OfflineChapterButton
+                          accountScope={accountScope}
                           chapterId={chapter.id}
                           contentType={chapter.contentType}
                           canUseOffline={canUseOffline}

@@ -33,6 +33,7 @@ export default async function OfflinePage() {
 
   const downloads = await prisma.offlineDownload.findMany({
     where: { userId: session.user.id, expiresAt: { gt: new Date() } },
+    take: 100,
     orderBy: { lastUsedAt: "desc" },
     select: OFFLINE_DOWNLOAD_SELECT,
   });
@@ -46,6 +47,7 @@ export default async function OfflinePage() {
       </section>
 
       <OfflineListenPanel
+        accountScope={session.user.id}
         items={downloads.map((download) => {
           const chapterParts = getChapterPartsForDisplay(download.chapter).map((part) => ({
             position: part.position,

@@ -7,7 +7,7 @@ import { reactionSchema } from "@/lib/validators";
 export async function POST(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
-  const limited = enforceRateLimit({ key: `reactions:${auth.user.id}`, limit: 80, windowMs: 60_000 });
+  const limited = await enforceRateLimit({ key: `reactions:${auth.user.id}`, limit: 80, windowMs: 60_000 });
   if (limited) return limited;
 
   const parsed = reactionSchema.safeParse(await request.json());

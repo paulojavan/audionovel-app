@@ -27,7 +27,15 @@ function isPublicPath(pathname: string) {
   return /\.(png|jpg|jpeg|webp|svg|ico|css|js|map|txt|xml|webmanifest)$/i.test(pathname);
 }
 
+export function isUnexpectedServerActionRequest(headers: Headers) {
+  return headers.has("next-action");
+}
+
 export async function proxy(request: NextRequest) {
+  if (isUnexpectedServerActionRequest(request.headers)) {
+    return NextResponse.json({ error: "Rota nao encontrada." }, { status: 404 });
+  }
+
   const { pathname, search } = request.nextUrl;
   const cookieNames = request.cookies.getAll().map((cookie) => cookie.name);
   const hasSessionCookie = hasNextAuthSessionCookie(cookieNames);

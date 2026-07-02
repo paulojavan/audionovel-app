@@ -91,7 +91,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <ServiceWorkerRegister />
+        <ServiceWorkerRegister accountScope={activeSession?.user?.id} />
         <PwaLifecycle />
         <BlockedSessionLogout blocked={session?.user?.isBlocked} />
         {!activeSession?.user ? (

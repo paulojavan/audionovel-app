@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
-import { requireUser } from "@/lib/api";
+import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
@@ -11,9 +11,8 @@ type ChapterInput = z.infer<typeof chapterSchema>;
 type PersistedChapterInput = ChapterInput & { positionEnd?: number | null };
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  if (auth.user.role !== "ADMIN") return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
 
   const body = await request.json();
   const batch = chapterBatchSchema.safeParse(body);
