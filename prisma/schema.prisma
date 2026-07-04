@@ -143,8 +143,8 @@ model Volume {
 model Chapter {
   id               String              @id @default(cuid())
   title            String
-  position         Int
-  positionEnd      Int?
+  position         Float
+  positionEnd      Float?
   contentType      String              @default("AUDIO")
   durationSec      Int                 @default(0)
   audioUrl         String?

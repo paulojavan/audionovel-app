@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getChapterPartsForDisplay, getGroupedChapterSummary, parseChapterParts } from "./chapter-grouping";
+import { getChapterPartsForDisplay, getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "./chapter-grouping";
 
 test("getGroupedChapterSummary combines chapter titles and range", () => {
   const grouped = getGroupedChapterSummary([
@@ -47,6 +47,14 @@ test("parseChapterParts returns normalized sorted parts", () => {
     { position: 1, title: "Primeiro", startSec: 0, endSec: 60 },
     { position: 2, title: "Segundo", startSec: 60, endSec: 120 },
   ]);
+});
+
+test("normalizeChapterParts preserves decimal chapter positions", () => {
+  const parts = normalizeChapterParts([
+    { position: 8.5, title: "Interludio", startSec: 0, endSec: 60 },
+  ]);
+
+  assert.equal(parts[0]?.position, 8.5);
 });
 
 test("getChapterPartsForDisplay derives fallback parts for old grouped chapters", () => {

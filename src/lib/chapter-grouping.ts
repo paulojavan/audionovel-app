@@ -40,12 +40,16 @@ export function getGroupedChapterSummary<T extends ChapterGroupSource>(chapters:
 
 export function normalizeChapterParts(parts: ChapterPart[]) {
   return parts
-    .map((part) => ({
-      position: Math.max(1, Math.floor(part.position || 1)),
-      title: part.title.trim(),
-      startSec: Math.max(0, Math.floor(part.startSec || 0)),
-      endSec: Math.max(0, Math.floor(part.endSec || 0)),
-    }))
+    .map((part) => {
+      const position = Number(part.position || 0);
+
+      return {
+        position: Number.isFinite(position) ? Math.max(0, position) : 0,
+        title: part.title.trim(),
+        startSec: Math.max(0, Math.floor(part.startSec || 0)),
+        endSec: Math.max(0, Math.floor(part.endSec || 0)),
+      };
+    })
     .filter((part) => part.title.length > 0)
     .sort((a, b) => a.position - b.position);
 }
