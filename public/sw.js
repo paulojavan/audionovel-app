@@ -169,8 +169,20 @@ async function networkOnlyWithOfflineFallback(request) {
   try {
     return await fetch(request);
   } catch {
-    return getOfflineFallback();
+    const offlineRedirect = await getAccountOfflineRedirect();
+    return offlineRedirect ?? getOfflineFallback();
   }
+}
+
+async function getAccountOfflineRedirect() {
+  const scope = await getAccountScope();
+  if (scope === ANONYMOUS_ACCOUNT_SCOPE) return null;
+
+  const cache = await caches.open(getAccountPageCacheName(scope));
+  const offlinePage = await cache.match("/offline");
+  if (!offlinePage) return null;
+
+  return Response.redirect(new URL("/offline", self.location.origin).href, 302);
 }
 
 async function accountScopedOfflinePage(request) {

@@ -45,6 +45,7 @@ class MemoryCacheStorage {
 type WorkerRuntime = {
   prepareOfflinePage(scope: string): Promise<void>;
   accountScopedOfflinePage(request: Request): Promise<Response>;
+  networkOnlyWithOfflineFallback(request: Request): Promise<Response>;
   cacheFirst(request: Request): Promise<Response>;
 };
 
@@ -139,6 +140,64 @@ test("navegacao online nao substitui shell valido com html de outra conta", asyn
 
   assert.match(await networkResponse.text(), /NEW-B/);
   assert.match(await (await pageCache.match("/offline"))!.text(), /OLD-A/);
+});
+
+test("abertura pela raiz sem rede redireciona para o shell offline da conta ativa", async () => {
+  const caches = new MemoryCacheStorage();
+  const created = createRuntime(async () => {
+    throw new TypeError("Failed to fetch");
+  }, caches);
+
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v7");
+  await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
+  const pageCache = await caches.open("audio-novel-br-pwa-pages-v7-account-a");
+  await pageCache.put(
+    "/offline",
+    responseWithUrl(offlineHtml("account-a", "OFFLINE-A"), `${ORIGIN}/offline`, "text/html"),
+  );
+
+  const response = await created.runtime.networkOnlyWithOfflineFallback(
+    new Request(`${ORIGIN}/`),
+  );
+
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("Location"), `${ORIGIN}/offline`);
+});
+
+test("abertura sem rede mantem o fallback quando a conta nao possui shell offline", async () => {
+  const caches = new MemoryCacheStorage();
+  const created = createRuntime(async () => {
+    throw new TypeError("Failed to fetch");
+  }, caches);
+
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v7");
+  await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
+  const staticCache = await caches.open("audio-novel-br-pwa-v7");
+  await staticCache.put(
+    "/offline-fallback.html",
+    responseWithUrl("FALLBACK", `${ORIGIN}/offline-fallback.html`, "text/html"),
+  );
+
+  const response = await created.runtime.networkOnlyWithOfflineFallback(
+    new Request(`${ORIGIN}/`),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "FALLBACK");
+});
+
+test("navegacao comum continua usando a resposta da rede quando online", async () => {
+  const created = createRuntime(async (request) => {
+    const url = new URL(request.toString(), ORIGIN);
+    return responseWithUrl("ONLINE", url.href, "text/html");
+  });
+
+  const response = await created.runtime.networkOnlyWithOfflineFallback(
+    new Request(`${ORIGIN}/`),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "ONLINE");
 });
 
 test("cacheFirst aguarda a gravacao antes de concluir a resposta", async () => {
