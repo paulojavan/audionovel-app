@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   if (!chapters) {
     const validationError = batchPayload ? batch.error : single.error;
     return NextResponse.json(
-      { error: validationError.issues[0]?.message ?? "Dados invalidos." },
+      { error: validationError?.issues[0]?.message ?? "Dados invalidos." },
       { status: 400 },
     );
   }

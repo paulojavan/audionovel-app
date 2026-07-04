@@ -1,8 +1,8 @@
-// Audio Novel BR - Service Worker v7
-// Estratégia: cache estático compartilhado e página offline isolada por conta.
+// Audio Novel BR - Service Worker v8
+// Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -124,12 +124,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navegações privadas nunca são persistidas. Apenas /offline usa cache por conta.
+  // Rotas de leitura aprovadas usam rede primeiro e cache isolado por conta.
   if (request.mode === "navigate") {
     event.respondWith(
-      url.pathname !== "/offline"
-        ? networkOnlyWithOfflineFallback(request)
-        : accountScopedOfflinePage(request),
+      url.pathname === "/offline"
+        ? accountScopedOfflinePage(request)
+        : isCacheableNavigationPath(url.pathname)
+          ? networkFirstWithPageCache(request, event)
+          : networkOnlyWithOfflineFallback(request),
     );
     return;
   }
@@ -169,20 +171,81 @@ async function networkOnlyWithOfflineFallback(request) {
   try {
     return await fetch(request);
   } catch {
-    const offlineRedirect = await getAccountOfflineRedirect();
-    return offlineRedirect ?? getOfflineFallback();
+    return getOfflineFallback();
   }
 }
 
-async function getAccountOfflineRedirect() {
+function isCacheableNavigationPath(pathname) {
+  return (
+    pathname === "/" ||
+    pathname === "/novels" ||
+    pathname.startsWith("/novels/") ||
+    pathname.startsWith("/chapters/") ||
+    pathname === "/biblioteca"
+  );
+}
+
+function getNavigationCacheKey(request) {
+  const url = new URL(request.url);
+  url.searchParams.delete("_rsc");
+  url.hash = "";
+  return url.href;
+}
+
+async function networkFirstWithPageCache(request, event) {
   const scope = await getAccountScope();
-  if (scope === ANONYMOUS_ACCOUNT_SCOPE) return null;
+  const cache = await caches.open(getAccountPageCacheName(scope));
+  const cacheKey = getNavigationCacheKey(request);
+  const cached = await cache.match(cacheKey);
+  const networkTask = fetch(request).then(async (response) => {
+    try {
+      await publishNavigationPage(response.clone(), request, scope);
+    } catch {
+      // Uma resposta valida continua utilizavel mesmo se nao puder ser persistida.
+    }
+    return response;
+  });
+
+  event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
+
+  let timeoutId;
+  const timeoutTask = new Promise((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve(cached ?? getOfflineFallback()),
+      4_000,
+    );
+  });
+
+  try {
+    const response = await Promise.race([networkTask, timeoutTask]);
+    clearTimeout(timeoutId);
+    return await response;
+  } catch {
+    clearTimeout(timeoutId);
+    return cached ?? getOfflineFallback();
+  }
+}
+
+async function publishNavigationPage(response, request, scope) {
+  const requestUrl = new URL(request.url);
+  const responseUrl = response.url ? new URL(response.url, self.location.origin) : requestUrl;
+  const contentType = response.headers.get("Content-Type") ?? "";
+  if (
+    !response.ok ||
+    responseUrl.origin !== self.location.origin ||
+    responseUrl.pathname !== requestUrl.pathname ||
+    !contentType.toLowerCase().includes("text/html")
+  ) {
+    return;
+  }
+
+  const html = await response.clone().text();
+  if (extractOfflineAccountScope(html) !== scope) return;
+  if (requestUrl.pathname === "/biblioteca" && scope === ANONYMOUS_ACCOUNT_SCOPE) return;
+  if (scope !== (await getAccountScope())) return;
 
   const cache = await caches.open(getAccountPageCacheName(scope));
-  const offlinePage = await cache.match("/offline");
-  if (!offlinePage) return null;
-
-  return Response.redirect(new URL("/offline", self.location.origin).href, 302);
+  await cache.put(getNavigationCacheKey(request), response);
 }
 
 async function accountScopedOfflinePage(request) {

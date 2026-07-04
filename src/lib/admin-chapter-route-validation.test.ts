@@ -10,5 +10,5 @@ const routeSource = readFileSync(
 
 test("POST devolve a primeira mensagem do schema no erro 400", () => {
   assert.match(routeSource, /const validationError = batchPayload \? batch\.error : single\.error/);
-  assert.match(routeSource, /validationError\.issues\[0\]\?\.message \?\? "Dados invalidos\."/);
+  assert.match(routeSource, /validationError\?\.issues\[0\]\?\.message \?\? "Dados invalidos\."/);
 });

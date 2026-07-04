@@ -12,7 +12,7 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v7"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v8"/);
   assert.match(
     serviceWorkerSource,
     /url\.pathname\.startsWith\("\/_next\/static\/"\)[\s\S]*?event\.respondWith\(cacheFirst\(request\)\)/,
@@ -23,14 +23,15 @@ test("service worker usa cache-first para chunks versionados do Next", () => {
   );
 });
 
-test("service worker limita cache de navegacao ao offline e separa por conta", () => {
+test("service worker limita cache de navegacao as rotas aprovadas e separa por conta", () => {
   assert.match(serviceWorkerSource, /SET_ACCOUNT_SCOPE/);
-  assert.match(serviceWorkerSource, /url\.pathname !== "\/offline"/);
+  assert.match(serviceWorkerSource, /isCacheableNavigationPath\(url\.pathname\)/);
   assert.match(serviceWorkerSource, /getAccountPageCacheName/);
-  assert.doesNotMatch(
+  assert.match(
     serviceWorkerSource,
-    /if \(request\.mode === "navigate"\) \{\s*event\.respondWith\(networkFirstWithOfflineFallback\(request\)\)/,
+    /networkFirstWithPageCache\(request, event\)/,
   );
+  assert.doesNotMatch(serviceWorkerSource, /getAccountOfflineRedirect/);
 });
 
 test("service worker prepara html e chunks offline antes da primeira visita", () => {

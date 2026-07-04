@@ -12,6 +12,7 @@ import {
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { PwaLifecycle } from "@/components/pwa-lifecycle";
+import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
@@ -93,8 +94,15 @@ export default async function RootLayout({
 
   return (
     <html lang="pt-BR">
+      <head>
+        <meta
+          name="audio-novel-account-scope"
+          content={activeSession?.user?.id ?? "anonymous"}
+        />
+      </head>
       <body>
         <ServiceWorkerRegister accountScope={activeSession?.user?.id} />
+        <PwaOfflineNavigation />
         <PwaLifecycle />
         <BlockedSessionLogout blocked={session?.user?.isBlocked} />
         {!activeSession?.user ? (
