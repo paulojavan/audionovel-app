@@ -54,6 +54,17 @@ export function normalizeChapterParts(parts: ChapterPart[]) {
     .sort((a, b) => a.position - b.position);
 }
 
+export function getChapterPersistenceBounds(position: number, parts: Array<Pick<ChapterPart, "position">>) {
+  if (parts.length <= 1) {
+    return { position, positionEnd: null };
+  }
+
+  return {
+    position: parts[0].position,
+    positionEnd: parts[parts.length - 1].position,
+  };
+}
+
 export function parseChapterParts(chapterPartsJson: string | null | undefined) {
   try {
     const parsed = JSON.parse(chapterPartsJson || "[]") as unknown;

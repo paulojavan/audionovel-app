@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getChapterPartsForDisplay, getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "./chapter-grouping";
+import {
+  getChapterPartsForDisplay,
+  getChapterPersistenceBounds,
+  getGroupedChapterSummary,
+  normalizeChapterParts,
+  parseChapterParts,
+} from "./chapter-grouping";
 
 test("getGroupedChapterSummary combines chapter titles and range", () => {
   const grouped = getGroupedChapterSummary([
@@ -63,6 +69,26 @@ test("normalizeChapterParts clamps negative chapter positions to zero", () => {
   ]);
 
   assert.equal(parts[0]?.position, 0);
+});
+
+test("grouped chapter persistence bounds come from the validated parts", () => {
+  const parts = normalizeChapterParts([
+    { position: 8, title: "Oito", startSec: 0, endSec: 60 },
+    { position: 9, title: "Nove", startSec: 60, endSec: 120 },
+    { position: 10, title: "Dez", startSec: 120, endSec: 180 },
+  ]);
+
+  assert.deepEqual(getChapterPersistenceBounds(8.5, parts), {
+    position: 8,
+    positionEnd: 10,
+  });
+});
+
+test("standalone chapter persistence keeps a decimal position without an end", () => {
+  assert.deepEqual(getChapterPersistenceBounds(8.5, []), {
+    position: 8.5,
+    positionEnd: null,
+  });
 });
 
 test("getChapterPartsForDisplay derives fallback parts for old grouped chapters", () => {

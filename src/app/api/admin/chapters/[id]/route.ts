@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
-import { normalizeChapterParts } from "@/lib/chapter-grouping";
+import { getChapterPersistenceBounds, normalizeChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -19,14 +19,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const youtubeVideoId = parsed.data.contentType === "YOUTUBE" && cleanedUrl ? getYouTubeVideoId(cleanedUrl) : null;
     if (parsed.data.contentType === "YOUTUBE" && !youtubeVideoId) throw new Error("youtube");
     if (parsed.data.contentType === "AUDIO" && !parsed.data.audioUrl) throw new Error("audio");
+    const chapterParts = normalizeChapterParts(parsed.data.chapterParts);
+    const bounds = getChapterPersistenceBounds(parsed.data.position, chapterParts);
 
     const chapter = await prisma.chapter.update({
       where: { id },
       data: {
         volumeId: parsed.data.volumeId,
         title: parsed.data.title,
-        position: parsed.data.position,
-        positionEnd: parsed.data.positionEnd ?? null,
+        position: bounds.position,
+        positionEnd: bounds.positionEnd,
         contentType: parsed.data.contentType,
         durationSec: parsed.data.durationSec,
         audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
@@ -34,7 +36,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         youtubeVideoId,
         coverUrl: parsed.data.coverUrl || null,
         startSec: parsed.data.startSec,
-        chapterPartsJson: JSON.stringify(normalizeChapterParts(parsed.data.chapterParts)),
+        chapterPartsJson: JSON.stringify(chapterParts),
         transcriptJson: parsed.data.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(parsed.data.transcriptJson, parsed.data.title, parsed.data.durationSec)) : "[]",
         premiumOnly: parsed.data.premiumOnly,
         published: parsed.data.published,
