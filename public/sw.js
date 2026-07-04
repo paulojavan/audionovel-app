@@ -153,7 +153,11 @@ async function cacheFirst(request) {
 
     const response = await fetch(request);
     if (response.ok && response.status < 400) {
-      cache.put(request, response.clone()).catch(() => undefined);
+      try {
+        await cache.put(request, response.clone());
+      } catch {
+        // Uma falha de armazenamento nao deve esconder uma resposta valida da rede.
+      }
     }
     return response;
   } catch {
@@ -180,7 +184,11 @@ async function accountScopedOfflinePage(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      cache.put(request, response.clone()).catch(() => undefined);
+      try {
+        await publishOfflinePage(response.clone(), scope);
+      } catch {
+        // Mantem o shell anterior quando a resposta nao puder ser publicada com seguranca.
+      }
     }
     return response;
   } catch {
@@ -221,6 +229,10 @@ async function prepareOfflinePage(requestedScope) {
     headers: { Accept: "text/html" },
     redirect: "follow",
   });
+  await publishOfflinePage(response, scope);
+}
+
+async function publishOfflinePage(response, scope) {
   const responseUrl = response.url ? new URL(response.url, self.location.origin) : null;
   const contentType = response.headers.get("Content-Type") ?? "";
 
@@ -234,6 +246,11 @@ async function prepareOfflinePage(requestedScope) {
   }
 
   const html = await response.clone().text();
+  const responseScope = extractOfflineAccountScope(html);
+  if (!responseScope || responseScope !== scope) {
+    throw new Error("Conta offline invalida.");
+  }
+
   const assetUrls = extractNextStaticAssetUrls(html);
   if (assetUrls.length === 0) {
     throw new Error("Arquivos da pagina offline nao foram encontrados.");
@@ -243,7 +260,8 @@ async function prepareOfflinePage(requestedScope) {
   await Promise.all(
     assetUrls.map(async (assetUrl) => {
       const assetResponse = await fetch(assetUrl, { credentials: "same-origin" });
-      if (!assetResponse.ok) {
+      const assetContentType = assetResponse.headers.get("Content-Type") ?? "";
+      if (!assetResponse.ok || assetContentType.toLowerCase().includes("text/html")) {
         throw new Error("Um arquivo da pagina offline nao esta disponivel.");
       }
       await staticCache.put(assetUrl, assetResponse);
@@ -251,7 +269,15 @@ async function prepareOfflinePage(requestedScope) {
   );
 
   const pageCache = await caches.open(getAccountPageCacheName(scope));
+  if (scope !== (await getAccountScope())) {
+    throw new Error("Conta offline invalida.");
+  }
   await pageCache.put("/offline", response);
+}
+
+function extractOfflineAccountScope(html) {
+  const metaTag = html.match(/<meta\b[^>]*\bname=["']audio-novel-account-scope["'][^>]*>/i)?.[0];
+  return metaTag?.match(/\bcontent=["']([^"']+)["']/i)?.[1] ?? "";
 }
 
 function extractNextStaticAssetUrls(html) {

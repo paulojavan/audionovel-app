@@ -14,14 +14,18 @@ type OfflinePagePreparationReply = {
   error?: string;
 };
 
+const OFFLINE_PREPARATION_TIMEOUT_MESSAGE = "Tempo esgotado ao preparar a pagina offline.";
+
 export async function prepareOfflinePage(
   accountScope: string,
   serviceWorker: OfflinePageServiceWorker = navigator.serviceWorker,
   timeoutMs = 15_000,
 ) {
-  const registration = await serviceWorker.ready;
+  const deadline = Date.now() + timeoutMs;
+  const registration = await withTimeout(serviceWorker.ready, timeoutMs);
   const worker = serviceWorker.controller ?? registration.active;
   if (!worker) throw new Error("Service worker indisponivel.");
+  const remainingTime = Math.max(1, deadline - Date.now());
 
   await new Promise<void>((resolve, reject) => {
     const channel = new MessageChannel();
@@ -38,8 +42,8 @@ export async function prepareOfflinePage(
     };
 
     const timer = setTimeout(
-      () => finish(new Error("Tempo esgotado ao preparar a pagina offline.")),
-      timeoutMs,
+      () => finish(new Error(OFFLINE_PREPARATION_TIMEOUT_MESSAGE)),
+      remainingTime,
     );
 
     channel.port1.onmessage = (event: MessageEvent<OfflinePagePreparationReply>) => {
@@ -58,5 +62,25 @@ export async function prepareOfflinePage(
     } catch (error) {
       finish(error instanceof Error ? error : new Error("Nao foi possivel contatar o service worker."));
     }
+  });
+}
+
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(OFFLINE_PREPARATION_TIMEOUT_MESSAGE)),
+      timeoutMs,
+    );
+
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
   });
 }

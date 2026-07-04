@@ -42,3 +42,24 @@ test("prepareOfflinePage propaga a mensagem de erro retornada pelo worker", asyn
     /Pagina offline indisponivel/,
   );
 });
+
+test("prepareOfflinePage aplica o timeout enquanto aguarda o worker ficar pronto", async () => {
+  const neverReady = new Promise<{ active: null }>(() => undefined);
+
+  await Promise.race([
+    assert.rejects(
+      prepareOfflinePage(
+        "user-1",
+        {
+          controller: null,
+          ready: neverReady,
+        },
+        10,
+      ),
+      /Tempo esgotado/,
+    ),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("prepareOfflinePage ficou aguardando ready sem limite.")), 50);
+    }),
+  ]);
+});
