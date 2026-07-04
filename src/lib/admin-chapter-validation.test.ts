@@ -82,6 +82,17 @@ test("batch da rota rejeita lacuna entre posicoes", () => {
   assert.equal(chapterBatchSchema.safeParse({ chapters }).success, false);
 });
 
+test("aceita lote consecutivo hospedado em novo bucket R2", () => {
+  const chapters = [96, 97, 98, 99, 100].map((position) => ({
+    ...baseChapter,
+    position,
+    title: `Capitulo ${position}`,
+    audioUrl: "https://pub-4684220593db49858eb8eea0e3b7b910.r2.dev/audio.mp3",
+  }));
+
+  assert.equal(chapterBatchSchema.safeParse({ chapters }).success, true);
+});
+
 test("rejeita posicao negativa", () => {
   assert.equal(chapterSchema.safeParse({ ...baseChapter, position: -0.5 }).success, false);
 });

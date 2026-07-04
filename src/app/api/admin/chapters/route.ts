@@ -17,8 +17,15 @@ export async function POST(request: Request) {
   const body = await request.json();
   const batch = chapterBatchSchema.safeParse(body);
   const single = chapterSchema.safeParse(body);
+  const batchPayload = typeof body === "object" && body !== null && "chapters" in body;
   const chapters: PersistedChapterInput[] | null = batch.success ? [groupBatchChapters(batch.data.chapters)] : single.success ? [single.data] : null;
-  if (!chapters) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
+  if (!chapters) {
+    const validationError = batchPayload ? batch.error : single.error;
+    return NextResponse.json(
+      { error: validationError.issues[0]?.message ?? "Dados invalidos." },
+      { status: 400 },
+    );
+  }
 
   try {
     const created = await prisma.$transaction(

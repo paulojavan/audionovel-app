@@ -1,5 +1,6 @@
 const LOCAL_HOSTS = new Set(["localhost", "0.0.0.0", "::", "::1"]);
 const DEFAULT_MEDIA_HOSTS = [
+  "r2.dev",
   "pub-975120676aa7420e9b84ddf23e7919b5.r2.dev",
   "pub-f335f9271beb48ae83c8b04706092d78.r2.dev",
   "pub-71184de2196c4369bcdb615e4c5e985a.r2.dev",

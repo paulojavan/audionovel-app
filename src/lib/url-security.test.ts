@@ -79,3 +79,17 @@ test("autoriza o bucket R2 usado pelos audios publicados", () => {
     true,
   );
 });
+
+test("autoriza qualquer subdominio publico do Cloudflare R2", () => {
+  assert.equal(
+    isSafeMediaHttpsUrl(
+      "https://pub-4684220593db49858eb8eea0e3b7b910.r2.dev/audio.mp3",
+    ),
+    true,
+  );
+});
+
+test("nao confunde dominio falso com Cloudflare R2", () => {
+  assert.equal(isSafeMediaHttpsUrl("https://r2.dev.exemplo.com/audio.mp3"), false);
+  assert.equal(isSafeMediaHttpsUrl("http://bucket.r2.dev/audio.mp3"), false);
+});
