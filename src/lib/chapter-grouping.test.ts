@@ -57,6 +57,14 @@ test("normalizeChapterParts preserves decimal chapter positions", () => {
   assert.equal(parts[0]?.position, 8.5);
 });
 
+test("normalizeChapterParts clamps negative chapter positions to zero", () => {
+  const parts = normalizeChapterParts([
+    { position: -1.5, title: "Prologo", startSec: 0, endSec: 60 },
+  ]);
+
+  assert.equal(parts[0]?.position, 0);
+});
+
 test("getChapterPartsForDisplay derives fallback parts for old grouped chapters", () => {
   const parts = getChapterPartsForDisplay({
     title: "Um, Dois",

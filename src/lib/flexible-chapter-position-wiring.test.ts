@@ -4,6 +4,10 @@ import test from "node:test";
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const adminForms = readFileSync("src/components/admin-content-forms.tsx", "utf8");
+const aivenMigration = readFileSync(
+  "prisma/aiven-2026-07-04-flexible-chapter-positions.sql",
+  "utf8",
+);
 
 function sourceBetween(source: string, start: string, end: string) {
   const startIndex = source.indexOf(start);
@@ -32,6 +36,20 @@ test("Chapter persiste posicoes zero e decimais sem alterar Volume.position", ()
   assert.match(chapterModel, /\bposition\s+Float\b/);
   assert.match(chapterModel, /\bpositionEnd\s+Float\?/);
   assert.match(chapterModel, /@@unique\(\[volumeId, position\]\)/);
+});
+
+test("migracao Aiven converte as posicoes de Chapter para double precision", () => {
+  assert.match(aivenMigration, /^\s*BEGIN\s*;/m);
+  assert.match(aivenMigration, /^ALTER TABLE "Chapter"$/m);
+  assert.match(
+    aivenMigration,
+    /ALTER COLUMN "position" TYPE DOUBLE PRECISION USING "position"::DOUBLE PRECISION/,
+  );
+  assert.match(
+    aivenMigration,
+    /ALTER COLUMN "positionEnd" TYPE DOUBLE PRECISION USING "positionEnd"::DOUBLE PRECISION/,
+  );
+  assert.match(aivenMigration, /^\s*COMMIT\s*;/m);
 });
 
 test("inputs de posicao de capitulo aceitam zero e decimais", () => {
