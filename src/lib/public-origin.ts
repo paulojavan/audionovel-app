@@ -5,11 +5,11 @@ type PublicOriginInput = {
 };
 
 export function getPublicOrigin({ headers, envOrigin, fallbackOrigin }: PublicOriginInput) {
-  const forwardedOrigin = getForwardedOrigin(headers);
-  if (forwardedOrigin && !isLocalOrigin(forwardedOrigin)) return forwardedOrigin;
-
   const normalizedEnvOrigin = normalizeOrigin(envOrigin);
   if (normalizedEnvOrigin && !isLocalOrigin(normalizedEnvOrigin)) return normalizedEnvOrigin;
+
+  const forwardedOrigin = getForwardedOrigin(headers);
+  if (forwardedOrigin && !isLocalOrigin(forwardedOrigin)) return forwardedOrigin;
 
   if (forwardedOrigin) return forwardedOrigin;
 

@@ -14,7 +14,10 @@ NEXT_PUBLIC_APP_URL=https://audionovelbr.com.br
 - Aponte o DNS de `audionovelbr.com.br` para a aplicação no Coolify.
 - Adicione `audionovelbr.com.br` aos domínios da aplicação e aguarde a emissão do certificado TLS.
 - Defina `https://audionovelbr.com.br` como domínio principal.
-- Mantenha o domínio antigo ativo durante a transição e configure um redirect HTTP 301 para o novo domínio, preservando todo o path e a query string.
+- Mantenha o domínio antigo e seu certificado TLS ativos durante a janela de transição.
+- Para os paths comuns, configure um redirect HTTP 301 para o novo domínio, preservando todo o path e a query string.
+- Não redirecione `https://audionovelbr.qzz.io/api/billing/webhook` com 301. Configure esse path como reverse proxy para a aplicação durante a transição, preservando método, corpo e headers do POST, para receber notificações de preferências emitidas com a URL antiga.
+- Remova o domínio antigo, o TLS e o reverse proxy somente depois de drenar os pagamentos e preferências antigos.
 
 Exemplo: `https://audionovelbr.qzz.io/novels/exemplo?origem=pwa` deve redirecionar para `https://audionovelbr.com.br/novels/exemplo?origem=pwa`.
 
@@ -30,6 +33,7 @@ Exemplo: `https://audionovelbr.qzz.io/novels/exemplo?origem=pwa` deve redirecion
 - Solicite uma recuperação de senha e abra o link recebido.
 - Execute um checkout, confirme o webhook e valide o retorno para a aplicação.
 - Teste manualmente os redirects do domínio antigo com paths e queries diferentes.
+- Confirme que um POST no webhook do domínio antigo chega à aplicação sem ser convertido em GET ou perder o corpo.
 
 ## PWA e modo offline
 

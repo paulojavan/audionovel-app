@@ -24,3 +24,15 @@ test("ignora NEXTAUTH_URL localhost quando existe host publico encaminhado", () 
 test("usa env publico quando nao ha host encaminhado", () => {
   assert.equal(getPublicOrigin({ headers: new Headers(), envOrigin: "https://audionovelbr.com.br/" }), "https://audionovelbr.com.br");
 });
+
+test("prioriza env publico sobre host encaminhado nao confiavel", () => {
+  const headers = new Headers({
+    "x-forwarded-proto": "https",
+    "x-forwarded-host": "attacker.example",
+  });
+
+  assert.equal(
+    getPublicOrigin({ headers, envOrigin: "https://audionovelbr.com.br" }),
+    "https://audionovelbr.com.br",
+  );
+});
