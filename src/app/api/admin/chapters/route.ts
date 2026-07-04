@@ -4,7 +4,7 @@ import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
-import { getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
+import { getChapterPersistenceBounds, getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
 import { prisma } from "@/lib/prisma";
 
 type ChapterInput = z.infer<typeof chapterSchema>;
@@ -27,13 +27,15 @@ export async function POST(request: Request) {
         const youtubeVideoId = chapter.contentType === "YOUTUBE" && cleanedUrl ? getYouTubeVideoId(cleanedUrl) : null;
         if (chapter.contentType === "YOUTUBE" && !youtubeVideoId) throw new Error("youtube");
         if (chapter.contentType === "AUDIO" && !chapter.audioUrl) throw new Error("audio");
+        const chapterParts = normalizeChapterParts(chapter.chapterParts);
+        const bounds = getChapterPersistenceBounds(chapter.position, chapterParts);
 
         return prisma.chapter.create({
           data: {
             volumeId: chapter.volumeId,
             title: chapter.title,
-            position: chapter.position,
-            positionEnd: chapter.positionEnd,
+            position: bounds.position,
+            positionEnd: bounds.positionEnd,
             contentType: chapter.contentType,
             durationSec: chapter.durationSec,
             audioUrl: chapter.contentType === "AUDIO" ? chapter.audioUrl : null,
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
             youtubeVideoId,
             coverUrl: chapter.coverUrl || null,
             startSec: chapter.startSec,
-            chapterPartsJson: JSON.stringify(normalizeChapterParts(chapter.chapterParts)),
+            chapterPartsJson: JSON.stringify(chapterParts),
             transcriptJson: chapter.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(chapter.transcriptJson, chapter.title, chapter.durationSec)) : "[]",
             premiumOnly: chapter.premiumOnly,
             published: chapter.published,
