@@ -28,8 +28,9 @@ As rotas cobertas usam rede primeiro:
    atualiza o cache.
 2. Quando a conexão falha ou demora além do limite e existe uma versão da URL
    exata no cache, a página salva é entregue sem redirecionar para `/offline`.
-3. Quando a URL nunca foi visitada, o service worker usa o shell `/offline` da
-   conta ativa; se ele não existir, usa o fallback estático.
+3. Quando a URL nunca foi visitada, o service worker mostra diretamente o
+   fallback estático “Você está offline” da imagem, sem redirecionar para
+   `/offline`.
 4. A tentativa de rede pode concluir em segundo plano e atualizar o cache, mas
    sua falha não substitui uma resposta válida já entregue ao usuário.
 
@@ -68,8 +69,8 @@ as falhas para `/offline`.
 
 - Uma rota coberta usa a resposta da rede e a salva no cache correto.
 - Uma falha ou demora da rede entrega a versão exata já visitada.
-- Uma URL inédita usa o shell offline da conta, sem criar ciclo para uma página
-  que já esteja salva.
+- Uma URL inédita usa o fallback estático “Você está offline”, sem redirecionar
+  para `/offline` e sem criar ciclo para uma página que já esteja salva.
 - A biblioteca de uma conta não é servida para outra conta nem para visitantes
   anônimos.
 - Rotas privadas fora da lista não são persistidas.
@@ -78,7 +79,7 @@ as falhas para `/offline`.
 
 ## Critério de sucesso
 
-Com conexão instável ou ausente, o usuário consegue sair de `/offline` e navegar
-entre início, catálogo, novels, capítulos e biblioteca que já tenha visitado.
-Páginas inéditas continuam apresentando o modo offline, e nenhuma página de uma
-conta é reutilizada por outra.
+Com conexão instável ou ausente, o usuário consegue navegar entre início,
+catálogo, novels, capítulos e biblioteca que já tenha visitado. Páginas inéditas
+mostram a tela estática “Você está offline”; `/offline` permanece reservado aos
+áudios salvos, e nenhuma página de uma conta é reutilizada por outra.
