@@ -747,7 +747,7 @@ function ChapterBatchTable({ chapterCount, chapterParts, contentType, startPosit
           {chapters.map((chapter, index) => (
             <tr key={index} className="border-t border-white/10">
               <td className="px-3 py-2 align-top">
-                <input name={`chapter.${index}.position`} type="number" min="0" step="any" defaultValue={chapter.position} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
+                <input name={`chapter.${index}.position`} type="number" min="0" step="1" defaultValue={chapter.position} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />
               </td>
               <td className="px-3 py-2 align-top">
                 <input name={`chapter.${index}.title`} defaultValue={chapter.title} placeholder={`Capitulo ${index + 1}`} className="w-full rounded-md border border-white/10 bg-black px-3 py-2" required />

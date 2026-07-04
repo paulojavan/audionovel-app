@@ -28,6 +28,15 @@ function assertFlexibleChapterPositionInput(source: string, namePattern: string)
   assert.match(input, /\bstep="any"/);
 }
 
+function assertIntegerChapterPositionInput(source: string, namePattern: string) {
+  const input = source.match(new RegExp(`<input[^>]*name=${namePattern}[^>]*>`))?.[0];
+
+  assert.ok(input, `Input de posicao ${namePattern} nao encontrado`);
+  assert.match(input, /\btype="number"/);
+  assert.match(input, /\bmin="0"/);
+  assert.match(input, /\bstep="1"/);
+}
+
 test("Chapter persiste posicoes zero e decimais sem alterar Volume.position", () => {
   const volumeModel = sourceBetween(schema, "model Volume {", "model Chapter {");
   const chapterModel = sourceBetween(schema, "model Chapter {", "model ListeningProgress {");
@@ -52,13 +61,13 @@ test("migracao Aiven converte as posicoes de Chapter para double precision", () 
   assert.match(aivenMigration, /^\s*COMMIT\s*;/m);
 });
 
-test("inputs de posicao de capitulo aceitam zero e decimais", () => {
+test("inputs standalone aceitam zero e decimais, mas batch exige inteiros", () => {
   const editForm = sourceBetween(adminForms, "export function AdminChapterEditForm(", "export function AdminNovelForm(");
   const batchFields = sourceBetween(adminForms, "function ChapterBatchTable(", "function ChapterBlockFields(");
   const blockFields = sourceBetween(adminForms, "function ChapterBlockFields(", "function PublishFields(");
 
   assertFlexibleChapterPositionInput(editForm, '"position"');
-  assertFlexibleChapterPositionInput(batchFields, "{`chapter\\.\\$\\{index\\}\\.position`}");
+  assertIntegerChapterPositionInput(batchFields, "{`chapter\\.\\$\\{index\\}\\.position`}");
   assertFlexibleChapterPositionInput(blockFields, "{`chapter\\.\\$\\{index\\}\\.position`}");
 });
 

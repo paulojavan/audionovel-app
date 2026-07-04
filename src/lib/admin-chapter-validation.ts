@@ -9,6 +9,13 @@ const cueSchema = z.object({
 
 const chapterPositionSchema = z.number().finite().min(0);
 
+function hasConsecutiveIntegerPositions(items: Array<{ position: number }>) {
+  return items.length <= 1 || items.every((item, index) => (
+    Number.isInteger(item.position)
+    && (index === 0 || item.position === items[index - 1].position + 1)
+  ));
+}
+
 const chapterPartSchema = z.object({
   position: chapterPositionSchema,
   title: z.string().trim().min(1),
@@ -30,26 +37,36 @@ const optionalSafeImageUrl = z
   .optional()
   .or(z.literal(""));
 
-export const chapterSchema = z.object({
-  volumeId: z.string().min(1),
-  title: z.string().trim().min(2).max(2000),
-  position: chapterPositionSchema,
-  contentType: z.enum(["AUDIO", "YOUTUBE"]).default("AUDIO"),
-  durationSec: z.number().int().min(0).default(0),
-  audioUrl: optionalSafeAudioUrl,
-  youtubeUrl: z.string().url().optional().or(z.literal("")),
-  coverUrl: optionalSafeImageUrl,
-  positionEnd: chapterPositionSchema.nullable().optional(),
-  startSec: z.number().int().min(0).default(0),
-  chapterParts: z.array(chapterPartSchema).optional().default([]),
-  transcriptJson: z.string().optional().default("[]"),
-  premiumOnly: z.boolean(),
-  published: z.boolean(),
-});
+export const chapterSchema = z
+  .object({
+    volumeId: z.string().min(1),
+    title: z.string().trim().min(2).max(2000),
+    position: chapterPositionSchema,
+    contentType: z.enum(["AUDIO", "YOUTUBE"]).default("AUDIO"),
+    durationSec: z.number().int().min(0).default(0),
+    audioUrl: optionalSafeAudioUrl,
+    youtubeUrl: z.string().url().optional().or(z.literal("")),
+    coverUrl: optionalSafeImageUrl,
+    positionEnd: chapterPositionSchema.nullable().optional(),
+    startSec: z.number().int().min(0).default(0),
+    chapterParts: z.array(chapterPartSchema).optional().default([]),
+    transcriptJson: z.string().optional().default("[]"),
+    premiumOnly: z.boolean(),
+    published: z.boolean(),
+  })
+  .refine(({ chapterParts }) => hasConsecutiveIntegerPositions(chapterParts), {
+    message: "Capitulos agrupados devem usar posicoes inteiras consecutivas.",
+    path: ["chapterParts"],
+  });
 
-export const chapterBatchSchema = z.object({
-  chapters: z.array(chapterSchema).min(1).max(50),
-});
+export const chapterBatchSchema = z
+  .object({
+    chapters: z.array(chapterSchema).min(1).max(50),
+  })
+  .refine(({ chapters }) => hasConsecutiveIntegerPositions(chapters), {
+    message: "Capitulos em bloco devem usar posicoes inteiras consecutivas.",
+    path: ["chapters"],
+  });
 
 export function cleanYouTubeUrl(url: string) {
   const ampIndex = url.indexOf("&");

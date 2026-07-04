@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chapterSchema } from "./admin-chapter-validation";
+import { chapterBatchSchema, chapterSchema } from "./admin-chapter-validation";
 
 const baseChapter = {
   volumeId: "volume-1",
@@ -32,6 +32,54 @@ test("aceita capitulo zero sem fim de intervalo", () => {
 
 test("aceita posicao decimal", () => {
   assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8.5, positionEnd: null }).success, true);
+});
+
+test("rejeita partes agrupadas com posicao decimal", () => {
+  const chapterParts = [
+    { position: 8, title: "Capitulo 8", startSec: 0, endSec: 60 },
+    { position: 8.5, title: "Capitulo 8.5", startSec: 60, endSec: 120 },
+    { position: 9, title: "Capitulo 9", startSec: 120, endSec: 180 },
+  ];
+
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8, chapterParts }).success, false);
+});
+
+test("aceita partes agrupadas com posicoes inteiras consecutivas", () => {
+  const chapterParts = [
+    { position: 8, title: "Capitulo 8", startSec: 0, endSec: 60 },
+    { position: 9, title: "Capitulo 9", startSec: 60, endSec: 120 },
+    { position: 10, title: "Capitulo 10", startSec: 120, endSec: 180 },
+  ];
+
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8, chapterParts }).success, true);
+});
+
+test("rejeita partes agrupadas com lacuna na sequencia", () => {
+  const chapterParts = [
+    { position: 8, title: "Capitulo 8", startSec: 0, endSec: 60 },
+    { position: 10, title: "Capitulo 10", startSec: 60, endSec: 120 },
+  ];
+
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8, chapterParts }).success, false);
+});
+
+test("batch da rota rejeita posicoes decimais", () => {
+  const chapters = [
+    { ...baseChapter, position: 8, title: "Capitulo 8" },
+    { ...baseChapter, position: 8.5, title: "Capitulo 8.5" },
+    { ...baseChapter, position: 9, title: "Capitulo 9" },
+  ];
+
+  assert.equal(chapterBatchSchema.safeParse({ chapters }).success, false);
+});
+
+test("batch da rota rejeita lacuna entre posicoes", () => {
+  const chapters = [
+    { ...baseChapter, position: 8, title: "Capitulo 8" },
+    { ...baseChapter, position: 10, title: "Capitulo 10" },
+  ];
+
+  assert.equal(chapterBatchSchema.safeParse({ chapters }).success, false);
 });
 
 test("rejeita posicao negativa", () => {
