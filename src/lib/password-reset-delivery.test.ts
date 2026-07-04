@@ -56,7 +56,7 @@ test("AgentMail recebe endpoint, autenticacao e mensagem texto e HTML", async ()
 
   await deliverPasswordResetLink({
     email: "leitor@example.com",
-    resetUrl: "https://audionovelbr.qzz.io/redefinir-senha?token=a&b=<segredo>",
+    resetUrl: "https://audionovelbr.com.br/redefinir-senha?token=a&b=<segredo>",
     config: {
       mode: "agentmail",
       apiKey: "am_secret",
@@ -94,7 +94,7 @@ test("resposta nao 2xx do AgentMail falha sem expor o corpo", async () => {
   await assert.rejects(
     deliverPasswordResetLink({
       email: "leitor@example.com",
-      resetUrl: "https://audionovelbr.qzz.io/redefinir-senha?token=abc",
+      resetUrl: "https://audionovelbr.com.br/redefinir-senha?token=abc",
       config: {
         mode: "agentmail",
         apiKey: "am_secret",
@@ -112,7 +112,7 @@ test("entrega segura registra falha e preserva resposta generica", async () => {
 
   const delivered = await deliverPasswordResetLinkSafely({
     email: "leitor@example.com",
-    resetUrl: "https://audionovelbr.qzz.io/redefinir-senha?token=abc",
+    resetUrl: "https://audionovelbr.com.br/redefinir-senha?token=abc",
     config: {
       mode: "agentmail",
       apiKey: "am_secret",

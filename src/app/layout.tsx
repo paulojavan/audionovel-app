@@ -17,6 +17,7 @@ import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://audionovelbr.com.br"),
   applicationName: "Audio Novel BR",
   title: {
     default: "Audio Novel BR",

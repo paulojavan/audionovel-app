@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Download, Headphones, LockKeyhole, Play, ShieldCheck, Sparkles, Star } from "lucide-react";
@@ -7,6 +8,12 @@ import { formatLaunchAge, groupLatestChapters } from "@/lib/latest-chapters";
 import { prisma } from "@/lib/prisma";
 import { getCachedHomeData } from "@/lib/public-data";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default async function Home() {
   const session = await getActiveServerSession();

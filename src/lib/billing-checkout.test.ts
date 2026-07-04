@@ -69,7 +69,7 @@ test("plano de cartao cria preferencia Mercado Pago sem pix", () => {
 
 test("normaliza origem com barra final nas urls do Mercado Pago", () => {
   const params = buildMercadoPagoPreferencePayload({
-    origin: "https://audionovelbr.qzz.io/",
+    origin: "https://audionovelbr.com.br/",
     userId,
     userEmail,
     userName,
@@ -87,8 +87,8 @@ test("normaliza origem com barra final nas urls do Mercado Pago", () => {
     },
   });
 
-  assert.equal(params.back_urls.success, "https://audionovelbr.qzz.io/api/billing/return?checkout=success");
-  assert.equal(params.notification_url, "https://audionovelbr.qzz.io/api/billing/webhook");
+  assert.equal(params.back_urls.success, "https://audionovelbr.com.br/api/billing/return?checkout=success");
+  assert.equal(params.notification_url, "https://audionovelbr.com.br/api/billing/webhook");
 });
 
 test("identifica plano apenas pix pelas flags do plano", () => {
