@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { Search, X } from "lucide-react";
+import {
+  ADMIN_USERS_PAGE_SIZE,
+  buildAdminUsersPageHref,
+  normalizeAdminUsersPage,
+} from "@/lib/admin-user-pagination";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionDisplayState } from "@/lib/subscription";
-
-const PAGE_SIZE = 50;
 
 export default async function AdminUsersPage({
   searchParams,
@@ -12,8 +15,7 @@ export default async function AdminUsersPage({
 }) {
   const { q, page } = await searchParams;
   const query = q?.trim();
-  const parsedPage = Number.parseInt(page ?? "1", 10);
-  const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const currentPage = normalizeAdminUsersPage(page);
   const where = query
     ? {
         OR: [
@@ -28,8 +30,8 @@ export default async function AdminUsersPage({
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: 50,
+      skip: (currentPage - 1) * ADMIN_USERS_PAGE_SIZE,
+      take: ADMIN_USERS_PAGE_SIZE,
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -47,7 +49,7 @@ export default async function AdminUsersPage({
     }),
     prisma.user.count({ where }),
   ]);
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / ADMIN_USERS_PAGE_SIZE));
 
   return (
     <section className="grid gap-4">
@@ -128,24 +130,16 @@ export default async function AdminUsersPage({
         )}
       </div>
       <nav className="flex items-center justify-center gap-3">
-        <PageLink href={buildPageHref(query, currentPage - 1)} disabled={currentPage <= 1}>
+        <PageLink href={buildAdminUsersPageHref(query, currentPage - 1)} disabled={currentPage <= 1}>
           Anterior
         </PageLink>
         <span className="text-sm font-bold text-zinc-300">Pagina {currentPage} de {totalPages}</span>
-        <PageLink href={buildPageHref(query, currentPage + 1)} disabled={currentPage >= totalPages}>
+        <PageLink href={buildAdminUsersPageHref(query, currentPage + 1)} disabled={currentPage >= totalPages}>
           Proxima
         </PageLink>
       </nav>
     </section>
   );
-}
-
-function buildPageHref(query: string | undefined, page: number) {
-  const params = new URLSearchParams();
-  if (query) params.set("q", query);
-  if (page > 1) params.set("page", String(page));
-  const suffix = params.toString();
-  return suffix ? `/admin/usuarios?${suffix}` : "/admin/usuarios";
 }
 
 function PageLink({ href, disabled, children }: { href: string; disabled: boolean; children: React.ReactNode }) {
