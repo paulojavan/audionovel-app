@@ -31,7 +31,7 @@ test("aceita capitulo zero sem fim de intervalo", () => {
 });
 
 test("aceita posicao decimal", () => {
-  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8.5 }).success, true);
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8.5, positionEnd: null }).success, true);
 });
 
 test("rejeita posicao negativa", () => {
