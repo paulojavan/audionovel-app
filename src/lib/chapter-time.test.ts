@@ -16,6 +16,11 @@ test("getChapterPositionLabel formats grouped chapter ranges", () => {
   assert.equal(getChapterPositionLabel(5, 5), "5");
 });
 
+test("getChapterPositionLabel preserves zero and decimal positions", () => {
+  assert.equal(getChapterPositionLabel(0), "0");
+  assert.equal(getChapterPositionLabel(8.5), "8.5");
+});
+
 test("getGroupedChapterPositionEnd returns the last chapter number for grouped chapters", () => {
   assert.equal(getGroupedChapterPositionEnd([1, 2, 10]), 10);
   assert.equal(getGroupedChapterPositionEnd([3]), null);

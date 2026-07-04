@@ -4,6 +4,7 @@ import { chapterSchema } from "./admin-chapter-validation";
 
 const baseChapter = {
   volumeId: "volume-1",
+  title: "Capitulo teste",
   position: 1,
   positionEnd: 10,
   contentType: "AUDIO" as const,
@@ -23,4 +24,16 @@ test("aceita titulo longo gerado por capitulos em bloco", () => {
 
   assert.equal(title.length > 180, true);
   assert.equal(chapterSchema.safeParse({ ...baseChapter, title }).success, true);
+});
+
+test("aceita capitulo zero sem fim de intervalo", () => {
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 0, positionEnd: null }).success, true);
+});
+
+test("aceita posicao decimal", () => {
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: 8.5 }).success, true);
+});
+
+test("rejeita posicao negativa", () => {
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, position: -0.5 }).success, false);
 });
