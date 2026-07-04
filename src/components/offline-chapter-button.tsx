@@ -6,6 +6,7 @@ import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported"
 import { getEncryptedAudioUrl, saveOfflineItem } from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import type { OfflineItem } from "@/lib/offline-items";
+import { prepareOfflinePage } from "@/lib/pwa-offline";
 
 type OfflineChapterButtonProps = {
   accountScope: string;
@@ -18,6 +19,7 @@ type OfflineChapterButtonProps = {
 export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, metadata }: OfflineChapterButtonProps) {
   const [message, setMessage] = useState("");
   const [ready, setReady] = useState(false);
+  const [audioSaved, setAudioSaved] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
   const offlineCryptoSupported = useOfflineCryptoSupported();
@@ -66,9 +68,29 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
 
   function prepareOffline() {
     startTransition(async () => {
+      const prepareSavedPage = async () => {
+        await prepareOfflinePage(accountScope);
+        setReady(true);
+        setDownloadProgress(100);
+        setMessage("Offline salvo.");
+      };
+      const showShellPreparationError = () => {
+        setMessage("Audio salvo, mas a pagina offline ainda nao ficou pronta. Toque novamente para tentar.");
+      };
+
       try {
         setMessage("");
         setDownloadProgress(null);
+
+        if (audioSaved) {
+          try {
+            await prepareSavedPage();
+          } catch {
+            showShellPreparationError();
+          }
+          return;
+        }
+
         const response = await fetch("/api/offline/prepare", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -92,9 +114,14 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
           cacheKey: payload.cacheKey,
           expiresAt: payload.expiresAt,
         });
-        setReady(true);
+        setAudioSaved(true);
         setDownloadProgress(100);
-        setMessage("Offline salvo.");
+
+        try {
+          await prepareSavedPage();
+        } catch {
+          showShellPreparationError();
+        }
       } catch (error) {
         setDownloadProgress(null);
         setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel salvar offline.");
@@ -108,17 +135,19 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
         type="button"
         onClick={prepareOffline}
         disabled={pending || ready}
-        title={ready ? "Capitulo salvo offline" : "Ouvir offline"}
+        title={ready ? "Capitulo salvo offline" : audioSaved ? "Preparar pagina offline" : "Ouvir offline"}
         className="inline-flex min-h-11 items-center gap-2 rounded-full bg-red-500/90 px-3 py-2 text-xs font-black text-white hover:bg-red-500 disabled:opacity-60"
       >
-        <Download size={16} /> {ready ? "Offline salvo" : "Ouvir offline"}
+        <Download size={16} /> {ready ? "Offline salvo" : audioSaved ? "Preparar offline" : "Ouvir offline"}
       </button>
       {pending ? (
         <div className="grid w-40 gap-1">
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div className={`h-full bg-red-400 ${downloadProgress === null ? "w-1/2 animate-pulse" : ""}`} style={downloadProgress === null ? undefined : { width: `${downloadProgress}%` }} />
           </div>
-          <span className="text-right text-[11px] text-zinc-300">{downloadProgress === null ? "Baixando..." : `${downloadProgress}%`}</span>
+          <span className="text-right text-[11px] text-zinc-300">
+            {audioSaved ? "Preparando..." : downloadProgress === null ? "Baixando..." : `${downloadProgress}%`}
+          </span>
         </div>
       ) : null}
       {message && !ready ? <span className="max-w-40 text-right text-[11px] text-red-200">{message}</span> : null}

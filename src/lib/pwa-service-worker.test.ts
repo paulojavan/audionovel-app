@@ -11,9 +11,16 @@ test("service worker nao pre-cacheia o manifest publico", () => {
   assert.match(serviceWorkerSource, /url\.pathname === "\/manifest\.webmanifest"/);
 });
 
-test("service worker nao intercepta chunks internos do Next", () => {
-  assert.match(serviceWorkerSource, /url\.pathname\.startsWith\("\/_next\/"\)/);
-  assert.doesNotMatch(serviceWorkerSource, /url\.pathname\.startsWith\("\/_next\/static\/"\)\s*return true/);
+test("service worker usa cache-first para chunks versionados do Next", () => {
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v7"/);
+  assert.match(
+    serviceWorkerSource,
+    /url\.pathname\.startsWith\("\/_next\/static\/"\)[\s\S]*?event\.respondWith\(cacheFirst\(request\)\)/,
+  );
+  assert.ok(
+    serviceWorkerSource.indexOf('url.pathname.startsWith("/_next/static/")') <
+      serviceWorkerSource.indexOf('url.pathname.startsWith("/_next/")'),
+  );
 });
 
 test("service worker limita cache de navegacao ao offline e separa por conta", () => {
@@ -24,4 +31,17 @@ test("service worker limita cache de navegacao ao offline e separa por conta", (
     serviceWorkerSource,
     /if \(request\.mode === "navigate"\) \{\s*event\.respondWith\(networkFirstWithOfflineFallback\(request\)\)/,
   );
+});
+
+test("service worker prepara html e chunks offline antes da primeira visita", () => {
+  assert.match(serviceWorkerSource, /event\.data\?\.type === "PREPARE_OFFLINE_PAGE"/);
+  assert.match(serviceWorkerSource, /prepareOfflinePage\(event\.data\.scope\)/);
+  assert.match(serviceWorkerSource, /scope !== \(await getAccountScope\(\)\)/);
+  assert.match(serviceWorkerSource, /fetch\("\/offline",[\s\S]*?credentials: "include"/);
+  assert.match(serviceWorkerSource, /extractNextStaticAssetUrls\(html\)/);
+  assert.match(
+    serviceWorkerSource,
+    /await Promise\.all\([\s\S]*?await caches\.open\(getAccountPageCacheName\(scope\)\)/,
+  );
+  assert.match(serviceWorkerSource, /pageCache\.put\("\/offline", response\)/);
 });

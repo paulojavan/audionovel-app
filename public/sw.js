@@ -1,8 +1,8 @@
-// Audio Novel BR - Service Worker v6
+// Audio Novel BR - Service Worker v7
 // Estratégia: cache estático compartilhado e página offline isolada por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -77,6 +77,18 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SET_ACCOUNT_SCOPE") {
     event.waitUntil(setAccountScope(event.data.scope));
   }
+
+  if (event.data?.type === "PREPARE_OFFLINE_PAGE") {
+    const replyPort = event.ports?.[0];
+    event.waitUntil(
+      prepareOfflinePage(event.data.scope)
+        .then(() => replyPort?.postMessage({ ok: true }))
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : "Nao foi possivel preparar a pagina offline.";
+          replyPort?.postMessage({ ok: false, error: message });
+        }),
+    );
+  }
 });
 
 // ─── FETCH ───────────────────────────────────────────────────────────────────
@@ -97,7 +109,13 @@ self.addEventListener("fetch", (event) => {
   // Ignorar manifest - sempre buscar da rede
   if (url.pathname === "/manifest.webmanifest") return;
 
-  // Ignorar arquivos internos do Next.js; o navegador deve sempre buscar os chunks atuais.
+  // Chunks do Next possuem hash no nome e podem ser reutilizados com seguranca.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+
+  // Ignorar os demais arquivos internos do Next.js.
   if (url.pathname.startsWith("/_next/")) return;
 
   // Assets estáticos (imagens, fontes, scripts, estilos)
@@ -177,7 +195,7 @@ function getAccountPageCacheName(scope) {
 }
 
 async function setAccountScope(value) {
-  const scope = typeof value === "string" && value.trim() ? value.trim() : ANONYMOUS_ACCOUNT_SCOPE;
+  const scope = normalizeAccountScope(value);
   const cache = await caches.open(ACCOUNT_META_CACHE);
   await cache.put(ACCOUNT_META_URL, new Response(scope));
 }
@@ -186,6 +204,69 @@ async function getAccountScope() {
   const cache = await caches.open(ACCOUNT_META_CACHE);
   const response = await cache.match(ACCOUNT_META_URL);
   return response ? response.text() : ANONYMOUS_ACCOUNT_SCOPE;
+}
+
+function normalizeAccountScope(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : ANONYMOUS_ACCOUNT_SCOPE;
+}
+
+async function prepareOfflinePage(requestedScope) {
+  const scope = normalizeAccountScope(requestedScope);
+  if (scope === ANONYMOUS_ACCOUNT_SCOPE || scope !== (await getAccountScope())) {
+    throw new Error("Conta offline invalida.");
+  }
+
+  const response = await fetch("/offline", {
+    credentials: "include",
+    headers: { Accept: "text/html" },
+    redirect: "follow",
+  });
+  const responseUrl = response.url ? new URL(response.url, self.location.origin) : null;
+  const contentType = response.headers.get("Content-Type") ?? "";
+
+  if (
+    !response.ok ||
+    responseUrl?.origin !== self.location.origin ||
+    responseUrl.pathname !== "/offline" ||
+    !contentType.toLowerCase().includes("text/html")
+  ) {
+    throw new Error("Pagina offline indisponivel.");
+  }
+
+  const html = await response.clone().text();
+  const assetUrls = extractNextStaticAssetUrls(html);
+  if (assetUrls.length === 0) {
+    throw new Error("Arquivos da pagina offline nao foram encontrados.");
+  }
+
+  const staticCache = await caches.open(CACHE_NAME);
+  await Promise.all(
+    assetUrls.map(async (assetUrl) => {
+      const assetResponse = await fetch(assetUrl, { credentials: "same-origin" });
+      if (!assetResponse.ok) {
+        throw new Error("Um arquivo da pagina offline nao esta disponivel.");
+      }
+      await staticCache.put(assetUrl, assetResponse);
+    }),
+  );
+
+  const pageCache = await caches.open(getAccountPageCacheName(scope));
+  await pageCache.put("/offline", response);
+}
+
+function extractNextStaticAssetUrls(html) {
+  const assetUrls = new Set();
+  const attributePattern = /(?:src|href)=["']([^"']+)["']/g;
+
+  for (const match of html.matchAll(attributePattern)) {
+    const rawUrl = match[1].replaceAll("&amp;", "&");
+    const url = new URL(rawUrl, self.location.origin);
+    if (url.origin === self.location.origin && url.pathname.startsWith("/_next/static/")) {
+      assetUrls.add(url.href);
+    }
+  }
+
+  return Array.from(assetUrls);
 }
 
 async function getOfflineFallback() {
