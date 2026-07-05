@@ -14,6 +14,7 @@ import { MobileAppNav } from "@/components/mobile-app-nav";
 import { PwaLifecycle } from "@/components/pwa-lifecycle";
 import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { SessionHeartbeat } from "@/components/session-heartbeat";
 import { UserMenu } from "@/components/user-menu";
 import "./globals.css";
 
@@ -105,6 +106,7 @@ export default async function RootLayout({
         <PwaOfflineNavigation />
         <PwaLifecycle />
         <BlockedSessionLogout blocked={session?.user?.isBlocked} />
+        {activeSession ? <SessionHeartbeat /> : null}
         {!activeSession?.user ? (
           <main className="min-h-screen">{children}</main>
         ) : (

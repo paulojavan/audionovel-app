@@ -4,6 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 const authSource = readFileSync(join(process.cwd(), "src", "lib", "auth.ts"), "utf8");
+const refreshSource = readFileSync(
+  join(process.cwd(), "src", "lib", "auth-session-refresh.ts"),
+  "utf8",
+);
 const authTypesSource = readFileSync(
   join(process.cwd(), "src", "types", "next-auth.d.ts"),
   "utf8",
@@ -22,13 +26,19 @@ test("adds the last successful database validation timestamp to the JWT type", (
   assert.match(authTypesSource, /sessionValidatedAt\?: number \| null;/);
 });
 
-test("imports and logs the established-session database grace policy for both operations", () => {
+test("delegates established-session refresh with both safe database failure operations", () => {
   assert.match(
     authSource,
-    /import\s*\{[\s\S]*?evaluateSessionDatabaseGrace[\s\S]*?isTransientPrismaSessionError[\s\S]*?logSessionDatabaseFailure[\s\S]*?\}\s*from "\.\/auth-session-grace";/,
+    /import\s*\{\s*logSessionDatabaseFailure\s*\}\s*from "\.\/auth-session-grace";/,
   );
-  assert.match(authSource, /operation:\s*"device_session_validation"/);
-  assert.match(authSource, /operation:\s*"user_state_refresh"/);
+  assert.match(
+    authSource,
+    /import\s*\{\s*refreshEstablishedSession\s*\}\s*from "\.\/auth-session-refresh";/,
+  );
+  assert.match(authSource, /await refreshEstablishedSession\(\{/);
+  assert.match(authSource, /findUserState:\s*\(userId\)[\s\S]*?where:\s*\{\s*id:\s*userId\s*\}/);
+  assert.match(refreshSource, /operation:\s*"device_session_validation"/);
+  assert.match(refreshSource, /operation:\s*"user_state_refresh"/);
 });
 
 test("keeps new-login hydration fail-closed without invoking database grace", () => {
@@ -45,31 +55,26 @@ test("keeps new-login hydration fail-closed without invoking database grace", ()
 });
 
 test("records successful device validation as the trustworthy grace anchor", () => {
-  const establishedSessionBranch = sourceBetween(
-    authSource,
-    "if (token.sessionId) {",
-    "if (token.id && shouldRefreshUserState)",
+  const userStateAssignmentIndex = refreshSource.indexOf(
+    "token.subscriptionStatus =",
+  );
+  const validationAnchorIndex = refreshSource.indexOf(
+    "token.sessionValidatedAt = now;",
   );
 
-  assert.match(establishedSessionBranch, /token\.sessionCheckedAt = now;/);
-  assert.match(establishedSessionBranch, /token\.sessionValidatedAt = now;/);
+  assert.ok(userStateAssignmentIndex >= 0);
+  assert.ok(validationAnchorIndex > userStateAssignmentIndex);
+  assert.doesNotMatch(authSource, /token\.sessionValidatedAt = now;/);
 });
 
-test("handles explicit invalid device sessions before catch-based database grace", () => {
-  const establishedSessionBranch = sourceBetween(
-    authSource,
-    "if (token.sessionId) {",
-    "if (token.id && shouldRefreshUserState)",
-  );
-  const explicitInvalidIndex = establishedSessionBranch.indexOf("if (!deviceSession.valid)");
-  const clearIdentityIndex = establishedSessionBranch.indexOf("token.id = undefined", explicitInvalidIndex);
-  const returnIndex = establishedSessionBranch.indexOf("return token", explicitInvalidIndex);
-  const catchIndex = establishedSessionBranch.indexOf("catch (error)");
-  const graceIndex = establishedSessionBranch.indexOf("evaluateDatabaseGrace", catchIndex);
+test("handles explicit invalid device sessions before any user-state refresh", () => {
+  const explicitInvalidIndex = refreshSource.indexOf("if (!deviceSession.valid)");
+  const clearIdentityIndex = refreshSource.indexOf("token.id = undefined", explicitInvalidIndex);
+  const returnIndex = refreshSource.indexOf("return token", explicitInvalidIndex);
+  const userRefreshIndex = refreshSource.indexOf("await findUserState");
 
   assert.ok(explicitInvalidIndex >= 0);
   assert.ok(clearIdentityIndex > explicitInvalidIndex);
   assert.ok(returnIndex > clearIdentityIndex);
-  assert.ok(catchIndex > returnIndex);
-  assert.ok(graceIndex > catchIndex);
+  assert.ok(userRefreshIndex > returnIndex);
 });
