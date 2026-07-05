@@ -1,5 +1,10 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import {
+  evaluateSessionDatabaseGrace,
+  isTransientPrismaSessionError,
+  logSessionDatabaseFailure,
+} from "./auth-session-grace";
 import { createDeviceSession, revokeDeviceSession, validateDeviceSession } from "./device-session";
 import { verifyPassword } from "./password";
 import { prisma } from "./prisma";
@@ -81,6 +86,41 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      const evaluateDatabaseGrace = (error: unknown, now: number) => {
+        const explicitValidationAt =
+          typeof token.sessionValidatedAt === "number" &&
+          Number.isFinite(token.sessionValidatedAt) &&
+          token.sessionValidatedAt > 0
+            ? token.sessionValidatedAt
+            : null;
+        const legacyValidationAt =
+          explicitValidationAt === null &&
+          typeof token.sessionCheckedAt === "number" &&
+          Number.isFinite(token.sessionCheckedAt) &&
+          token.sessionCheckedAt > 0
+            ? token.sessionCheckedAt
+            : null;
+        const lastValidatedAt = explicitValidationAt ?? legacyValidationAt;
+
+        if (
+          !token.id ||
+          !token.sessionId ||
+          token.sessionInvalid === true ||
+          !isTransientPrismaSessionError(error)
+        ) {
+          return { allowed: false, remainingMs: 0, lastValidatedAt };
+        }
+
+        return {
+          ...evaluateSessionDatabaseGrace({
+            now,
+            lastValidatedAt,
+            sessionInvalid: false,
+          }),
+          lastValidatedAt,
+        };
+      };
+
       if (user?.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: user.email.toLowerCase() },
@@ -116,37 +156,79 @@ export const authOptions: NextAuthOptions = {
         const now = Date.now();
         const lastCheckedAt = typeof token.sessionCheckedAt === "number" ? token.sessionCheckedAt : 0;
         if (token.sessionInvalid || now - lastCheckedAt >= SESSION_VALIDATION_INTERVAL_MS) {
-          const deviceSession = await validateDeviceSession(token.sessionId);
-          token.sessionCheckedAt = now;
-          shouldRefreshUserState = true;
-          token.sessionInvalid = !deviceSession.valid;
-          if (!deviceSession.valid) {
-            token.id = undefined;
-            return token;
+          try {
+            const deviceSession = await validateDeviceSession(token.sessionId);
+            token.sessionCheckedAt = now;
+            if (!deviceSession.valid) {
+              token.sessionInvalid = true;
+              token.id = undefined;
+              return token;
+            }
+
+            token.sessionInvalid = false;
+            token.sessionValidatedAt = now;
+            shouldRefreshUserState = true;
+          } catch (error) {
+            const grace = evaluateDatabaseGrace(error, now);
+            logSessionDatabaseFailure({
+              error,
+              operation: "device_session_validation",
+              graceApplied: grace.allowed,
+              remainingMs: grace.remainingMs,
+              now,
+            });
+            if (!grace.allowed) {
+              throw error;
+            }
+
+            if (
+              grace.lastValidatedAt !== null &&
+              !(typeof token.sessionValidatedAt === "number" &&
+                Number.isFinite(token.sessionValidatedAt) &&
+                token.sessionValidatedAt > 0)
+            ) {
+              token.sessionValidatedAt = grace.lastValidatedAt;
+            }
+            token.sessionCheckedAt = now;
           }
         }
       }
 
       if (token.id && shouldRefreshUserState) {
-        const userState = await prisma.user.findUnique({
-          where: { id: token.id as string },
-          select: {
-            email: true,
-            isBlocked: true,
-            name: true,
-            plan: true,
-            role: true,
-            subscriptionStatus: true,
-            premiumUntil: true,
-          },
-        });
-        token.email = userState?.email ?? token.email;
-        token.isBlocked = userState?.isBlocked ?? true;
-        token.name = userState?.name ?? token.name;
-        token.plan = userState?.plan ?? token.plan;
-        token.role = userState?.role ?? token.role;
-        token.subscriptionStatus = userState?.subscriptionStatus ?? token.subscriptionStatus;
-        token.premiumUntil = userState?.premiumUntil?.toISOString() ?? token.premiumUntil;
+        const now = Date.now();
+        try {
+          const userState = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              email: true,
+              isBlocked: true,
+              name: true,
+              plan: true,
+              role: true,
+              subscriptionStatus: true,
+              premiumUntil: true,
+            },
+          });
+          token.email = userState?.email ?? token.email;
+          token.isBlocked = userState?.isBlocked ?? true;
+          token.name = userState?.name ?? token.name;
+          token.plan = userState?.plan ?? token.plan;
+          token.role = userState?.role ?? token.role;
+          token.subscriptionStatus = userState?.subscriptionStatus ?? token.subscriptionStatus;
+          token.premiumUntil = userState?.premiumUntil?.toISOString() ?? token.premiumUntil;
+        } catch (error) {
+          const grace = evaluateDatabaseGrace(error, now);
+          logSessionDatabaseFailure({
+            error,
+            operation: "user_state_refresh",
+            graceApplied: grace.allowed,
+            remainingMs: grace.remainingMs,
+            now,
+          });
+          if (!grace.allowed) {
+            throw error;
+          }
+        }
       }
 
       return token;

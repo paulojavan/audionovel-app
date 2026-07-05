@@ -40,5 +40,6 @@ declare module "next-auth/jwt" {
     sessionId?: string | null;
     sessionInvalid?: boolean | null;
     sessionCheckedAt?: number | null;
+    sessionValidatedAt?: number | null;
   }
 }
