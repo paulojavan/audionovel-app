@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   getAudioResponseStart,
+  getContinuationRequestHeaders,
   getContinuationRange,
+  getStrongEtag,
   isExactContinuationResponse,
 } from "./resumable-audio-stream";
 
@@ -93,60 +95,171 @@ test("throws instead of emitting malformed or unsafe continuation offsets", () =
   }
 });
 
-test("recognizes an exact 206 continuation response with a body", () => {
+test("extracts a quoted strong ETag from a response or headers", () => {
+  const response = new Response(null, { headers: { ETag: '"audio-v1"' } });
+  const headers = new Headers({ ETag: '"audio-v2"' });
+
+  assert.equal(getStrongEtag(response), '"audio-v1"');
+  assert.equal(getStrongEtag(headers), '"audio-v2"');
+});
+
+test("rejects missing, empty, and weak ETags", () => {
+  assert.equal(getStrongEtag(new Headers()), null);
+  assert.equal(getStrongEtag(new Headers({ ETag: "" })), null);
+  assert.equal(getStrongEtag(new Headers({ ETag: '""' })), null);
+  assert.equal(getStrongEtag(new Headers({ ETag: 'W/"audio-v1"' })), null);
+});
+
+test("recognizes an exact 206 continuation response with the same validator and total", () => {
   const response = new Response(new Uint8Array([1]), {
     status: 206,
-    headers: { "Content-Range": "bytes 100-100/200" },
+    headers: {
+      "Content-Range": "bytes 100-100/200",
+      ETag: '"audio-v1"',
+    },
   });
 
-  assert.equal(isExactContinuationResponse(response, 100), true);
+  assert.equal(
+    isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+    true,
+  );
 });
 
 test("rejects a 200 response as a continuation", () => {
   const response = new Response(new Uint8Array([1]), {
     status: 200,
-    headers: { "Content-Range": "bytes 100-100/200" },
+    headers: {
+      "Content-Range": "bytes 100-100/200",
+      ETag: '"audio-v1"',
+    },
   });
 
-  assert.equal(isExactContinuationResponse(response, 100), false);
+  assert.equal(
+    isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+    false,
+  );
 });
 
 test("rejects a continuation response starting at the wrong byte", () => {
   const response = new Response(new Uint8Array([1]), {
     status: 206,
-    headers: { "Content-Range": "bytes 101-101/200" },
+    headers: {
+      "Content-Range": "bytes 101-101/200",
+      ETag: '"audio-v1"',
+    },
   });
 
-  assert.equal(isExactContinuationResponse(response, 100), false);
+  assert.equal(
+    isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+    false,
+  );
 });
 
 test("rejects continuation responses missing a body or content range", () => {
   const missingBody = new Response(null, {
     status: 206,
-    headers: { "Content-Range": "bytes 100-100/200" },
+    headers: {
+      "Content-Range": "bytes 100-100/200",
+      ETag: '"audio-v1"',
+    },
   });
   const missingContentRange = new Response(new Uint8Array([1]), {
     status: 206,
+    headers: { ETag: '"audio-v1"' },
   });
 
-  assert.equal(isExactContinuationResponse(missingBody, 100), false);
-  assert.equal(isExactContinuationResponse(missingContentRange, 100), false);
+  assert.equal(
+    isExactContinuationResponse(missingBody, 100, '"audio-v1"', 200),
+    false,
+  );
+  assert.equal(
+    isExactContinuationResponse(
+      missingContentRange,
+      100,
+      '"audio-v1"',
+      200,
+    ),
+    false,
+  );
 });
 
 test("rejects a continuation response whose content range ends before it starts", () => {
   const response = new Response(new Uint8Array([1]), {
     status: 206,
-    headers: { "Content-Range": "bytes 100-99/200" },
+    headers: {
+      "Content-Range": "bytes 100-99/200",
+      ETag: '"audio-v1"',
+    },
   });
 
-  assert.equal(isExactContinuationResponse(response, 100), false);
+  assert.equal(
+    isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+    false,
+  );
 });
 
 test("rejects a continuation response whose numeric total does not exceed its end", () => {
   const response = new Response(new Uint8Array([1]), {
     status: 206,
-    headers: { "Content-Range": "bytes 100-199/100" },
+    headers: {
+      "Content-Range": "bytes 100-199/100",
+      ETag: '"audio-v1"',
+    },
   });
 
-  assert.equal(isExactContinuationResponse(response, 100), false);
+  assert.equal(
+    isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+    false,
+  );
+});
+
+test("rejects changed, missing, or weak continuation ETags", () => {
+  for (const etag of ['"audio-v2"', null, 'W/"audio-v1"']) {
+    const headers = new Headers({ "Content-Range": "bytes 100-199/200" });
+    if (etag !== null) headers.set("ETag", etag);
+    const response = new Response(new Uint8Array([1]), {
+      status: 206,
+      headers,
+    });
+
+    assert.equal(
+      isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+      false,
+      String(etag),
+    );
+  }
+});
+
+test("rejects changed and wildcard continuation totals", () => {
+  for (const contentRange of ["bytes 100-199/201", "bytes 100-199/*"]) {
+    const response = new Response(new Uint8Array([1]), {
+      status: 206,
+      headers: {
+        "Content-Range": contentRange,
+        ETag: '"audio-v1"',
+      },
+    });
+
+    assert.equal(
+      isExactContinuationResponse(response, 100, '"audio-v1"', 200),
+      false,
+      contentRange,
+    );
+  }
+});
+
+test("builds continuation headers with exact Range and If-Range values", () => {
+  const headers = getContinuationRequestHeaders(100, 25, '"audio-v1"');
+
+  assert.deepEqual([...headers.entries()], [
+    ["if-range", '"audio-v1"'],
+    ["range", "bytes=125-"],
+  ]);
+});
+
+test("refuses to build continuation headers from an invalid ETag", () => {
+  assert.throws(
+    () => getContinuationRequestHeaders(100, 25, 'W/"audio-v1"'),
+    TypeError,
+  );
 });

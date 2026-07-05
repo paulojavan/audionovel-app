@@ -37,6 +37,17 @@ function parseContentRange(value: string | null): ParsedContentRange | null {
   return { start, end, total };
 }
 
+function parseStrongEtag(value: string | null): string | null {
+  return value !== null && /^"[\x21\x23-\x7e\x80-\xff]+"$/.test(value)
+    ? value
+    : null;
+}
+
+export function getStrongEtag(source: Response | Headers): string | null {
+  const headers = source instanceof Response ? source.headers : source;
+  return parseStrongEtag(headers.get("ETag"));
+}
+
 export function getAudioResponseStart(
   requestRange: string | null,
   status: number,
@@ -73,18 +84,44 @@ export function getContinuationRange(
   return `bytes=${continuationStart}-`;
 }
 
+export function getContinuationRequestHeaders(
+  responseStart: number,
+  deliveredBytes: number,
+  strongEtag: string,
+): Headers {
+  const validatedEtag = parseStrongEtag(strongEtag);
+  if (validatedEtag === null) {
+    throw new TypeError("Audio continuation requires a strong ETag.");
+  }
+
+  return new Headers({
+    Range: getContinuationRange(responseStart, deliveredBytes),
+    "If-Range": validatedEtag,
+  });
+}
+
 export function isExactContinuationResponse(
   response: Response,
   expectedStart: number,
+  expectedStrongEtag: string,
+  expectedTotal: number,
 ): boolean {
   if (
     response.status !== 206 ||
     response.body === null ||
     !Number.isSafeInteger(expectedStart) ||
-    expectedStart < 0
+    expectedStart < 0 ||
+    !Number.isSafeInteger(expectedTotal) ||
+    expectedTotal <= 0 ||
+    parseStrongEtag(expectedStrongEtag) !== expectedStrongEtag
   ) {
     return false;
   }
 
-  return parseContentRange(response.headers.get("Content-Range"))?.start === expectedStart;
+  const contentRange = parseContentRange(response.headers.get("Content-Range"));
+  return (
+    contentRange?.start === expectedStart &&
+    contentRange.total === expectedTotal &&
+    getStrongEtag(response) === expectedStrongEtag
+  );
 }
