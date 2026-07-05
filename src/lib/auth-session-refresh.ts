@@ -82,12 +82,18 @@ export async function refreshEstablishedSession({
   const now = readNow();
   const lastValidatedAt = getTrustedValidationAnchor(token);
   const lastCheckedAt =
-    typeof token.sessionCheckedAt === "number" ? token.sessionCheckedAt : 0;
+    typeof token.sessionCheckedAt === "number" &&
+    Number.isFinite(token.sessionCheckedAt) &&
+    token.sessionCheckedAt > 0 &&
+    token.sessionCheckedAt <= now
+      ? token.sessionCheckedAt
+      : null;
   const graceExpired =
     lastValidatedAt !== null &&
     now - lastValidatedAt >= SESSION_DATABASE_GRACE_MS;
   if (
     token.sessionInvalid !== true &&
+    lastCheckedAt !== null &&
     now - lastCheckedAt < validationIntervalMs &&
     !graceExpired
   ) {

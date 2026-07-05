@@ -184,6 +184,27 @@ test("applies a successfully refreshed blocked user immediately", async () => {
   assert.equal(harness.token.sessionValidatedAt, 120_000);
 });
 
+for (const { label, sessionCheckedAt } of [
+  { label: "positive infinity", sessionCheckedAt: Number.POSITIVE_INFINITY },
+  { label: "NaN", sessionCheckedAt: Number.NaN },
+  { label: "a future timestamp", sessionCheckedAt: 120_001 },
+]) {
+  test(`validates immediately when checkedAt is ${label}`, async () => {
+    let validations = 0;
+    const harness = createHarness({
+      token: createToken({ sessionCheckedAt }),
+      validateDeviceSession: async () => {
+        validations += 1;
+        return { valid: true };
+      },
+    });
+
+    await harness.run();
+
+    assert.equal(validations, 1);
+  });
+}
+
 test("uses legacy checkedAt once as the fixed trusted anchor", async () => {
   const anchor = 100_000;
   const token = createToken({ sessionCheckedAt: anchor, sessionValidatedAt: undefined });
