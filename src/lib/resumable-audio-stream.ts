@@ -4,6 +4,20 @@ type ParsedContentRange = {
   total: number | null;
 };
 
+export type ResumableAudioStreamFailure = {
+  attempt: number;
+  byteOffset: number;
+};
+
+export type CreateResumableAudioStreamOptions = {
+  initialResponse: Response;
+  requestRange: string | null;
+  openRange: (headers: Headers, signal?: AbortSignal) => Promise<Response>;
+  maxContinuations?: number;
+  downstreamSignal?: AbortSignal;
+  onFailure?: (failure: ResumableAudioStreamFailure) => void;
+};
+
 function parseSafeInteger(value: string): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
@@ -124,4 +138,294 @@ export function isExactContinuationResponse(
     contentRange.total === expectedTotal &&
     getStrongEtag(response) === expectedStrongEtag
   );
+}
+
+function getContentLength(headers: Headers): number | null {
+  const value = headers.get("Content-Length");
+  if (value === null) return null;
+  if (!/^\d+$/.test(value)) {
+    throw new TypeError("Audio Content-Length must be a nonnegative safe integer.");
+  }
+
+  const length = parseSafeInteger(value);
+  if (length === null) {
+    throw new TypeError("Audio Content-Length must be a nonnegative safe integer.");
+  }
+  return length;
+}
+
+function validateContentLengthAgainstRange(
+  contentLength: number | null,
+  contentRange: ParsedContentRange | null,
+) {
+  if (contentLength === null || contentRange === null) return;
+
+  const rangeLength = contentRange.end - contentRange.start + 1;
+  if (
+    !Number.isSafeInteger(rangeLength) ||
+    rangeLength < 0 ||
+    contentLength !== rangeLength
+  ) {
+    throw new TypeError("Audio Content-Length contradicts its Content-Range.");
+  }
+}
+
+function createAbortError() {
+  return new DOMException("Audio stream aborted.", "AbortError");
+}
+
+export function createResumableAudioStream({
+  initialResponse,
+  requestRange,
+  openRange,
+  maxContinuations = 2,
+  downstreamSignal,
+  onFailure,
+}: CreateResumableAudioStreamOptions): ReadableStream<Uint8Array> {
+  let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let responseStart = 0;
+  let deliveredBytes = 0;
+  let expectedLength: number | null = null;
+  let representationTotal: number | null = null;
+  let strongEtag: string | null = null;
+  let continuationAttempts = 0;
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let terminated = false;
+  let abortListener: (() => void) | null = null;
+  const continuationAbort = new AbortController();
+
+  function cleanUpAbortListener() {
+    if (abortListener && downstreamSignal) {
+      downstreamSignal.removeEventListener("abort", abortListener);
+    }
+    abortListener = null;
+  }
+
+  function cancelActiveReader(reason?: unknown) {
+    const reader = activeReader;
+    activeReader = null;
+    if (reader) {
+      void reader.cancel(reason).catch(() => undefined);
+    }
+  }
+
+  function finish() {
+    if (terminated) return;
+    terminated = true;
+    cleanUpAbortListener();
+    continuationAbort.abort();
+    cancelActiveReader();
+    controller?.close();
+  }
+
+  function fail(error: unknown) {
+    if (terminated) return;
+    terminated = true;
+    cleanUpAbortListener();
+    continuationAbort.abort();
+    cancelActiveReader(error);
+    controller?.error(error);
+  }
+
+  function abort() {
+    if (terminated) return;
+    const error = createAbortError();
+    terminated = true;
+    cleanUpAbortListener();
+    continuationAbort.abort(error);
+    cancelActiveReader(error);
+    controller?.error(error);
+  }
+
+  async function openContinuation() {
+    if (strongEtag === null) {
+      throw new TypeError("Audio recovery requires a strong ETag.");
+    }
+    if (representationTotal === null) {
+      throw new TypeError(
+        "Audio recovery requires a trustworthy numeric representation total.",
+      );
+    }
+
+    while (!terminated) {
+      if (continuationAttempts >= maxContinuations) {
+        throw new Error("Audio continuation limit reached.");
+      }
+
+      const range = getContinuationRange(responseStart, deliveredBytes);
+      const byteOffset = parseRequestRange(range);
+      if (byteOffset === null) {
+        throw new RangeError("Audio continuation offset is invalid.");
+      }
+
+      continuationAttempts += 1;
+      try {
+        onFailure?.({
+          attempt: continuationAttempts,
+          byteOffset,
+        });
+      } catch {
+        // Observability must not alter stream delivery.
+      }
+
+      let response: Response;
+      try {
+        response = await openRange(
+          getContinuationRequestHeaders(
+            responseStart,
+            deliveredBytes,
+            strongEtag,
+          ),
+          continuationAbort.signal,
+        );
+      } catch (error) {
+        if (terminated || continuationAbort.signal.aborted) throw error;
+        if (continuationAttempts >= maxContinuations) {
+          throw new Error("Audio continuation limit reached.", {
+            cause: error,
+          });
+        }
+        continue;
+      }
+
+      if (terminated || continuationAbort.signal.aborted) {
+        await response.body?.cancel().catch(() => undefined);
+        throw createAbortError();
+      }
+      if (
+        !isExactContinuationResponse(
+          response,
+          byteOffset,
+          strongEtag,
+          representationTotal,
+        )
+      ) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new TypeError("Invalid audio continuation response.");
+      }
+
+      try {
+        const contentRange = parseContentRange(
+          response.headers.get("Content-Range"),
+        );
+        const contentLength = getContentLength(response.headers);
+        validateContentLengthAgainstRange(contentLength, contentRange);
+        activeReader = response.body!.getReader();
+      } catch (error) {
+        await response.body?.cancel(error).catch(() => undefined);
+        throw error;
+      }
+      return;
+    }
+  }
+
+  async function pump() {
+    while (!terminated) {
+      if (expectedLength !== null && deliveredBytes === expectedLength) {
+        finish();
+        return;
+      }
+
+      if (activeReader === null) {
+        await openContinuation();
+        if (terminated) return;
+      }
+
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await activeReader!.read();
+      } catch {
+        activeReader = null;
+        if (terminated) return;
+        continue;
+      }
+      if (terminated) return;
+
+      if (result.done) {
+        activeReader = null;
+        if (expectedLength !== null && deliveredBytes < expectedLength) {
+          continue;
+        }
+        finish();
+        return;
+      }
+      if (result.value.byteLength === 0) continue;
+
+      const nextDeliveredBytes = deliveredBytes + result.value.byteLength;
+      if (!Number.isSafeInteger(nextDeliveredBytes)) {
+        throw new RangeError("Delivered audio byte count exceeds the safe integer range.");
+      }
+      if (
+        expectedLength !== null &&
+        nextDeliveredBytes > expectedLength
+      ) {
+        throw new RangeError(
+          "Audio body would exceed the declared Content-Length.",
+        );
+      }
+
+      deliveredBytes = nextDeliveredBytes;
+      controller!.enqueue(result.value);
+      if (expectedLength !== null && deliveredBytes === expectedLength) {
+        finish();
+      }
+      return;
+    }
+  }
+
+  return new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController;
+      try {
+        if (
+          !Number.isSafeInteger(maxContinuations) ||
+          maxContinuations < 0
+        ) {
+          throw new TypeError(
+            "maxContinuations must be a nonnegative safe integer.",
+          );
+        }
+
+        const start = getAudioResponseStart(
+          requestRange,
+          initialResponse.status,
+          initialResponse.headers.get("Content-Range"),
+        );
+        if (start === null) {
+          throw new TypeError("Invalid initial audio response range.");
+        }
+        responseStart = start;
+        expectedLength = getContentLength(initialResponse.headers);
+        const contentRange = parseContentRange(
+          initialResponse.headers.get("Content-Range"),
+        );
+        validateContentLengthAgainstRange(expectedLength, contentRange);
+        representationTotal =
+          contentRange?.total ??
+          (initialResponse.status === 200 ? expectedLength : null);
+        strongEtag = getStrongEtag(initialResponse);
+        activeReader = initialResponse.body?.getReader() ?? null;
+
+        abortListener = abort;
+        downstreamSignal?.addEventListener("abort", abortListener, {
+          once: true,
+        });
+        if (downstreamSignal?.aborted) abort();
+      } catch (error) {
+        fail(error);
+      }
+    },
+    pull() {
+      return pump().catch(fail);
+    },
+    cancel(reason) {
+      if (terminated) return;
+      terminated = true;
+      cleanUpAbortListener();
+      continuationAbort.abort(reason);
+      const reader = activeReader;
+      activeReader = null;
+      return reader?.cancel(reason).catch(() => undefined);
+    },
+  });
 }

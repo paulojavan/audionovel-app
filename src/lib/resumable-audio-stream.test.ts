@@ -1,12 +1,48 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  createResumableAudioStream,
   getAudioResponseStart,
   getContinuationRequestHeaders,
   getContinuationRange,
   getStrongEtag,
   isExactContinuationResponse,
 } from "./resumable-audio-stream";
+
+function streamFromChunks(
+  chunks: Uint8Array[],
+  options: { errorAfter?: number; onCancel?: () => void } = {},
+) {
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (options.errorAfter === index) {
+        controller.error(new TypeError("upstream connection lost"));
+        return;
+      }
+      const chunk = chunks[index];
+      if (chunk) {
+        index += 1;
+        controller.enqueue(chunk);
+        return;
+      }
+      controller.close();
+    },
+    cancel() {
+      options.onCancel?.();
+    },
+  });
+}
+
+async function readBytes(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  const bytes: number[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return bytes;
+    bytes.push(...value);
+  }
+}
 
 test("accepts a full 200 response when no range was requested", () => {
   assert.equal(getAudioResponseStart(null, 200, null), 0);
@@ -262,4 +298,454 @@ test("refuses to build continuation headers from an invalid ETag", () => {
     () => getContinuationRequestHeaders(100, 25, 'W/"audio-v1"'),
     TypeError,
   );
+});
+
+test("resumes a thrown initial body at the exact next byte with Range and If-Range", async () => {
+  const requests: Array<{ range: string | null; ifRange: string | null }> = [];
+  const failures: Array<{ attempt: number; byteOffset: number }> = [];
+  const initialResponse = new Response(
+    streamFromChunks([new Uint8Array([1, 2])], { errorAfter: 1 }),
+    {
+      headers: {
+        "Content-Length": "4",
+        ETag: '"audio-v1"',
+      },
+    },
+  );
+
+  const stream = createResumableAudioStream({
+    initialResponse,
+    requestRange: null,
+    async openRange(headers) {
+      requests.push({
+        range: headers.get("Range"),
+        ifRange: headers.get("If-Range"),
+      });
+      return new Response(new Uint8Array([3, 4]), {
+        status: 206,
+        headers: {
+          "Content-Length": "2",
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+    onFailure(failure) {
+      failures.push(failure);
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2, 3, 4]);
+  assert.deepEqual(requests, [
+    { range: "bytes=2-", ifRange: '"audio-v1"' },
+  ]);
+  assert.deepEqual(failures, [{ attempt: 1, byteOffset: 2 }]);
+});
+
+test("resumes when the initial body reaches EOF before Content-Length", async () => {
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(new Uint8Array([1, 2]), {
+      headers: {
+        "Content-Length": "4",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    async openRange(headers) {
+      attempts += 1;
+      assert.equal(headers.get("Range"), "bytes=2-");
+      return new Response(new Uint8Array([3, 4]), {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2, 3, 4]);
+  assert.equal(attempts, 1);
+});
+
+test("accepts a complete initial body without a strong validator", async () => {
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(new Uint8Array([1, 2]), {
+      headers: { "Content-Length": "2" },
+    }),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      throw new Error("must not open a continuation");
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2]);
+  assert.equal(attempts, 0);
+});
+
+test("fails safely on recovery when the initial response has no strong validator", async () => {
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      { headers: { "Content-Length": "2" } },
+    ),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      return new Response(new Uint8Array([2]));
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /strong ETag/i);
+  assert.equal(attempts, 0);
+});
+
+test("fails safely on recovery when the representation total is unknown", async () => {
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      { headers: { ETag: '"audio-v1"' } },
+    ),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      return new Response(new Uint8Array([2]));
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /numeric representation total/i);
+  assert.equal(attempts, 0);
+});
+
+test("rejects malformed initial Content-Length values", async () => {
+  for (const contentLength of [
+    "-1",
+    "1.5",
+    "not-a-number",
+    String(Number.MAX_SAFE_INTEGER + 1),
+  ]) {
+    const stream = createResumableAudioStream({
+      initialResponse: new Response(new Uint8Array([1]), {
+        headers: { "Content-Length": contentLength },
+      }),
+      requestRange: null,
+      async openRange() {
+        throw new Error("must not open a continuation");
+      },
+    });
+    await assert.rejects(readBytes(stream), /Content-Length/i, contentLength);
+  }
+});
+
+test("rejects a 206 whose Content-Length contradicts its Content-Range extent", async () => {
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(new Uint8Array([3, 4]), {
+      status: 206,
+      headers: {
+        "Content-Length": "1",
+        "Content-Range": "bytes 2-3/4",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: "bytes=2-",
+    async openRange() {
+      throw new Error("must not open a continuation");
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /Content-Length.*Content-Range/i);
+});
+
+test("rejects invalid continuation status, start, ETag, and total without a second attempt", async () => {
+  const cases = [
+    {
+      name: "status",
+      status: 200,
+      contentRange: "bytes 1-1/2",
+      etag: '"audio-v1"',
+    },
+    {
+      name: "start",
+      status: 206,
+      contentRange: "bytes 0-1/2",
+      etag: '"audio-v1"',
+    },
+    {
+      name: "ETag",
+      status: 206,
+      contentRange: "bytes 1-1/2",
+      etag: '"audio-v2"',
+    },
+    {
+      name: "total",
+      status: 206,
+      contentRange: "bytes 1-1/3",
+      etag: '"audio-v1"',
+    },
+  ];
+
+  for (const invalid of cases) {
+    let attempts = 0;
+    const stream = createResumableAudioStream({
+      initialResponse: new Response(
+        streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+        {
+          headers: {
+            "Content-Length": "2",
+            ETag: '"audio-v1"',
+          },
+        },
+      ),
+      requestRange: null,
+      async openRange() {
+        attempts += 1;
+        return new Response(new Uint8Array([2]), {
+          status: invalid.status,
+          headers: {
+            "Content-Range": invalid.contentRange,
+            ETag: invalid.etag,
+          },
+        });
+      },
+    });
+
+    await assert.rejects(readBytes(stream), /continuation response/i, invalid.name);
+    assert.equal(attempts, 1, invalid.name);
+  }
+});
+
+test("bounds continuation attempts exactly at maxContinuations", async () => {
+  const failures: Array<{ attempt: number; byteOffset: number }> = [];
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      {
+        headers: {
+          "Content-Length": "3",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: null,
+    maxContinuations: 2,
+    async openRange(headers) {
+      attempts += 1;
+      assert.equal(headers.get("Range"), "bytes=1-");
+      return new Response(
+        streamFromChunks([], { errorAfter: 0 }),
+        {
+          status: 206,
+          headers: {
+            "Content-Range": "bytes 1-2/3",
+            ETag: '"audio-v1"',
+          },
+        },
+      );
+    },
+    onFailure(failure) {
+      failures.push(failure);
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /continuation limit/i);
+  assert.equal(attempts, 2);
+  assert.deepEqual(failures, [
+    { attempt: 1, byteOffset: 1 },
+    { attempt: 2, byteOffset: 1 },
+  ]);
+});
+
+test("rejects a continuation chunk that would exceed the original Content-Length", async () => {
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1, 2])], { errorAfter: 1 }),
+      {
+        headers: {
+          "Content-Length": "4",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: null,
+    async openRange() {
+      return new Response(new Uint8Array([3, 4, 5]), {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /exceed.*Content-Length/i);
+});
+
+test("rejects and cancels a continuation whose Content-Length contradicts its range", async () => {
+  let cancelled = false;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      {
+        headers: {
+          "Content-Length": "2",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: null,
+    async openRange() {
+      return new Response(
+        streamFromChunks([new Uint8Array([2])], {
+          onCancel: () => (cancelled = true),
+        }),
+        {
+          status: 206,
+          headers: {
+            "Content-Length": "2",
+            "Content-Range": "bytes 1-1/2",
+            ETag: '"audio-v1"',
+          },
+        },
+      );
+    },
+  });
+
+  await assert.rejects(
+    readBytes(stream),
+    /Content-Length.*Content-Range/i,
+  );
+  assert.equal(cancelled, true);
+});
+
+test("closes at the original Content-Length without reading duplicate trailing bytes", async () => {
+  let continuationCancelled = false;
+  const continuationBody = streamFromChunks(
+    [new Uint8Array([3, 4]), new Uint8Array([5])],
+    { onCancel: () => (continuationCancelled = true) },
+  );
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1, 2])], { errorAfter: 1 }),
+      {
+        headers: {
+          "Content-Length": "4",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: null,
+    async openRange() {
+      return new Response(continuationBody, {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2, 3, 4]);
+  assert.equal(continuationCancelled, true);
+});
+
+test("downstream abort cancels the active reader and never opens a continuation", async () => {
+  let cancelled = false;
+  let attempts = 0;
+  const abortController = new AbortController();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(body, {
+      headers: {
+        "Content-Length": "2",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    downstreamSignal: abortController.signal,
+    async openRange() {
+      attempts += 1;
+      throw new Error("must not open a continuation");
+    },
+  });
+  const reader = stream.getReader();
+
+  assert.deepEqual(await reader.read(), {
+    done: false,
+    value: new Uint8Array([1]),
+  });
+  abortController.abort();
+  await assert.rejects(reader.read(), /abort/i);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(cancelled, true);
+  assert.equal(attempts, 0);
+});
+
+test("downstream cancellation cancels the active reader and never opens a continuation", async () => {
+  let cancelled = false;
+  let attempts = 0;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(body, {
+      headers: {
+        "Content-Length": "2",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      throw new Error("must not open a continuation");
+    },
+  });
+  const reader = stream.getReader();
+
+  await reader.read();
+  await reader.cancel();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(cancelled, true);
+  assert.equal(attempts, 0);
+});
+
+test("a normal complete body opens no continuation", async () => {
+  let attempts = 0;
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(new Uint8Array([1, 2, 3]), {
+      headers: {
+        "Content-Length": "3",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      throw new Error("must not open a continuation");
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2, 3]);
+  assert.equal(attempts, 0);
 });
