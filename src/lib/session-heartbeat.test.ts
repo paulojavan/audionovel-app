@@ -12,6 +12,10 @@ const heartbeatPath = join(
 const heartbeatSource = existsSync(heartbeatPath)
   ? readFileSync(heartbeatPath, "utf8")
   : "";
+const controllerSource = readFileSync(
+  join(process.cwd(), "src", "lib", "session-heartbeat-controller.ts"),
+  "utf8",
+);
 const layoutSource = readFileSync(
   join(process.cwd(), "src", "app", "layout.tsx"),
   "utf8",
@@ -22,14 +26,22 @@ test("refreshes the NextAuth session cookie immediately and every sixty seconds"
   assert.match(heartbeatSource, /^"use client";/);
   assert.match(
     heartbeatSource,
-    /fetch\("\/api\/auth\/session",\s*\{\s*method:\s*"GET",\s*credentials:\s*"same-origin",\s*cache:\s*"no-store",?\s*\}\)/,
+    /createSessionHeartbeatController\(\{/,
+  );
+  assert.match(
+    heartbeatSource,
+    /fetch\("\/api\/auth\/session",\s*\{\s*method:\s*"GET",\s*credentials:\s*"same-origin",\s*cache:\s*"no-store",\s*signal,?\s*\}\)/,
   );
   assert.match(heartbeatSource, /refreshSession\(\);/);
   assert.match(
     heartbeatSource,
     /setInterval\(refreshSession,\s*60_000\)/,
   );
-  assert.match(heartbeatSource, /\.catch\(\(\) => undefined\)/);
+  assert.match(controllerSource, /\.catch\(\(\) => undefined\)/);
+  assert.match(
+    heartbeatSource,
+    /typeof navigator\.locks\?\.request === "function"/,
+  );
 });
 
 test("refreshes when the document returns visible and cleans up browser subscriptions", () => {
@@ -42,6 +54,7 @@ test("refreshes when the document returns visible and cleans up browser subscrip
     /document\.addEventListener\("visibilitychange",\s*handleVisibilityChange\)/,
   );
   assert.match(heartbeatSource, /clearInterval\(intervalId\)/);
+  assert.match(heartbeatSource, /controller\.cancel\(\)/);
   assert.match(
     heartbeatSource,
     /document\.removeEventListener\("visibilitychange",\s*handleVisibilityChange\)/,
