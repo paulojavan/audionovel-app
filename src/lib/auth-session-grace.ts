@@ -14,7 +14,9 @@ export function getPrismaErrorCode(error: unknown): string | null {
     return null;
   }
 
-  return typeof error.code === "string" ? error.code : null;
+  return typeof error.code === "string" && /^P\d{4}$/.test(error.code)
+    ? error.code
+    : null;
 }
 
 export function isTransientPrismaSessionError(error: unknown): boolean {

@@ -21,6 +21,31 @@ test("classifies exactly the known transient Prisma session failures", () => {
   assert.equal(getPrismaErrorCode(null), null);
 });
 
+test("rejects unsafe Prisma error codes before structured logging", () => {
+  const lines: string[] = [];
+  const unsafeCode = "postgresql://admin:secret@db/user-123";
+
+  assert.equal(getPrismaErrorCode({ code: "P2002" }), "P2002");
+  assert.equal(getPrismaErrorCode({ code: unsafeCode }), null);
+  assert.equal(getPrismaErrorCode({ code: "" }), null);
+  assert.equal(getPrismaErrorCode({ code: "timeout" }), null);
+
+  logSessionDatabaseFailure({
+    error: { code: unsafeCode },
+    operation: "user_state_refresh",
+    graceApplied: false,
+    remainingMs: 0,
+    now: Date.parse("2026-07-05T10:00:00Z"),
+    write: (line) => lines.push(line),
+  });
+
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).prismaCode, null);
+  for (const secret of ["postgresql://", "admin:secret", "user-123"]) {
+    assert.equal(lines[0].includes(secret), false, secret);
+  }
+});
+
 test("allows a validated session until one millisecond before the grace boundary", () => {
   const now = Date.parse("2026-07-05T10:00:00Z");
 
