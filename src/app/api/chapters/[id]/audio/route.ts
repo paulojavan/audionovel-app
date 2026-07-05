@@ -95,7 +95,7 @@ export async function GET(request: Request, context: Context) {
 
   const headers = new Headers();
   headers.set("Content-Type", upstream.headers.get("content-type") ?? "audio/mpeg");
-  headers.set("Accept-Ranges", upstream.headers.get("accept-ranges") ?? "bytes");
+  headers.set("Accept-Ranges", "bytes");
   headers.set("Cache-Control", "private, no-store");
 
   for (const header of ["content-length", "content-range"]) {

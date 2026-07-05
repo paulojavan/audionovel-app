@@ -78,7 +78,8 @@ test("rota encaminha apenas Range inicialmente e preserva metadados da resposta"
   assert.match(audioRoute, /const initialHeaders = new Headers\(\)/);
   assert.match(audioRoute, /if \(range\) initialHeaders\.set\("Range", range\)/);
   assert.match(audioRoute, /upstream\.headers\.get\("content-type"\)/);
-  assert.match(audioRoute, /upstream\.headers\.get\("accept-ranges"\)/);
+  assert.match(audioRoute, /headers\.set\("Accept-Ranges", "bytes"\)/);
+  assert.doesNotMatch(audioRoute, /upstream\.headers\.get\("accept-ranges"\)/);
   assert.match(audioRoute, /\["content-length", "content-range"\]/);
   assert.match(audioRoute, /status:\s*upstream\.status/);
   assert.match(audioRoute, /"Cache-Control", "private, no-store"/);
