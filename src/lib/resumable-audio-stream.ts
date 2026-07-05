@@ -52,7 +52,7 @@ function parseContentRange(value: string | null): ParsedContentRange | null {
 }
 
 function parseStrongEtag(value: string | null): string | null {
-  return value !== null && /^"[\x21\x23-\x7e\x80-\xff]+"$/.test(value)
+  return value !== null && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value)
     ? value
     : null;
 }
@@ -160,14 +160,20 @@ function validateContentLengthAgainstRange(
 ) {
   if (contentLength === null || contentRange === null) return;
 
-  const rangeLength = contentRange.end - contentRange.start + 1;
+  const rangeLength = getContentRangeLength(contentRange);
   if (
-    !Number.isSafeInteger(rangeLength) ||
-    rangeLength < 0 ||
     contentLength !== rangeLength
   ) {
     throw new TypeError("Audio Content-Length contradicts its Content-Range.");
   }
+}
+
+function getContentRangeLength(contentRange: ParsedContentRange) {
+  const rangeLength = contentRange.end - contentRange.start + 1;
+  if (!Number.isSafeInteger(rangeLength) || rangeLength <= 0) {
+    throw new TypeError("Audio Content-Range extent is invalid.");
+  }
+  return rangeLength;
 }
 
 function createAbortError() {
@@ -186,6 +192,9 @@ export function createResumableAudioStream({
   let responseStart = 0;
   let deliveredBytes = 0;
   let expectedLength: number | null = null;
+  let activeExpectedLength: number | null = null;
+  let activeDeliveredBytes = 0;
+  let activeExpectedFromContentRange = false;
   let representationTotal: number | null = null;
   let strongEtag: string | null = null;
   let continuationAttempts = 0;
@@ -310,6 +319,9 @@ export function createResumableAudioStream({
         );
         const contentLength = getContentLength(response.headers);
         validateContentLengthAgainstRange(contentLength, contentRange);
+        activeExpectedLength = getContentRangeLength(contentRange!);
+        activeDeliveredBytes = 0;
+        activeExpectedFromContentRange = true;
         activeReader = response.body!.getReader();
       } catch (error) {
         await response.body?.cancel(error).catch(() => undefined);
@@ -343,7 +355,13 @@ export function createResumableAudioStream({
 
       if (result.done) {
         activeReader = null;
-        if (expectedLength !== null && deliveredBytes < expectedLength) {
+        const activeResponseEndedEarly =
+          activeExpectedLength !== null &&
+          activeDeliveredBytes < activeExpectedLength;
+        if (
+          activeResponseEndedEarly ||
+          (expectedLength !== null && deliveredBytes < expectedLength)
+        ) {
           continue;
         }
         finish();
@@ -352,8 +370,25 @@ export function createResumableAudioStream({
       if (result.value.byteLength === 0) continue;
 
       const nextDeliveredBytes = deliveredBytes + result.value.byteLength;
+      const nextActiveDeliveredBytes =
+        activeDeliveredBytes + result.value.byteLength;
       if (!Number.isSafeInteger(nextDeliveredBytes)) {
         throw new RangeError("Delivered audio byte count exceeds the safe integer range.");
+      }
+      if (!Number.isSafeInteger(nextActiveDeliveredBytes)) {
+        throw new RangeError(
+          "Delivered response byte count exceeds the safe integer range.",
+        );
+      }
+      if (
+        activeExpectedLength !== null &&
+        nextActiveDeliveredBytes > activeExpectedLength
+      ) {
+        throw new RangeError(
+          activeExpectedFromContentRange
+            ? "Audio body would exceed its declared Content-Range extent."
+            : "Audio body would exceed its declared Content-Length.",
+        );
       }
       if (
         expectedLength !== null &&
@@ -365,6 +400,7 @@ export function createResumableAudioStream({
       }
 
       deliveredBytes = nextDeliveredBytes;
+      activeDeliveredBytes = nextActiveDeliveredBytes;
       controller!.enqueue(result.value);
       if (expectedLength !== null && deliveredBytes === expectedLength) {
         finish();
@@ -400,10 +436,21 @@ export function createResumableAudioStream({
           initialResponse.headers.get("Content-Range"),
         );
         validateContentLengthAgainstRange(expectedLength, contentRange);
+        const contentRangeLength = contentRange
+          ? getContentRangeLength(contentRange)
+          : null;
+        if (
+          expectedLength === null &&
+          initialResponse.status === 206
+        ) {
+          expectedLength = contentRangeLength;
+        }
         representationTotal =
           contentRange?.total ??
           (initialResponse.status === 200 ? expectedLength : null);
         strongEtag = getStrongEtag(initialResponse);
+        activeExpectedLength = contentRangeLength ?? expectedLength;
+        activeExpectedFromContentRange = contentRangeLength !== null;
         activeReader = initialResponse.body?.getReader() ?? null;
 
         abortListener = abort;

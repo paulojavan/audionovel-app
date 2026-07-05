@@ -134,15 +134,16 @@ test("throws instead of emitting malformed or unsafe continuation offsets", () =
 test("extracts a quoted strong ETag from a response or headers", () => {
   const response = new Response(null, { headers: { ETag: '"audio-v1"' } });
   const headers = new Headers({ ETag: '"audio-v2"' });
+  const emptyOpaqueTag = new Headers({ ETag: '""' });
 
   assert.equal(getStrongEtag(response), '"audio-v1"');
   assert.equal(getStrongEtag(headers), '"audio-v2"');
+  assert.equal(getStrongEtag(emptyOpaqueTag), '""');
 });
 
-test("rejects missing, empty, and weak ETags", () => {
+test("rejects missing, malformed, and weak ETags", () => {
   assert.equal(getStrongEtag(new Headers()), null);
   assert.equal(getStrongEtag(new Headers({ ETag: "" })), null);
-  assert.equal(getStrongEtag(new Headers({ ETag: '""' })), null);
   assert.equal(getStrongEtag(new Headers({ ETag: 'W/"audio-v1"' })), null);
 });
 
@@ -369,6 +370,74 @@ test("resumes when the initial body reaches EOF before Content-Length", async ()
   assert.equal(attempts, 1);
 });
 
+test("derives a 206 expected length from Content-Range and resumes premature EOF", async () => {
+  const requests: string[] = [];
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(new Uint8Array([3]), {
+      status: 206,
+      headers: {
+        "Content-Range": "bytes 2-3/4",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: "bytes=2-",
+    async openRange(headers) {
+      requests.push(headers.get("Range")!);
+      return new Response(new Uint8Array([4]), {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 3-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [3, 4]);
+  assert.deepEqual(requests, ["bytes=3-"]);
+});
+
+test("resumes again when a continuation ends before its Content-Range extent", async () => {
+  const requests: string[] = [];
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      {
+        status: 206,
+        headers: {
+          "Content-Length": "4",
+          "Content-Range": "bytes 0-3/4",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: "bytes=0-",
+    async openRange(headers) {
+      const range = headers.get("Range")!;
+      requests.push(range);
+      if (range === "bytes=1-") {
+        return new Response(new Uint8Array([2]), {
+          status: 206,
+          headers: {
+            "Content-Range": "bytes 1-2/4",
+            ETag: '"audio-v1"',
+          },
+        });
+      }
+      return new Response(new Uint8Array([3, 4]), {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2, 3, 4]);
+  assert.deepEqual(requests, ["bytes=1-", "bytes=2-"]);
+});
+
 test("accepts a complete initial body without a strong validator", async () => {
   let attempts = 0;
   const stream = createResumableAudioStream({
@@ -584,7 +653,53 @@ test("rejects a continuation chunk that would exceed the original Content-Length
     },
   });
 
-  await assert.rejects(readBytes(stream), /exceed.*Content-Length/i);
+  await assert.rejects(
+    readBytes(stream),
+    /exceed.*(?:Content-Length|Content-Range)/i,
+  );
+});
+
+test("rejects a chunk that exceeds its continuation Content-Range before forwarding it", async () => {
+  let continuationCancelled = false;
+  const overflowingContinuation = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([2, 3, 4, 5]));
+    },
+    cancel() {
+      continuationCancelled = true;
+    },
+  });
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      {
+        status: 206,
+        headers: {
+          "Content-Length": "4",
+          "Content-Range": "bytes 0-3/5",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: "bytes=0-",
+    async openRange() {
+      return new Response(overflowingContinuation, {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 1-2/5",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+  const reader = stream.getReader();
+
+  assert.deepEqual(await reader.read(), {
+    done: false,
+    value: new Uint8Array([1]),
+  });
+  await assert.rejects(reader.read(), /exceed.*Content-Range/i);
+  assert.equal(continuationCancelled, true);
 });
 
 test("rejects and cancels a continuation whose Content-Length contradicts its range", async () => {
