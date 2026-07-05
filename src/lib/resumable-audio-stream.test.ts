@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { openAudioUpstream } from "./audio-upstream";
 import {
   createResumableAudioStream,
   getAudioResponseStart,
   getContinuationRequestHeaders,
   getContinuationRange,
   getStrongEtag,
+  isSafeAudioPassThroughResponse,
   isExactContinuationResponse,
 } from "./resumable-audio-stream";
 
@@ -81,6 +83,89 @@ test("rejects ranged 200 responses and unsupported statuses", () => {
   assert.equal(getAudioResponseStart("bytes=0-", 200, null), null);
   assert.equal(getAudioResponseStart(null, 206, "bytes 0-99/100"), null);
   assert.equal(getAudioResponseStart(null, 416, null), null);
+});
+
+test("recognizes bounded and suffix 206 responses as safe pass-through streams", () => {
+  assert.equal(
+    isSafeAudioPassThroughResponse(
+      "bytes=0-99",
+      new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: {
+          "Content-Length": "100",
+          "Content-Range": "bytes 0-99/1000",
+        },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isSafeAudioPassThroughResponse(
+      "bytes=-100",
+      new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: {
+          "Content-Length": "100",
+          "Content-Range": "bytes 900-999/1000",
+        },
+      }),
+    ),
+    true,
+  );
+});
+
+test("recognizes an ignored valid Range 200 as safe pass-through", () => {
+  assert.equal(
+    isSafeAudioPassThroughResponse(
+      "bytes=0-99",
+      new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { "Content-Length": "1000" },
+      }),
+    ),
+    true,
+  );
+});
+
+test("does not pass through malformed or contradictory range metadata", () => {
+  const cases = [
+    {
+      requestRange: "bytes=0-99",
+      response: new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: {
+          "Content-Length": "99",
+          "Content-Range": "bytes 0-99/1000",
+        },
+      }),
+    },
+    {
+      requestRange: "bytes=-100",
+      response: new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: { "Content-Range": "bytes 899-999/1000" },
+      }),
+    },
+    {
+      requestRange: "bytes=broken",
+      response: new Response(new Uint8Array([1]), { status: 200 }),
+    },
+    {
+      requestRange: "bytes=0-",
+      response: new Response(new Uint8Array([1]), {
+        status: 200,
+        headers: { "Content-Range": "bytes 0-0/1" },
+      }),
+    },
+  ];
+
+  for (const { requestRange, response } of cases) {
+    assert.equal(
+      isSafeAudioPassThroughResponse(requestRange, response),
+      false,
+      requestRange,
+    );
+  }
 });
 
 test("rejects malformed content ranges", () => {
@@ -971,6 +1056,68 @@ test("downstream cancellation cancels the active reader and never opens a contin
   assert.equal(cancelled, true);
   assert.equal(body.locked, false);
   assert.equal(attempts, 0);
+});
+
+test("downstream cancellation aborts a deferred continuation fetch promptly", async () => {
+  const request = new AbortController();
+  let fetchSignal: AbortSignal | undefined;
+  let markFetchStarted: (() => void) | undefined;
+  const fetchStarted = new Promise<void>((resolve) => {
+    markFetchStarted = resolve;
+  });
+  const fetcher = (_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      fetchSignal = init?.signal ?? undefined;
+      markFetchStarted?.();
+      fetchSignal?.addEventListener(
+        "abort",
+        () => reject(fetchSignal?.reason),
+        { once: true },
+      );
+    });
+
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(
+      streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+      {
+        headers: {
+          "Content-Length": "2",
+          ETag: '"audio-v1"',
+        },
+      },
+    ),
+    requestRange: null,
+    openRange(headers, continuationSignal) {
+      return openAudioUpstream(
+        "https://media.example/audio.mp3",
+        headers,
+        AbortSignal.any([request.signal, continuationSignal]),
+        fetcher,
+      );
+    },
+  });
+  const reader = stream.getReader();
+
+  assert.deepEqual(await reader.read(), {
+    done: false,
+    value: new Uint8Array([1]),
+  });
+  const pendingRead = reader.read();
+  await fetchStarted;
+
+  await Promise.race([
+    reader.cancel("playback stopped"),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error("continuation cancellation did not settle promptly")),
+        500,
+      );
+    }),
+  ]);
+  await pendingRead.catch(() => undefined);
+
+  assert.equal(request.signal.aborted, false);
+  assert.equal(fetchSignal?.aborted, true);
 });
 
 test("a normal complete body opens no continuation", async () => {

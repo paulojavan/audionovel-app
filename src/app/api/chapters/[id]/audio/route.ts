@@ -4,7 +4,10 @@ import { openAudioUpstream } from "@/lib/audio-upstream";
 import { prisma } from "@/lib/prisma";
 import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
-import { createResumableAudioStream } from "@/lib/resumable-audio-stream";
+import {
+  createResumableAudioStream,
+  isSafeAudioPassThroughResponse,
+} from "@/lib/resumable-audio-stream";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { isSafeMediaHttpsUrl } from "@/lib/url-security";
 
@@ -105,22 +108,28 @@ export async function GET(request: Request, context: Context) {
 
   let body: ReadableStream<Uint8Array>;
   try {
-    body = createResumableAudioStream({
-      initialResponse: upstream,
-      requestRange: range,
-      openRange: (headers) =>
-        openAudioUpstream(audioUrl, headers, request.signal),
-      maxContinuations: 2,
-      downstreamSignal: request.signal,
-      onFailure({ attempt, byteOffset }) {
-        console.warn(JSON.stringify({
-          event: "audio_upstream_interrupted",
-          timestamp: new Date().toISOString(),
-          attempt,
-          byteOffset,
-        }));
-      },
-    });
+    body = isSafeAudioPassThroughResponse(range, upstream)
+      ? upstream.body
+      : createResumableAudioStream({
+        initialResponse: upstream,
+        requestRange: range,
+        openRange: (headers, continuationSignal) =>
+          openAudioUpstream(
+            audioUrl,
+            headers,
+            AbortSignal.any([request.signal, continuationSignal]),
+          ),
+        maxContinuations: 2,
+        downstreamSignal: request.signal,
+        onFailure({ attempt, byteOffset }) {
+          console.warn(JSON.stringify({
+            event: "audio_upstream_interrupted",
+            timestamp: new Date().toISOString(),
+            attempt,
+            byteOffset,
+          }));
+        },
+      });
   } catch (error) {
     await upstream.body?.cancel(error).catch(() => undefined);
     return NextResponse.json(

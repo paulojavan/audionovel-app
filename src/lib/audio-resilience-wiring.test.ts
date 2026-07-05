@@ -43,8 +43,19 @@ test("servidor preserva conclusao e nao aborta streaming depois dos cabecalhos",
 test("rota usa stream retomavel e propaga cancelamento", () => {
   assert.match(audioRoute, /createResumableAudioStream/);
   assert.match(audioRoute, /downstreamSignal:\s*request\.signal/);
-  assert.match(audioRoute, /openRange:\s*\(headers\)/);
-  assert.match(audioRoute, /openAudioUpstream\([^,]+,\s*headers,\s*request\.signal\)/);
+  assert.match(audioRoute, /openRange:\s*\(headers,\s*continuationSignal\)/);
+  assert.match(
+    audioRoute,
+    /openAudioUpstream\(\s*[^,]+,\s*headers,\s*AbortSignal\.any\(\[request\.signal,\s*continuationSignal\]\),?\s*\)/,
+  );
+});
+
+test("rota preserva respostas Range validas que nao podem ser retomadas", () => {
+  assert.match(audioRoute, /isSafeAudioPassThroughResponse\(range,\s*upstream\)/);
+  assert.match(
+    audioRoute,
+    /isSafeAudioPassThroughResponse\(range,\s*upstream\)\s*\?\s*upstream\.body\s*:/,
+  );
 });
 
 test("rota protege criacao sincrona do stream e registra apenas campos sanitizados", () => {

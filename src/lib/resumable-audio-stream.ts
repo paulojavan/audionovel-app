@@ -12,7 +12,7 @@ export type ResumableAudioStreamFailure = {
 export type CreateResumableAudioStreamOptions = {
   initialResponse: Response;
   requestRange: string | null;
-  openRange: (headers: Headers, signal?: AbortSignal) => Promise<Response>;
+  openRange: (headers: Headers, signal: AbortSignal) => Promise<Response>;
   maxContinuations?: number;
   downstreamSignal?: AbortSignal;
   onFailure?: (
@@ -30,6 +30,40 @@ function parseRequestRange(value: string | null): number | null {
 
   const match = /^bytes=(\d+)-$/i.exec(value);
   return match ? parseSafeInteger(match[1]) : null;
+}
+
+type ParsedPassThroughRequestRange =
+  | { kind: "bounded"; start: number; end: number }
+  | { kind: "suffix"; length: number };
+
+function parsePassThroughRequestRange(
+  value: string | null,
+): ParsedPassThroughRequestRange | null {
+  if (value === null) return null;
+
+  const bounded = /^bytes=(\d+)-(\d+)$/i.exec(value);
+  if (bounded) {
+    const start = parseSafeInteger(bounded[1]);
+    const end = parseSafeInteger(bounded[2]);
+    return start !== null && end !== null && end >= start
+      ? { kind: "bounded", start, end }
+      : null;
+  }
+
+  const suffix = /^bytes=-(\d+)$/i.exec(value);
+  if (suffix) {
+    const length = parseSafeInteger(suffix[1]);
+    return length !== null && length > 0
+      ? { kind: "suffix", length }
+      : null;
+  }
+
+  return null;
+}
+
+function isValidSingleRequestRange(value: string | null) {
+  return parseRequestRange(value) !== null ||
+    parsePassThroughRequestRange(value) !== null;
 }
 
 function parseContentRange(value: string | null): ParsedContentRange | null {
@@ -176,6 +210,60 @@ function getContentRangeLength(contentRange: ParsedContentRange) {
     throw new TypeError("Audio Content-Range extent is invalid.");
   }
   return rangeLength;
+}
+
+export function isSafeAudioPassThroughResponse(
+  requestRange: string | null,
+  response: Response,
+): boolean {
+  if (!response.body || !isValidSingleRequestRange(requestRange)) {
+    return false;
+  }
+
+  if (response.status === 200) {
+    if (response.headers.has("Content-Range")) return false;
+    try {
+      getContentLength(response.headers);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const parsedRequest = parsePassThroughRequestRange(requestRange);
+  const contentRange = parseContentRange(
+    response.headers.get("Content-Range"),
+  );
+  if (
+    response.status !== 206 ||
+    parsedRequest === null ||
+    contentRange === null ||
+    contentRange.total === null
+  ) {
+    return false;
+  }
+
+  try {
+    validateContentLengthAgainstRange(
+      getContentLength(response.headers),
+      contentRange,
+    );
+  } catch {
+    return false;
+  }
+
+  const expectedStart = parsedRequest.kind === "bounded"
+    ? parsedRequest.start
+    : Math.max(contentRange.total - parsedRequest.length, 0);
+  const expectedEnd = parsedRequest.kind === "bounded"
+    ? Math.min(parsedRequest.end, contentRange.total - 1)
+    : contentRange.total - 1;
+
+  return (
+    expectedStart < contentRange.total &&
+    contentRange.start === expectedStart &&
+    contentRange.end === expectedEnd
+  );
 }
 
 function createAbortError() {
