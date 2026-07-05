@@ -498,39 +498,43 @@ test("rejects malformed initial Content-Length values", async () => {
     "not-a-number",
     String(Number.MAX_SAFE_INTEGER + 1),
   ]) {
-    const stream = createResumableAudioStream({
-      initialResponse: new Response(new Uint8Array([1]), {
-        headers: { "Content-Length": contentLength },
+    assert.throws(
+      () => createResumableAudioStream({
+        initialResponse: new Response(new Uint8Array([1]), {
+          headers: { "Content-Length": contentLength },
+        }),
+        requestRange: null,
+        async openRange() {
+          throw new Error("must not open a continuation");
+        },
       }),
-      requestRange: null,
-      async openRange() {
-        throw new Error("must not open a continuation");
-      },
-    });
-    await assert.rejects(readBytes(stream), /Content-Length/i, contentLength);
+      /Content-Length/i,
+      contentLength,
+    );
   }
 });
 
-test("rejects a 206 whose Content-Length contradicts its Content-Range extent", async () => {
-  const stream = createResumableAudioStream({
-    initialResponse: new Response(new Uint8Array([3, 4]), {
-      status: 206,
-      headers: {
-        "Content-Length": "1",
-        "Content-Range": "bytes 2-3/4",
-        ETag: '"audio-v1"',
+test("rejects a 206 whose Content-Length contradicts its Content-Range extent", () => {
+  assert.throws(
+    () => createResumableAudioStream({
+      initialResponse: new Response(new Uint8Array([3, 4]), {
+        status: 206,
+        headers: {
+          "Content-Length": "1",
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      }),
+      requestRange: "bytes=2-",
+      async openRange() {
+        throw new Error("must not open a continuation");
       },
     }),
-    requestRange: "bytes=2-",
-    async openRange() {
-      throw new Error("must not open a continuation");
-    },
-  });
-
-  await assert.rejects(readBytes(stream), /Content-Length.*Content-Range/i);
+    /Content-Length.*Content-Range/i,
+  );
 });
 
-test("rejects and cancels a 200 response carrying Content-Range before streaming bytes", async () => {
+test("rejects and cancels a 200 response carrying Content-Range before streaming bytes", () => {
   let cancelled = false;
   let attempts = 0;
   const body = new ReadableStream<Uint8Array>({
@@ -541,44 +545,45 @@ test("rejects and cancels a 200 response carrying Content-Range before streaming
       cancelled = true;
     },
   });
-  const stream = createResumableAudioStream({
-    initialResponse: new Response(body, {
-      status: 200,
-      headers: {
-        "Content-Range": "bytes 2-3/4",
-        ETag: '"audio-v1"',
+  assert.throws(
+    () => createResumableAudioStream({
+      initialResponse: new Response(body, {
+        status: 200,
+        headers: {
+          "Content-Range": "bytes 2-3/4",
+          ETag: '"audio-v1"',
+        },
+      }),
+      requestRange: null,
+      async openRange() {
+        attempts += 1;
+        throw new Error("must not open a continuation");
       },
     }),
-    requestRange: null,
-    async openRange() {
-      attempts += 1;
-      throw new Error("must not open a continuation");
-    },
-  });
-  const reader = stream.getReader();
-
-  await assert.rejects(reader.read(), /200.*Content-Range/i);
+    /200.*Content-Range/i,
+  );
   assert.equal(cancelled, true);
   assert.equal(attempts, 0);
 });
 
-test("cancels the initial body when synchronous option validation fails", async () => {
+test("cancels the initial body when synchronous option validation fails", () => {
   let cancelled = false;
   const body = new ReadableStream<Uint8Array>({
     cancel() {
       cancelled = true;
     },
   });
-  const stream = createResumableAudioStream({
-    initialResponse: new Response(body),
-    requestRange: null,
-    maxContinuations: -1,
-    async openRange() {
-      throw new Error("must not open a continuation");
-    },
-  });
-
-  await assert.rejects(readBytes(stream), /maxContinuations/i);
+  assert.throws(
+    () => createResumableAudioStream({
+      initialResponse: new Response(body),
+      requestRange: null,
+      maxContinuations: -1,
+      async openRange() {
+        throw new Error("must not open a continuation");
+      },
+    }),
+    /maxContinuations/i,
+  );
   assert.equal(cancelled, true);
 });
 
@@ -964,6 +969,7 @@ test("downstream cancellation cancels the active reader and never opens a contin
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(cancelled, true);
+  assert.equal(body.locked, false);
   assert.equal(attempts, 0);
 });
 

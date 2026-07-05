@@ -27,10 +27,15 @@ test("proxy de audio limita tempo, bloqueia redirect e trata falha do upstream",
     join(process.cwd(), "src", "app", "api", "chapters", "[id]", "audio", "route.ts"),
     "utf8",
   );
-  assert.match(routeSource, /new AbortController/);
-  assert.match(routeSource, /setTimeout\(\(\) => upstreamController\.abort\(\), 15_000\)/);
-  assert.match(routeSource, /clearTimeout\(upstreamTimeout\)/);
-  assert.match(routeSource, /redirect:\s*"manual"/);
+  const upstreamSource = readFileSync(
+    join(process.cwd(), "src", "lib", "audio-upstream.ts"),
+    "utf8",
+  );
+  assert.match(upstreamSource, /new AbortController/);
+  assert.match(upstreamSource, /setTimeout\(/);
+  assert.match(upstreamSource, /15_000/);
+  assert.match(upstreamSource, /clearTimeout\(timeout\)/);
+  assert.match(upstreamSource, /redirect:\s*"manual"/);
   assert.match(routeSource, /catch/);
 });
 

@@ -182,6 +182,70 @@ function createAbortError() {
   return new DOMException("Audio stream aborted.", "AbortError");
 }
 
+type InitialResponseMetadata = {
+  responseStart: number;
+  expectedLength: number | null;
+  activeExpectedLength: number | null;
+  activeExpectedFromContentRange: boolean;
+  representationTotal: number | null;
+  strongEtag: string | null;
+};
+
+function inspectInitialResponse(
+  initialResponse: Response,
+  requestRange: string | null,
+  maxContinuations: number,
+): InitialResponseMetadata {
+  if (
+    !Number.isSafeInteger(maxContinuations) ||
+    maxContinuations < 0
+  ) {
+    throw new TypeError(
+      "maxContinuations must be a nonnegative safe integer.",
+    );
+  }
+  if (
+    initialResponse.status === 200 &&
+    initialResponse.headers.has("Content-Range")
+  ) {
+    throw new TypeError(
+      "Audio 200 response must not include Content-Range.",
+    );
+  }
+
+  const responseStart = getAudioResponseStart(
+    requestRange,
+    initialResponse.status,
+    initialResponse.headers.get("Content-Range"),
+  );
+  if (responseStart === null) {
+    throw new TypeError("Invalid initial audio response range.");
+  }
+
+  let expectedLength = getContentLength(initialResponse.headers);
+  const contentRange = parseContentRange(
+    initialResponse.headers.get("Content-Range"),
+  );
+  validateContentLengthAgainstRange(expectedLength, contentRange);
+  const contentRangeLength = contentRange
+    ? getContentRangeLength(contentRange)
+    : null;
+  if (expectedLength === null && initialResponse.status === 206) {
+    expectedLength = contentRangeLength;
+  }
+
+  return {
+    responseStart,
+    expectedLength,
+    activeExpectedLength: contentRangeLength ?? expectedLength,
+    activeExpectedFromContentRange: contentRangeLength !== null,
+    representationTotal:
+      contentRange?.total ??
+      (initialResponse.status === 200 ? expectedLength : null),
+    strongEtag: getStrongEtag(initialResponse),
+  };
+}
+
 export function createResumableAudioStream({
   initialResponse,
   requestRange,
@@ -190,15 +254,28 @@ export function createResumableAudioStream({
   downstreamSignal,
   onFailure,
 }: CreateResumableAudioStreamOptions): ReadableStream<Uint8Array> {
+  let initialMetadata: InitialResponseMetadata;
+  try {
+    initialMetadata = inspectInitialResponse(
+      initialResponse,
+      requestRange,
+      maxContinuations,
+    );
+  } catch (error) {
+    void initialResponse.body?.cancel(error).catch(() => undefined);
+    throw error;
+  }
+
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  let responseStart = 0;
+  const responseStart = initialMetadata.responseStart;
   let deliveredBytes = 0;
-  let expectedLength: number | null = null;
-  let activeExpectedLength: number | null = null;
+  const expectedLength = initialMetadata.expectedLength;
+  let activeExpectedLength = initialMetadata.activeExpectedLength;
   let activeDeliveredBytes = 0;
-  let activeExpectedFromContentRange = false;
-  let representationTotal: number | null = null;
-  let strongEtag: string | null = null;
+  let activeExpectedFromContentRange =
+    initialMetadata.activeExpectedFromContentRange;
+  const representationTotal = initialMetadata.representationTotal;
+  const strongEtag = initialMetadata.strongEtag;
   let continuationAttempts = 0;
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   let terminated = false;
@@ -438,63 +515,12 @@ export function createResumableAudioStream({
   return new ReadableStream<Uint8Array>({
     start(streamController) {
       controller = streamController;
-      try {
-        activeReader = initialResponse.body?.getReader() ?? null;
-        if (
-          !Number.isSafeInteger(maxContinuations) ||
-          maxContinuations < 0
-        ) {
-          throw new TypeError(
-            "maxContinuations must be a nonnegative safe integer.",
-          );
-        }
-        if (
-          initialResponse.status === 200 &&
-          initialResponse.headers.has("Content-Range")
-        ) {
-          throw new TypeError(
-            "Audio 200 response must not include Content-Range.",
-          );
-        }
-
-        const start = getAudioResponseStart(
-          requestRange,
-          initialResponse.status,
-          initialResponse.headers.get("Content-Range"),
-        );
-        if (start === null) {
-          throw new TypeError("Invalid initial audio response range.");
-        }
-        responseStart = start;
-        expectedLength = getContentLength(initialResponse.headers);
-        const contentRange = parseContentRange(
-          initialResponse.headers.get("Content-Range"),
-        );
-        validateContentLengthAgainstRange(expectedLength, contentRange);
-        const contentRangeLength = contentRange
-          ? getContentRangeLength(contentRange)
-          : null;
-        if (
-          expectedLength === null &&
-          initialResponse.status === 206
-        ) {
-          expectedLength = contentRangeLength;
-        }
-        representationTotal =
-          contentRange?.total ??
-          (initialResponse.status === 200 ? expectedLength : null);
-        strongEtag = getStrongEtag(initialResponse);
-        activeExpectedLength = contentRangeLength ?? expectedLength;
-        activeExpectedFromContentRange = contentRangeLength !== null;
-
-        abortListener = abort;
-        downstreamSignal?.addEventListener("abort", abortListener, {
-          once: true,
-        });
-        if (downstreamSignal?.aborted) abort();
-      } catch (error) {
-        fail(error);
-      }
+      activeReader = initialResponse.body?.getReader() ?? null;
+      abortListener = abort;
+      downstreamSignal?.addEventListener("abort", abortListener, {
+        once: true,
+      });
+      if (downstreamSignal?.aborted) abort();
     },
     pull() {
       return pump().catch(fail);
@@ -506,7 +532,16 @@ export function createResumableAudioStream({
       continuationAbort.abort(reason);
       const reader = activeReader;
       activeReader = null;
-      return reader?.cancel(reason).catch(() => undefined);
+      return reader
+        ?.cancel(reason)
+        .catch(() => undefined)
+        .finally(() => {
+          try {
+            reader.releaseLock();
+          } catch {
+            // The reader may still have a pending operation in another runtime.
+          }
+        });
     },
   });
 }

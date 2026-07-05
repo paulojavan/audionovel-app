@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { canPlayChapter } from "@/lib/api";
+import { openAudioUpstream } from "@/lib/audio-upstream";
 import { prisma } from "@/lib/prisma";
 import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
 import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
+import { createResumableAudioStream } from "@/lib/resumable-audio-stream";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { isSafeMediaHttpsUrl } from "@/lib/url-security";
 
@@ -27,6 +29,7 @@ export async function GET(request: Request, context: Context) {
   if (!media || media.contentType !== "AUDIO" || !media.audioUrl) {
     return NextResponse.json({ error: "Este capitulo nao possui audio hospedado." }, { status: 400 });
   }
+  const audioUrl = media.audioUrl;
 
   const limited = await enforceRateLimit({
     key: `audio:${id}:${getRequestIdentifier(request, session?.user?.id)}`,
@@ -35,7 +38,7 @@ export async function GET(request: Request, context: Context) {
   });
   if (limited) return limited;
 
-  if (!isSafeMediaHttpsUrl(media.audioUrl)) {
+  if (!isSafeMediaHttpsUrl(audioUrl)) {
     return NextResponse.json({ error: "URL de audio invalida ou nao permitida." }, { status: 400 });
   }
 
@@ -66,33 +69,33 @@ export async function GET(request: Request, context: Context) {
   }
 
   const range = request.headers.get("range");
-  const upstreamController = new AbortController();
-  const upstreamTimeout = setTimeout(() => upstreamController.abort(), 15_000);
+  const initialHeaders = new Headers();
+  if (range) initialHeaders.set("Range", range);
+
   let upstream: Response;
   try {
-    upstream = await fetch(media.audioUrl, {
-      headers: range ? { range } : {},
-      cache: "no-store",
-      redirect: "manual",
-      signal: upstreamController.signal,
-    });
+    upstream = await openAudioUpstream(
+      audioUrl,
+      initialHeaders,
+      request.signal,
+    );
   } catch {
     return NextResponse.json({ error: "Audio temporariamente indisponivel." }, { status: 502 });
-  } finally {
-    clearTimeout(upstreamTimeout);
   }
 
   if (upstream.status >= 300 && upstream.status < 400) {
+    await upstream.body?.cancel().catch(() => undefined);
     return NextResponse.json({ error: "Redirecionamento de audio nao permitido." }, { status: 502 });
   }
 
   if (!upstream.ok || !upstream.body) {
+    await upstream.body?.cancel().catch(() => undefined);
     return NextResponse.json({ error: "Áudio indisponível." }, { status: 502 });
   }
 
   const headers = new Headers();
   headers.set("Content-Type", upstream.headers.get("content-type") ?? "audio/mpeg");
-  headers.set("Accept-Ranges", "bytes");
+  headers.set("Accept-Ranges", upstream.headers.get("accept-ranges") ?? "bytes");
   headers.set("Cache-Control", "private, no-store");
 
   for (const header of ["content-length", "content-range"]) {
@@ -100,7 +103,33 @@ export async function GET(request: Request, context: Context) {
     if (value) headers.set(header, value);
   }
 
-  return new Response(upstream.body, {
+  let body: ReadableStream<Uint8Array>;
+  try {
+    body = createResumableAudioStream({
+      initialResponse: upstream,
+      requestRange: range,
+      openRange: (headers) =>
+        openAudioUpstream(audioUrl, headers, request.signal),
+      maxContinuations: 2,
+      downstreamSignal: request.signal,
+      onFailure({ attempt, byteOffset }) {
+        console.warn(JSON.stringify({
+          event: "audio_upstream_interrupted",
+          timestamp: new Date().toISOString(),
+          attempt,
+          byteOffset,
+        }));
+      },
+    });
+  } catch (error) {
+    await upstream.body?.cancel(error).catch(() => undefined);
+    return NextResponse.json(
+      { error: "Audio temporariamente indisponivel." },
+      { status: 502 },
+    );
+  }
+
+  return new Response(body, {
     status: upstream.status,
     headers,
   });
