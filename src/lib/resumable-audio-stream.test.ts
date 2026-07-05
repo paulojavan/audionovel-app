@@ -60,6 +60,17 @@ test("rejects malformed content ranges", () => {
   }
 });
 
+test("rejects a content range whose numeric total equals its end", () => {
+  assert.equal(
+    getAudioResponseStart("bytes=100-", 206, "bytes 100-199/199"),
+    null,
+  );
+});
+
+test("rejects a zero-sized content range with a numeric zero total", () => {
+  assert.equal(getAudioResponseStart("bytes=0-", 206, "bytes 0-0/0"), null);
+});
+
 test("builds the next open-ended continuation range", () => {
   assert.equal(getContinuationRange(100, 25), "bytes=125-");
 });
@@ -126,6 +137,15 @@ test("rejects a continuation response whose content range ends before it starts"
   const response = new Response(new Uint8Array([1]), {
     status: 206,
     headers: { "Content-Range": "bytes 100-99/200" },
+  });
+
+  assert.equal(isExactContinuationResponse(response, 100), false);
+});
+
+test("rejects a continuation response whose numeric total does not exceed its end", () => {
+  const response = new Response(new Uint8Array([1]), {
+    status: 206,
+    headers: { "Content-Range": "bytes 100-199/100" },
   });
 
   assert.equal(isExactContinuationResponse(response, 100), false);

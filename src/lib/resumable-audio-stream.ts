@@ -25,7 +25,12 @@ function parseContentRange(value: string | null): ParsedContentRange | null {
   const start = parseSafeInteger(match[1]);
   const end = parseSafeInteger(match[2]);
   const total = match[3] === "*" ? null : parseSafeInteger(match[3]);
-  if (start === null || end === null || end < start || (match[3] !== "*" && total === null)) {
+  if (
+    start === null ||
+    end === null ||
+    end < start ||
+    (match[3] !== "*" && (total === null || total <= end))
+  ) {
     return null;
   }
 
