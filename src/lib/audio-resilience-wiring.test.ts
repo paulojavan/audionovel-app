@@ -64,7 +64,7 @@ test("player redefine a tentativa apenas quando a origem muda", () => {
 
 test("player registra intencao antes de play e nao a apaga em pause induzido por erro", () => {
   assert.match(player, /desiredPlaybackRef\.current = true;[\s\S]*?\.play\(\)/);
-  assert.match(player, /shouldResume:\s*desiredPlaybackRef\.current/);
+  assert.match(player, /desiredPlayback:\s*desiredPlaybackRef\.current/);
   const pauseHandler = player.match(/onPause=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
   assert.doesNotMatch(pauseHandler, /desiredPlaybackRef\.current = false/);
 });
@@ -75,6 +75,29 @@ test("play manual depois de erro inicia nova revisao sem sobrepor recarga penden
   assert.match(player, /reason:\s*"manual"/);
   assert.match(player, /advanceAudioRetryState/);
   assert.match(player, /role="alert"/);
+});
+
+test("erro terminal tem prioridade sobre estado paused possivelmente obsoleto", () => {
+  const toggleStart = player.indexOf("function toggle()");
+  const toggleEnd = player.indexOf("function decreaseKaraokeFont", toggleStart);
+  const toggleBlock = player.slice(toggleStart, toggleEnd);
+  const fatalErrorIndex = toggleBlock.indexOf("playbackError || audio.error");
+  const pausedIndex = toggleBlock.indexOf("if (audio.paused)");
+  assert.ok(fatalErrorIndex >= 0);
+  assert.ok(pausedIndex >= 0);
+  assert.ok(fatalErrorIndex < pausedIndex);
+});
+
+test("erro durante recarga libera pendencia antes da tentativa automatica", () => {
+  const errorHandler = player.match(/onError=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+  const captureIndex = errorHandler.indexOf("resolveInterruptedAudioRetry");
+  const clearIndex = errorHandler.indexOf("pendingRetryRef.current = null");
+  const automaticIndex = errorHandler.indexOf('reason: "automatic"');
+  assert.ok(captureIndex >= 0);
+  assert.ok(clearIndex > captureIndex);
+  assert.ok(automaticIndex > clearIndex);
+  assert.match(errorHandler, /if \(beginAudioReload\(\{[\s\S]*reason:\s*"automatic"[\s\S]*\}\)\) return/);
+  assert.match(errorHandler, /setPlaybackError\(PLAYBACK_CONNECTION_ERROR\)/);
 });
 
 test("servidor preserva conclusao e nao aborta streaming depois dos cabecalhos", () => {

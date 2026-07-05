@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   advanceAudioRetryState,
   buildAudioRetrySource,
+  resolveInterruptedAudioRetry,
   shouldRetryMediaError,
   type AudioRetryState,
 } from "@/lib/audio-player-retry";
@@ -212,16 +213,17 @@ export function AudioPlayer({
     if (!audio) return;
     if (pendingRetryRef.current) return;
 
+    if (playbackError || audio.error) {
+      setKaraokeMode(playMode === "karaoke");
+      beginAudioReload({
+        reason: "manual",
+        position: audio.currentTime,
+        shouldResume: true,
+      });
+      return;
+    }
+
     if (audio.paused) {
-      if (playbackError || audio.error) {
-        setKaraokeMode(playMode === "karaoke");
-        beginAudioReload({
-          reason: "manual",
-          position: audio.currentTime,
-          shouldResume: true,
-        });
-        return;
-      }
       if (audio.currentTime < startOffset || (audio.currentTime === 0 && (initialPosition > 0 || startOffset > 0))) {
         audio.currentTime = startOffset + initialPosition;
       }
@@ -502,19 +504,24 @@ export function AudioPlayer({
           }}
           onError={(event) => {
             const audio = event.currentTarget;
+            const interruptedRetry = resolveInterruptedAudioRetry({
+              pendingRetry: pendingRetryRef.current,
+              currentPosition: audio.currentTime,
+              desiredPlayback: desiredPlaybackRef.current,
+            });
+            pendingRetryRef.current = null;
+
             if (shouldRetryMediaError({
               errorCode: audio.error?.code ?? null,
               retryCount: audioRetryStateRef.current.automaticRetryCount,
             })) {
-              beginAudioReload({
+              if (beginAudioReload({
                 reason: "automatic",
-                position: audio.currentTime,
-                shouldResume: desiredPlaybackRef.current,
-              });
-              return;
+                position: interruptedRetry.position,
+                shouldResume: interruptedRetry.shouldResume,
+              })) return;
             }
 
-            pendingRetryRef.current = null;
             desiredPlaybackRef.current = false;
             playbackActiveRef.current = false;
             setPlaying(false);

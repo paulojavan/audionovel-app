@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   advanceAudioRetryState,
   buildAudioRetrySource,
+  resolveInterruptedAudioRetry,
   shouldRetryMediaError,
 } from "./audio-player-retry";
 
@@ -60,4 +61,26 @@ test("manual reload advances the source revision and restores automatic allowanc
 
   const automatic = advanceAudioRetryState({ state: manual, reason: "automatic" });
   assert.deepEqual(automatic, { sourceRevision: 3, automaticRetryCount: 1 });
+});
+
+test("an interrupted pending reload keeps its original position and resume intent", () => {
+  assert.deepEqual(
+    resolveInterruptedAudioRetry({
+      pendingRetry: { position: 42, shouldResume: true },
+      currentPosition: 0,
+      desiredPlayback: false,
+    }),
+    { position: 42, shouldResume: true },
+  );
+});
+
+test("a new interruption captures the current player position and intent", () => {
+  assert.deepEqual(
+    resolveInterruptedAudioRetry({
+      pendingRetry: null,
+      currentPosition: 18,
+      desiredPlayback: true,
+    }),
+    { position: 18, shouldResume: true },
+  );
 });
