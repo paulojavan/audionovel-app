@@ -22,6 +22,37 @@ export function isTransientPrismaSessionError(error: unknown): boolean {
   return Boolean(code && TRANSIENT_PRISMA_SESSION_CODES.has(code));
 }
 
+export function logSessionDatabaseFailure({
+  error,
+  operation,
+  graceApplied,
+  remainingMs,
+  now = Date.now(),
+  write = console.warn,
+}: {
+  error: unknown;
+  operation: "device_session_validation" | "user_state_refresh";
+  graceApplied: boolean;
+  remainingMs: number;
+  now?: number;
+  write?: (line: string) => void;
+}): void {
+  const remainingGraceMs = Number.isFinite(remainingMs)
+    ? Math.min(Math.max(remainingMs, 0), Number.MAX_SAFE_INTEGER)
+    : 0;
+
+  write(
+    JSON.stringify({
+      event: "auth_database_failure",
+      timestamp: new Date(now).toISOString(),
+      operation,
+      prismaCode: getPrismaErrorCode(error),
+      graceApplied,
+      remainingGraceMs,
+    }),
+  );
+}
+
 export function evaluateSessionDatabaseGrace({
   now,
   lastValidatedAt,

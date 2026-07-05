@@ -5,6 +5,7 @@ import {
   evaluateSessionDatabaseGrace,
   getPrismaErrorCode,
   isTransientPrismaSessionError,
+  logSessionDatabaseFailure,
 } from "./auth-session-grace";
 
 test("classifies exactly the known transient Prisma session failures", () => {
@@ -86,4 +87,73 @@ test("denies grace at exactly five minutes and clamps remaining time to zero", (
     }),
     { allowed: false, remainingMs: 0 },
   );
+});
+
+test("logs only sanitized structured session database failure fields", () => {
+  const lines: string[] = [];
+  const now = Date.parse("2026-07-05T10:00:00Z");
+  const error = {
+    code: "P2024",
+    message:
+      "Timed out connecting to postgresql://admin:secret@db.example.com/app",
+    meta: {
+      query: 'SELECT * FROM "User" WHERE id = \'user-123\'',
+      email: "reader@example.com",
+      sessionToken: "session-secret",
+    },
+  };
+
+  logSessionDatabaseFailure({
+    error,
+    operation: "device_session_validation",
+    graceApplied: true,
+    remainingMs: 42_000,
+    now,
+    write: (line) => lines.push(line),
+  });
+
+  assert.equal(lines.length, 1);
+  assert.deepEqual(JSON.parse(lines[0]), {
+    event: "auth_database_failure",
+    timestamp: "2026-07-05T10:00:00.000Z",
+    operation: "device_session_validation",
+    prismaCode: "P2024",
+    graceApplied: true,
+    remainingGraceMs: 42_000,
+  });
+
+  for (const secret of [
+    "postgresql://",
+    "admin:secret",
+    "SELECT",
+    "user-123",
+    "reader@example.com",
+    "session-secret",
+  ]) {
+    assert.equal(lines[0].includes(secret), false, secret);
+  }
+});
+
+test("logs invalid remaining grace metrics as zero", () => {
+  for (const remainingMs of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    -1,
+  ]) {
+    const lines: string[] = [];
+
+    logSessionDatabaseFailure({
+      error: new Error("database unavailable"),
+      operation: "user_state_refresh",
+      graceApplied: false,
+      remainingMs,
+      now: Date.parse("2026-07-05T10:00:00Z"),
+      write: (line) => lines.push(line),
+    });
+
+    assert.equal(lines.length, 1);
+    assert.equal(JSON.parse(lines[0]).remainingGraceMs, 0);
+    assert.equal(lines[0].includes('"remainingGraceMs":null'), false);
+  }
 });
