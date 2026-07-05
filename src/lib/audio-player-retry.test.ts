@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAudioRetrySource, shouldRetryMediaError } from "./audio-player-retry";
+import {
+  advanceAudioRetryState,
+  buildAudioRetrySource,
+  shouldRetryMediaError,
+} from "./audio-player-retry";
 
 test("retries one network or decode media failure", () => {
   assert.equal(shouldRetryMediaError({ errorCode: 2, retryCount: 0 }), true);
@@ -34,4 +38,26 @@ test("adds streamRetry to a source without an existing query", () => {
     buildAudioRetrySource("/api/chapters/chapter-1/audio#player", 1),
     "/api/chapters/chapter-1/audio?streamRetry=1#player",
   );
+});
+
+test("preserves absolute and protocol-relative sources", () => {
+  assert.equal(
+    buildAudioRetrySource("https://media.example/audio?id=1#player", 2),
+    "https://media.example/audio?id=1&streamRetry=2#player",
+  );
+  assert.equal(
+    buildAudioRetrySource("//media.example/audio?streamRetry=1&streamRetry=8#player", 2),
+    "//media.example/audio?streamRetry=2#player",
+  );
+});
+
+test("manual reload advances the source revision and restores automatic allowance", () => {
+  const manual = advanceAudioRetryState({
+    state: { sourceRevision: 1, automaticRetryCount: 1 },
+    reason: "manual",
+  });
+  assert.deepEqual(manual, { sourceRevision: 2, automaticRetryCount: 0 });
+
+  const automatic = advanceAudioRetryState({ state: manual, reason: "automatic" });
+  assert.deepEqual(automatic, { sourceRevision: 3, automaticRetryCount: 1 });
 });

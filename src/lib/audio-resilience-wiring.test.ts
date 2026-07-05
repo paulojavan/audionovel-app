@@ -56,10 +56,25 @@ test("player redefine a tentativa apenas quando a origem muda", () => {
   );
   assert.match(
     player,
-    /useEffect\(\(\) => \{[\s\S]*retryCountRef\.current = 0;[\s\S]*\}, \[src\]\)/,
+    /useEffect\(\(\) => \{[\s\S]*audioRetryStateRef\.current = \{[\s\S]*automaticRetryCount:\s*0,[\s\S]*\};[\s\S]*\}, \[src\]\)/,
   );
   const metadataHandler = player.match(/onLoadedMetadata=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
-  assert.doesNotMatch(metadataHandler, /retryCountRef\.current = 0/);
+  assert.doesNotMatch(metadataHandler, /automaticRetryCount:\s*0/);
+});
+
+test("player registra intencao antes de play e nao a apaga em pause induzido por erro", () => {
+  assert.match(player, /desiredPlaybackRef\.current = true;[\s\S]*?\.play\(\)/);
+  assert.match(player, /shouldResume:\s*desiredPlaybackRef\.current/);
+  const pauseHandler = player.match(/onPause=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+  assert.doesNotMatch(pauseHandler, /desiredPlaybackRef\.current = false/);
+});
+
+test("play manual depois de erro inicia nova revisao sem sobrepor recarga pendente", () => {
+  assert.match(player, /if \(pendingRetryRef\.current\) return/);
+  assert.match(player, /playbackError \|\| audio\.error/);
+  assert.match(player, /reason:\s*"manual"/);
+  assert.match(player, /advanceAudioRetryState/);
+  assert.match(player, /role="alert"/);
 });
 
 test("servidor preserva conclusao e nao aborta streaming depois dos cabecalhos", () => {

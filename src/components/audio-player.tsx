@@ -2,7 +2,12 @@
 
 import { Gauge, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildAudioRetrySource, shouldRetryMediaError } from "@/lib/audio-player-retry";
+import {
+  advanceAudioRetryState,
+  buildAudioRetrySource,
+  shouldRetryMediaError,
+  type AudioRetryState,
+} from "@/lib/audio-player-retry";
 import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import {
   getActiveChapterPartIndex,
@@ -53,7 +58,11 @@ export function AudioPlayer({
   const completionSentRef = useRef(false);
   const playbackStartedRef = useRef(false);
   const playbackActiveRef = useRef(false);
-  const retryCountRef = useRef(0);
+  const desiredPlaybackRef = useRef(false);
+  const audioRetryStateRef = useRef<AudioRetryState>({
+    sourceRevision: 0,
+    automaticRetryCount: 0,
+  });
   const pendingRetryRef = useRef<{ position: number; shouldResume: boolean } | null>(null);
   const [audioSource, setAudioSource] = useState(src);
   const [sourceProp, setSourceProp] = useState(src);
@@ -123,9 +132,13 @@ export function AudioPlayer({
   ][karaokeFontLevel];
 
   useEffect(() => {
-    retryCountRef.current = 0;
+    audioRetryStateRef.current = {
+      sourceRevision: 0,
+      automaticRetryCount: 0,
+    };
     pendingRetryRef.current = null;
     playbackActiveRef.current = false;
+    desiredPlaybackRef.current = false;
   }, [src]);
 
   const saveProgress = useCallback(async ({
@@ -169,11 +182,46 @@ export function AudioPlayer({
     }
   }, [chapterId, duration, resolvedDuration, startOffset]);
 
+  function beginAudioReload({
+    reason,
+    position,
+    shouldResume,
+  }: {
+    reason: "automatic" | "manual";
+    position: number;
+    shouldResume: boolean;
+  }) {
+    if (pendingRetryRef.current) return false;
+
+    const nextRetryState = advanceAudioRetryState({
+      state: audioRetryStateRef.current,
+      reason,
+    });
+    audioRetryStateRef.current = nextRetryState;
+    pendingRetryRef.current = { position, shouldResume };
+    desiredPlaybackRef.current = shouldResume;
+    setPlaybackError("");
+    setAudioSource(
+      buildAudioRetrySource(src, nextRetryState.sourceRevision),
+    );
+    return true;
+  }
+
   function toggle() {
     const audio = audioRef.current;
     if (!audio) return;
+    if (pendingRetryRef.current) return;
 
     if (audio.paused) {
+      if (playbackError || audio.error) {
+        setKaraokeMode(playMode === "karaoke");
+        beginAudioReload({
+          reason: "manual",
+          position: audio.currentTime,
+          shouldResume: true,
+        });
+        return;
+      }
       if (audio.currentTime < startOffset || (audio.currentTime === 0 && (initialPosition > 0 || startOffset > 0))) {
         audio.currentTime = startOffset + initialPosition;
       }
@@ -182,18 +230,21 @@ export function AudioPlayer({
       audio.playbackRate = playbackRate;
       audio.volume = volume;
       audio.muted = muted;
+      desiredPlaybackRef.current = true;
       audio
         .play()
         .then(() => {
           setPlaying(true);
         })
         .catch(() => {
+          desiredPlaybackRef.current = false;
           playbackActiveRef.current = false;
           setPlaying(false);
           setKaraokeMode(false);
           setPlaybackError(PLAYBACK_CONNECTION_ERROR);
         });
     } else {
+      desiredPlaybackRef.current = false;
       audio.pause();
       setPlaying(false);
       void saveProgress({ force: true });
@@ -232,10 +283,12 @@ export function AudioPlayer({
     audio.playbackRate = playbackRate;
     audio.volume = volume;
     audio.muted = muted;
+    desiredPlaybackRef.current = true;
     audio
       .play()
       .then(() => setPlaying(true))
       .catch(() => {
+        desiredPlaybackRef.current = false;
         playbackActiveRef.current = false;
         setPlaying(false);
         setKaraokeMode(false);
@@ -303,6 +356,7 @@ export function AudioPlayer({
     if (activePart.endSec >= startOffset + progressDuration) return;
     if (absoluteCurrent < activePart.endSec - 0.25) return;
 
+    desiredPlaybackRef.current = false;
     audio.pause();
     audio.currentTime = activePart.endSec;
     setPlaying(false);
@@ -346,9 +400,18 @@ export function AudioPlayer({
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ["play", () => {
         const audio = audioRef.current;
-        if (audio) void audio.play();
+        if (audio) {
+          desiredPlaybackRef.current = true;
+          void audio.play().catch(() => {
+            desiredPlaybackRef.current = false;
+            setPlaybackError(PLAYBACK_CONNECTION_ERROR);
+          });
+        }
       }],
-      ["pause", () => audioRef.current?.pause()],
+      ["pause", () => {
+        desiredPlaybackRef.current = false;
+        audioRef.current?.pause();
+      }],
       ["seekbackward", (details) => seekBy(-(details.seekOffset ?? 10))],
       ["seekforward", (details) => seekBy(details.seekOffset ?? 10)],
     ];
@@ -393,7 +456,9 @@ export function AudioPlayer({
             setPlaybackError("");
             pendingRetryRef.current = null;
             if (pendingRetry?.shouldResume) {
+              desiredPlaybackRef.current = true;
               event.currentTarget.play().catch(() => {
+                desiredPlaybackRef.current = false;
                 playbackActiveRef.current = false;
                 setPlaying(false);
                 setKaraokeMode(false);
@@ -418,6 +483,7 @@ export function AudioPlayer({
           onPlay={() => {
             playbackStartedRef.current = true;
             playbackActiveRef.current = true;
+            desiredPlaybackRef.current = true;
             setPlaying(true);
             if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
           }}
@@ -427,6 +493,7 @@ export function AudioPlayer({
             if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
           }}
           onEnded={() => {
+            desiredPlaybackRef.current = false;
             playbackActiveRef.current = false;
             setPlaying(false);
             setKaraokeMode(false);
@@ -437,19 +504,18 @@ export function AudioPlayer({
             const audio = event.currentTarget;
             if (shouldRetryMediaError({
               errorCode: audio.error?.code ?? null,
-              retryCount: retryCountRef.current,
+              retryCount: audioRetryStateRef.current.automaticRetryCount,
             })) {
-              const nextRetryCount = retryCountRef.current + 1;
-              pendingRetryRef.current = {
+              beginAudioReload({
+                reason: "automatic",
                 position: audio.currentTime,
-                shouldResume: playbackActiveRef.current,
-              };
-              retryCountRef.current = nextRetryCount;
-              setAudioSource(buildAudioRetrySource(src, nextRetryCount));
+                shouldResume: desiredPlaybackRef.current,
+              });
               return;
             }
 
             pendingRetryRef.current = null;
+            desiredPlaybackRef.current = false;
             playbackActiveRef.current = false;
             setPlaying(false);
             setKaraokeMode(false);
@@ -559,7 +625,7 @@ export function AudioPlayer({
             </p>
           </div>
         </div>
-        {playbackError ? <p className="rounded-md bg-red-500/10 p-3 text-sm text-red-200">{playbackError}</p> : null}
+        {playbackError ? <p role="alert" className="rounded-md bg-red-500/10 p-3 text-sm text-red-200">{playbackError}</p> : null}
 
         {playing && playMode === "page" ? (
           <div className="grid gap-3 rounded-md bg-black/30 p-3">
