@@ -15,7 +15,9 @@ export type CreateResumableAudioStreamOptions = {
   openRange: (headers: Headers, signal?: AbortSignal) => Promise<Response>;
   maxContinuations?: number;
   downstreamSignal?: AbortSignal;
-  onFailure?: (failure: ResumableAudioStreamFailure) => void;
+  onFailure?: (
+    failure: ResumableAudioStreamFailure,
+  ) => void | Promise<void>;
 };
 
 function parseSafeInteger(value: string): number | null {
@@ -214,7 +216,16 @@ export function createResumableAudioStream({
     const reader = activeReader;
     activeReader = null;
     if (reader) {
-      void reader.cancel(reason).catch(() => undefined);
+      void reader
+        .cancel(reason)
+        .catch(() => undefined)
+        .finally(() => {
+          try {
+            reader.releaseLock();
+          } catch {
+            // The reader may still have a pending operation in another runtime.
+          }
+        });
     }
   }
 
@@ -269,10 +280,13 @@ export function createResumableAudioStream({
 
       continuationAttempts += 1;
       try {
-        onFailure?.({
+        const observation = onFailure?.({
           attempt: continuationAttempts,
           byteOffset,
         });
+        if (observation) {
+          void Promise.resolve(observation).catch(() => undefined);
+        }
       } catch {
         // Observability must not alter stream delivery.
       }
@@ -344,10 +358,17 @@ export function createResumableAudioStream({
       }
 
       let result: ReadableStreamReadResult<Uint8Array>;
+      const reader = activeReader!;
       try {
-        result = await activeReader!.read();
-      } catch {
+        result = await reader.read();
+      } catch (error) {
         activeReader = null;
+        await reader.cancel(error).catch(() => undefined);
+        try {
+          reader.releaseLock();
+        } catch {
+          // Best-effort cleanup after a failed read.
+        }
         if (terminated) return;
         continue;
       }
@@ -355,6 +376,11 @@ export function createResumableAudioStream({
 
       if (result.done) {
         activeReader = null;
+        try {
+          reader.releaseLock();
+        } catch {
+          // A completed read normally releases cleanly.
+        }
         const activeResponseEndedEarly =
           activeExpectedLength !== null &&
           activeDeliveredBytes < activeExpectedLength;
@@ -413,12 +439,21 @@ export function createResumableAudioStream({
     start(streamController) {
       controller = streamController;
       try {
+        activeReader = initialResponse.body?.getReader() ?? null;
         if (
           !Number.isSafeInteger(maxContinuations) ||
           maxContinuations < 0
         ) {
           throw new TypeError(
             "maxContinuations must be a nonnegative safe integer.",
+          );
+        }
+        if (
+          initialResponse.status === 200 &&
+          initialResponse.headers.has("Content-Range")
+        ) {
+          throw new TypeError(
+            "Audio 200 response must not include Content-Range.",
           );
         }
 
@@ -451,7 +486,6 @@ export function createResumableAudioStream({
         strongEtag = getStrongEtag(initialResponse);
         activeExpectedLength = contentRangeLength ?? expectedLength;
         activeExpectedFromContentRange = contentRangeLength !== null;
-        activeReader = initialResponse.body?.getReader() ?? null;
 
         abortListener = abort;
         downstreamSignal?.addEventListener("abort", abortListener, {

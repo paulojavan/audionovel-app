@@ -530,6 +530,58 @@ test("rejects a 206 whose Content-Length contradicts its Content-Range extent", 
   await assert.rejects(readBytes(stream), /Content-Length.*Content-Range/i);
 });
 
+test("rejects and cancels a 200 response carrying Content-Range before streaming bytes", async () => {
+  let cancelled = false;
+  let attempts = 0;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([3, 4]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Range": "bytes 2-3/4",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    async openRange() {
+      attempts += 1;
+      throw new Error("must not open a continuation");
+    },
+  });
+  const reader = stream.getReader();
+
+  await assert.rejects(reader.read(), /200.*Content-Range/i);
+  assert.equal(cancelled, true);
+  assert.equal(attempts, 0);
+});
+
+test("cancels the initial body when synchronous option validation fails", async () => {
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>({
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(body),
+    requestRange: null,
+    maxContinuations: -1,
+    async openRange() {
+      throw new Error("must not open a continuation");
+    },
+  });
+
+  await assert.rejects(readBytes(stream), /maxContinuations/i);
+  assert.equal(cancelled, true);
+});
+
 test("rejects invalid continuation status, start, ETag, and total without a second attempt", async () => {
   const cases = [
     {
@@ -628,6 +680,76 @@ test("bounds continuation attempts exactly at maxContinuations", async () => {
     { attempt: 1, byteOffset: 1 },
     { attempt: 2, byteOffset: 1 },
   ]);
+});
+
+test("consumes an asynchronous onFailure rejection without interrupting delivery", async () => {
+  const observationError = new Error("metrics backend unavailable");
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  process.on("unhandledRejection", onUnhandled);
+
+  try {
+    const stream = createResumableAudioStream({
+      initialResponse: new Response(
+        streamFromChunks([new Uint8Array([1])], { errorAfter: 1 }),
+        {
+          headers: {
+            "Content-Length": "2",
+            ETag: '"audio-v1"',
+          },
+        },
+      ),
+      requestRange: null,
+      async openRange() {
+        return new Response(new Uint8Array([2]), {
+          status: 206,
+          headers: {
+            "Content-Range": "bytes 1-1/2",
+            ETag: '"audio-v1"',
+          },
+        });
+      },
+      async onFailure() {
+        throw observationError;
+      },
+    });
+
+    assert.deepEqual(await readBytes(stream), [1, 2]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.removeListener("unhandledRejection", onUnhandled);
+  }
+});
+
+test("releases a failed reader lock before continuing", async () => {
+  const initialBody = streamFromChunks(
+    [new Uint8Array([1])],
+    { errorAfter: 1 },
+  );
+  const stream = createResumableAudioStream({
+    initialResponse: new Response(initialBody, {
+      headers: {
+        "Content-Length": "2",
+        ETag: '"audio-v1"',
+      },
+    }),
+    requestRange: null,
+    async openRange() {
+      return new Response(new Uint8Array([2]), {
+        status: 206,
+        headers: {
+          "Content-Range": "bytes 1-1/2",
+          ETag: '"audio-v1"',
+        },
+      });
+    },
+  });
+
+  assert.deepEqual(await readBytes(stream), [1, 2]);
+  assert.equal(initialBody.locked, false);
 });
 
 test("rejects a continuation chunk that would exceed the original Content-Length", async () => {
