@@ -31,10 +31,20 @@ export function evaluateSessionDatabaseGrace({
   lastValidatedAt: number | null;
   sessionInvalid: boolean;
 }): { allowed: boolean; remainingMs: number } {
-  if (sessionInvalid || lastValidatedAt === null || !Number.isFinite(lastValidatedAt)) {
+  if (
+    sessionInvalid ||
+    !Number.isFinite(now) ||
+    lastValidatedAt === null ||
+    !Number.isFinite(lastValidatedAt)
+  ) {
     return { allowed: false, remainingMs: 0 };
   }
 
-  const remainingMs = Math.max(0, SESSION_DATABASE_GRACE_MS - (now - lastValidatedAt));
+  const elapsedMs = now - lastValidatedAt;
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return { allowed: false, remainingMs: 0 };
+  }
+
+  const remainingMs = Math.max(0, SESSION_DATABASE_GRACE_MS - elapsedMs);
   return { allowed: remainingMs > 0, remainingMs };
 }

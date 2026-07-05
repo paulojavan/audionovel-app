@@ -44,6 +44,28 @@ test("denies grace without a finite validation timestamp", () => {
   }
 });
 
+test("denies grace when the current timestamp is not finite", () => {
+  for (const now of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.deepEqual(
+      evaluateSessionDatabaseGrace({ now, lastValidatedAt: 1, sessionInvalid: false }),
+      { allowed: false, remainingMs: 0 },
+    );
+  }
+});
+
+test("denies grace when the validation timestamp is in the future", () => {
+  const now = Date.parse("2026-07-05T10:00:00Z");
+
+  assert.deepEqual(
+    evaluateSessionDatabaseGrace({
+      now,
+      lastValidatedAt: now + 1,
+      sessionInvalid: false,
+    }),
+    { allowed: false, remainingMs: 0 },
+  );
+});
+
 test("denies grace for an invalid session", () => {
   const now = Date.parse("2026-07-05T10:00:00Z");
 
