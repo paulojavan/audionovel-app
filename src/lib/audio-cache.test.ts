@@ -25,7 +25,7 @@ test("player online transmite pelo proxy sem baixar o audio inteiro ao montar", 
   const playerSource = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
   assert.doesNotMatch(playerSource, /getEncryptedAudioUrl\(chapterId, src\)/);
   assert.doesNotMatch(playerSource, /setAudioSrc/);
-  assert.match(playerSource, /src=\{src\}/);
+  assert.match(playerSource, /src=\{audioSource\}/);
 });
 
 test("download de audio retoma do byte recebido quando a conexao cai", async () => {

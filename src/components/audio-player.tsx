@@ -2,6 +2,7 @@
 
 import { Gauge, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildAudioRetrySource, shouldRetryMediaError } from "@/lib/audio-player-retry";
 import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import {
   getActiveChapterPartIndex,
@@ -16,6 +17,9 @@ type Cue = {
   end: number;
   text: string;
 };
+
+const PLAYBACK_CONNECTION_ERROR =
+  "Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.";
 
 export function AudioPlayer({
   chapterId,
@@ -48,6 +52,11 @@ export function AudioPlayer({
   const lastProgressPayloadRef = useRef("");
   const completionSentRef = useRef(false);
   const playbackStartedRef = useRef(false);
+  const playbackActiveRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const pendingRetryRef = useRef<{ position: number; shouldResume: boolean } | null>(null);
+  const [audioSource, setAudioSource] = useState(src);
+  const [sourceProp, setSourceProp] = useState(src);
   const [playing, setPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
@@ -59,6 +68,11 @@ export function AudioPlayer({
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
   const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
+
+  if (sourceProp !== src) {
+    setSourceProp(src);
+    setAudioSource(src);
+  }
 
   const activeIndex = useMemo(() => {
     if (!transcript.length) return -1;
@@ -107,6 +121,12 @@ export function AudioPlayer({
       nearby: "clamp(1.3rem, 2.7vw, 2.15rem)",
     },
   ][karaokeFontLevel];
+
+  useEffect(() => {
+    retryCountRef.current = 0;
+    pendingRetryRef.current = null;
+    playbackActiveRef.current = false;
+  }, [src]);
 
   const saveProgress = useCallback(async ({
     completed = false,
@@ -168,9 +188,10 @@ export function AudioPlayer({
           setPlaying(true);
         })
         .catch(() => {
+          playbackActiveRef.current = false;
           setPlaying(false);
           setKaraokeMode(false);
-          setPlaybackError("Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.");
+          setPlaybackError(PLAYBACK_CONNECTION_ERROR);
         });
     } else {
       audio.pause();
@@ -215,9 +236,10 @@ export function AudioPlayer({
       .play()
       .then(() => setPlaying(true))
       .catch(() => {
+        playbackActiveRef.current = false;
         setPlaying(false);
         setKaraokeMode(false);
-        setPlaybackError("Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.");
+        setPlaybackError(PLAYBACK_CONNECTION_ERROR);
       });
   }, [muted, playbackRate, playMode, startOffset, volume]);
 
@@ -356,17 +378,28 @@ export function AudioPlayer({
       <div id="chapter-player" className="grid gap-5 rounded-lg bg-[#06272b] p-4">
         <audio
           ref={audioRef}
-          src={src}
+          src={audioSource}
           preload="metadata"
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
+            const pendingRetry = pendingRetryRef.current;
             setResolvedDuration(duration || audioDuration);
-            if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
+            if (pendingRetry) event.currentTarget.currentTime = pendingRetry.position;
+            else if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
             else if (initialPosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialPosition;
             event.currentTarget.volume = volume;
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
             setPlaybackError("");
+            pendingRetryRef.current = null;
+            if (pendingRetry?.shouldResume) {
+              event.currentTarget.play().catch(() => {
+                playbackActiveRef.current = false;
+                setPlaying(false);
+                setKaraokeMode(false);
+                setPlaybackError(PLAYBACK_CONNECTION_ERROR);
+              });
+            }
           }}
           onTimeUpdate={(event) => {
             const relativePosition = Math.max(0, event.currentTarget.currentTime - startOffset);
@@ -384,18 +417,43 @@ export function AudioPlayer({
           }}
           onPlay={() => {
             playbackStartedRef.current = true;
+            playbackActiveRef.current = true;
             setPlaying(true);
             if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
           }}
           onPause={() => {
+            playbackActiveRef.current = false;
             setPlaying(false);
             if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
           }}
           onEnded={() => {
+            playbackActiveRef.current = false;
             setPlaying(false);
             setKaraokeMode(false);
             setCurrent(progressDuration);
             void saveProgress({ completed: true, force: true, keepalive: true });
+          }}
+          onError={(event) => {
+            const audio = event.currentTarget;
+            if (shouldRetryMediaError({
+              errorCode: audio.error?.code ?? null,
+              retryCount: retryCountRef.current,
+            })) {
+              const nextRetryCount = retryCountRef.current + 1;
+              pendingRetryRef.current = {
+                position: audio.currentTime,
+                shouldResume: playbackActiveRef.current,
+              };
+              retryCountRef.current = nextRetryCount;
+              setAudioSource(buildAudioRetrySource(src, nextRetryCount));
+              return;
+            }
+
+            pendingRetryRef.current = null;
+            playbackActiveRef.current = false;
+            setPlaying(false);
+            setKaraokeMode(false);
+            setPlaybackError(PLAYBACK_CONNECTION_ERROR);
           }}
         />
 

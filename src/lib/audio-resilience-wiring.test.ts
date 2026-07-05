@@ -13,6 +13,10 @@ const audioUpstream = readFileSync(
   join(process.cwd(), "src", "lib", "audio-upstream.ts"),
   "utf8",
 );
+const playerRetry = readFileSync(
+  join(process.cwd(), "src", "lib", "audio-player-retry.ts"),
+  "utf8",
+);
 
 test("troca para karaoke fica bloqueada durante reproducao em modo pagina", () => {
   assert.match(player, /disabled=\{playing && playMode === "page"\}/);
@@ -31,6 +35,31 @@ test("player salva checkpoints e conclusao durante o ciclo em segundo plano", ()
 test("player integra controles nativos quando Media Session esta disponivel", () => {
   assert.match(player, /navigator\.mediaSession/);
   assert.match(player, /new MediaMetadata/);
+});
+
+test("player tenta uma unica recarga retomavel sem baixar o audio online inteiro", () => {
+  assert.match(player, /shouldRetryMediaError/);
+  assert.match(player, /buildAudioRetrySource/);
+  assert.match(player, /const \[audioSource,\s*setAudioSource\] = useState\(src\)/);
+  assert.match(player, /src=\{audioSource\}/);
+  assert.match(player, /playbackActiveRef/);
+  assert.match(player, /pendingRetryRef/);
+  assert.match(player, /onError=/);
+  assert.doesNotMatch(player, /downloadAudioBuffer|decryptAudio|audio-cache/);
+  assert.match(playerRetry, /searchParams\.set\("streamRetry"/);
+});
+
+test("player redefine a tentativa apenas quando a origem muda", () => {
+  assert.match(
+    player,
+    /if \(sourceProp !== src\) \{[\s\S]*setAudioSource\(src\);[\s\S]*\}/,
+  );
+  assert.match(
+    player,
+    /useEffect\(\(\) => \{[\s\S]*retryCountRef\.current = 0;[\s\S]*\}, \[src\]\)/,
+  );
+  const metadataHandler = player.match(/onLoadedMetadata=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+  assert.doesNotMatch(metadataHandler, /retryCountRef\.current = 0/);
 });
 
 test("servidor preserva conclusao e nao aborta streaming depois dos cabecalhos", () => {
