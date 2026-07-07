@@ -1,12 +1,20 @@
 import Link from "next/link";
+import { getConfirmedPaymentWhere, getPendingPaymentWhere } from "@/lib/admin-payments";
 import { ADMIN_DASHBOARD_PAYMENT_SELECT, ADMIN_TOP_NOVEL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
-  const [stats, topNovels, recentPayments] = await Promise.all([
+  const [stats, topNovels, recentPayments, pendingPaymentEvents] = await Promise.all([
     getAdminDashboardStats(),
     prisma.novel.findMany({ take: 5, orderBy: { viewCount: "desc" }, select: ADMIN_TOP_NOVEL_SELECT }),
     prisma.paymentTransaction.findMany({
+      where: getConfirmedPaymentWhere(),
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      select: ADMIN_DASHBOARD_PAYMENT_SELECT,
+    }),
+    prisma.paymentTransaction.findMany({
+      where: getPendingPaymentWhere(),
       take: 5,
       orderBy: { createdAt: "desc" },
       select: ADMIN_DASHBOARD_PAYMENT_SELECT,
@@ -46,7 +54,7 @@ export default async function AdminDashboardPage() {
 
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-2xl font-bold">Pagamentos recentes</h2>
+            <h2 className="text-2xl font-bold">Vendas confirmadas</h2>
             <Link href="/admin/financeiro" className="text-sm font-bold text-[#18b7bd]">
               Ver todos
             </Link>
@@ -62,7 +70,28 @@ export default async function AdminDashboardPage() {
                 </div>
               ))
             ) : (
-              <p className="p-4 text-zinc-400">Nenhum pagamento registrado ainda.</p>
+              <p className="p-4 text-zinc-400">Nenhuma venda confirmada ainda.</p>
+            )}
+          </div>
+
+          <div className="mb-3 mt-6 flex items-center justify-between gap-3">
+            <h2 className="text-2xl font-bold">Pendencias recentes</h2>
+            <Link href="/admin/financeiro" className="text-sm font-bold text-[#18b7bd]">
+              Ver todos
+            </Link>
+          </div>
+          <div className="overflow-hidden rounded-md border border-white/10 bg-[#06272b]">
+            {pendingPaymentEvents.length ? (
+              pendingPaymentEvents.map((payment) => (
+                <div key={payment.id} className="border-b border-white/10 p-3 text-sm last:border-b-0">
+                  <p className="font-bold">{payment.user?.email ?? "Sem usuario"}</p>
+                  <p className="mt-1 text-zinc-400">
+                    {payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)} - {payment.status}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-zinc-400">Nenhuma pendencia registrada.</p>
             )}
           </div>
         </div>

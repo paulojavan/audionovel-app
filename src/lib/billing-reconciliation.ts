@@ -27,6 +27,17 @@ export function resolveApprovedPaymentReference(
   return null;
 }
 
+export function resolvePaymentEventUserId(
+  payment: Pick<MercadoPagoPaymentResponse, "external_reference">,
+  checkoutIntent: Pick<ApprovedPaymentReference, "checkoutIntentId" | "userId"> | { id: string; userId: string } | null,
+) {
+  const checkoutIntentId = payment.external_reference?.trim();
+  if (!checkoutIntentId || !checkoutIntent) return null;
+
+  const intentId = "checkoutIntentId" in checkoutIntent ? checkoutIntent.checkoutIntentId : checkoutIntent.id;
+  return intentId === checkoutIntentId ? checkoutIntent.userId : null;
+}
+
 export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymentResponse, options: ApplyPaymentOptions = {}) {
   const reference = await resolvePaymentReference(payment, options.expectedUserId);
   if (!reference) return { status: "ignored" as const };

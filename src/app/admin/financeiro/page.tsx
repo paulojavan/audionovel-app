@@ -1,3 +1,4 @@
+import { getConfirmedPaymentWhere, getPendingPaymentWhere } from "@/lib/admin-payments";
 import { ADMIN_PAYMENT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getFinanceMonthPeriod } from "@/lib/finance-period";
@@ -10,9 +11,15 @@ export default async function AdminFinancePage({
   const { month } = await searchParams;
   const period = getFinanceMonthPeriod(month);
   const createdAt = { gte: period.start, lt: period.end };
-  const [payments, stats] = await Promise.all([
+  const [payments, pendingPayments, stats] = await Promise.all([
     prisma.paymentTransaction.findMany({
-      where: { createdAt },
+      where: getConfirmedPaymentWhere(createdAt),
+      take: 100,
+      orderBy: { createdAt: "desc" },
+      select: ADMIN_PAYMENT_SELECT,
+    }),
+    prisma.paymentTransaction.findMany({
+      where: getPendingPaymentWhere(createdAt),
       take: 100,
       orderBy: { createdAt: "desc" },
       select: ADMIN_PAYMENT_SELECT,
@@ -41,12 +48,12 @@ export default async function AdminFinancePage({
 
       <section className="grid gap-3 sm:grid-cols-3">
         <FinanceCard label="Receita confirmada" value={`R$ ${totalRevenue.toFixed(2)}`} />
-        <FinanceCard label="Pagamentos aprovados" value={stats.succeededCount.toString()} />
-        <FinanceCard label="Outros status" value={stats.failedCount.toString()} />
+        <FinanceCard label="Vendas confirmadas" value={stats.succeededCount.toString()} />
+        <FinanceCard label="Pendencias e outros" value={stats.failedCount.toString()} />
       </section>
 
       <section>
-        <h2 className="mb-3 text-2xl font-bold">Transacoes de {formatMonth(period.month)}</h2>
+        <h2 className="mb-3 text-2xl font-bold">Vendas confirmadas de {formatMonth(period.month)}</h2>
         <div className="overflow-hidden rounded-md border border-white/10 bg-[#06272b]">
           {payments.length ? (
             payments.map((payment) => (
@@ -61,7 +68,28 @@ export default async function AdminFinancePage({
               </div>
             ))
           ) : (
-            <p className="p-4 text-zinc-400">Nenhum pagamento registrado ainda.</p>
+            <p className="p-4 text-zinc-400">Nenhuma venda confirmada neste mes.</p>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-2xl font-bold">Pendencias e tentativas de {formatMonth(period.month)}</h2>
+        <div className="overflow-hidden rounded-md border border-white/10 bg-[#06272b]">
+          {pendingPayments.length ? (
+            pendingPayments.map((payment) => (
+              <div key={payment.id} className="grid gap-2 border-b border-white/10 p-3 text-sm last:border-b-0 md:grid-cols-[1fr_auto_auto_auto]">
+                <span>
+                  <strong>{payment.user?.email ?? "Sem usuario"}</strong>
+                  <span className="block text-zinc-400">{payment.description ?? payment.providerPaymentId ?? payment.providerEventId}</span>
+                </span>
+                <span>{payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)}</span>
+                <span>{payment.status}</span>
+                <span className="text-zinc-400">{payment.createdAt.toLocaleDateString("pt-BR")}</span>
+              </div>
+            ))
+          ) : (
+            <p className="p-4 text-zinc-400">Nenhuma pendencia registrada neste mes.</p>
           )}
         </div>
       </section>

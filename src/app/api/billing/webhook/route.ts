@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
+import { applyApprovedMercadoPagoPayment, resolvePaymentEventUserId } from "@/lib/billing-reconciliation";
 import { getMercadoPagoPayment, verifyMercadoPagoWebhookSignature } from "@/lib/mercado-pago";
 import { prisma } from "@/lib/prisma";
 
@@ -42,10 +42,11 @@ export async function POST(request: Request) {
   const eventId = buildEventId(request.headers.get("x-request-id"), paymentId, payment.status);
 
   if (payment.status !== "approved") {
+    const userId = await getPaymentEventUserId(payment);
     await recordPaymentEvent({
       eventId,
       paymentId,
-      userId: null,
+      userId,
       amountCents: toCents(payment.transaction_amount),
       currency: payment.currency_id ?? "brl",
       status: normalizePaymentStatus(payment.status),
@@ -104,6 +105,18 @@ function normalizePaymentStatus(status: string | undefined) {
   return status.trim().toUpperCase();
 }
 
+async function getPaymentEventUserId(payment: { external_reference?: string }) {
+  const checkoutIntentId = payment.external_reference?.trim();
+  if (!checkoutIntentId) return null;
+
+  const checkoutIntent = await prisma.billingCheckoutIntent.findUnique({
+    where: { id: checkoutIntentId },
+    select: { id: true, userId: true },
+  });
+
+  return resolvePaymentEventUserId(payment, checkoutIntent);
+}
+
 async function recordPaymentEvent({
   eventId,
   paymentId,
@@ -132,6 +145,8 @@ async function recordPaymentEvent({
       status,
       description,
     },
-    update: {},
+    update: {
+      userId: userId ?? undefined,
+    },
   });
 }

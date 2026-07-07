@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveApprovedPaymentReference, validateCheckoutPayment } from "./billing-reconciliation";
+import { resolveApprovedPaymentReference, resolvePaymentEventUserId, validateCheckoutPayment } from "./billing-reconciliation";
 
 test("referencia legada nao pode liberar premium sem intencao local", () => {
   assert.equal(
@@ -30,6 +30,24 @@ test("rejeita pagamento aprovado que pertence a outro usuario", () => {
 test("ignora pagamento pendente ou sem referencia local", () => {
   assert.equal(resolveApprovedPaymentReference({ id: "1", status: "pending" }), null);
   assert.equal(resolveApprovedPaymentReference({ id: "1", status: "approved" }), null);
+});
+
+test("resolve usuario de evento pendente pela intencao de checkout", () => {
+  assert.equal(
+    resolvePaymentEventUserId(
+      { id: "payment-1", status: "pending", external_reference: "checkout_intent_1" },
+      { id: "checkout_intent_1", userId: "user-1" },
+    ),
+    "user-1",
+  );
+  assert.equal(
+    resolvePaymentEventUserId(
+      { id: "payment-1", status: "pending", external_reference: "checkout_intent_1" },
+      { id: "checkout_intent_2", userId: "user-2" },
+    ),
+    null,
+  );
+  assert.equal(resolvePaymentEventUserId({ id: "payment-1", status: "pending" }, null), null);
 });
 
 test("valida valor moeda validade uso e usuario da intencao", () => {
