@@ -5,7 +5,7 @@ import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
 import { getApprovedCheckoutReturnPaymentId } from "@/lib/billing-return";
 import { getMercadoPagoPayment } from "@/lib/mercado-pago";
 import { SUBSCRIPTION_PLAN_SELECT } from "@/lib/page-data-select";
-import { formatPlanInterval, formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
+import { formatPlanPrice, paymentMethodLabels } from "@/lib/plan-utils";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -75,7 +75,7 @@ export default async function SubscriptionsPage({
           <PlanCard
             key={plan.id}
             title={plan.name}
-            price={`${formatPlanPrice(plan.amountCents, plan.currency)} / ${formatPlanInterval(plan.interval)}`}
+            price={formatPlanPrice(plan.amountCents, plan.currency)}
             highlight
             current={isPremium}
             features={[
