@@ -119,7 +119,7 @@ export async function GET(request: Request, context: Context) {
             headers,
             AbortSignal.any([request.signal, continuationSignal]),
           ),
-        maxContinuations: 2,
+        maxContinuations: 12,
         downstreamSignal: request.signal,
         onFailure({ attempt, byteOffset }) {
           console.warn(JSON.stringify({

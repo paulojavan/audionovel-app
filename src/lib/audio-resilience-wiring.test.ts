@@ -117,6 +117,10 @@ test("rota usa stream retomavel e propaga cancelamento", () => {
   );
 });
 
+test("rota permite varias retomadas antes de desistir do audio", () => {
+  assert.match(audioRoute, /maxContinuations:\s*12/);
+});
+
 test("rota preserva respostas Range validas que nao podem ser retomadas", () => {
   assert.match(audioRoute, /isSafeAudioPassThroughResponse\(range,\s*upstream\)/);
   assert.match(
