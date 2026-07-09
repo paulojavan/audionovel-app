@@ -134,6 +134,8 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
           novelTitle={access.chapter.volume.novel.title}
           coverUrl={chapterCoverUrl}
           chapterParts={chapterParts}
+          accountScope={session?.user?.id ?? "anonymous"}
+          nextChapterHref={nextChapter ? `/chapters/${nextChapter.id}` : null}
         />
       )}
       <section className="mt-8">

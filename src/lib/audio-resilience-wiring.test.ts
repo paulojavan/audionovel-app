@@ -9,12 +9,9 @@ const audioRoute = readFileSync(
   join(process.cwd(), "src", "app", "api", "chapters", "[id]", "audio", "route.ts"),
   "utf8",
 );
+const audioCache = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
 const audioUpstream = readFileSync(
   join(process.cwd(), "src", "lib", "audio-upstream.ts"),
-  "utf8",
-);
-const playerRetry = readFileSync(
-  join(process.cwd(), "src", "lib", "audio-player-retry.ts"),
   "utf8",
 );
 
@@ -37,66 +34,51 @@ test("player integra controles nativos quando Media Session esta disponivel", ()
   assert.match(player, /new MediaMetadata/);
 });
 
-test("player tenta uma unica recarga retomavel sem baixar o audio online inteiro", () => {
-  assert.match(player, /shouldRetryMediaError/);
-  assert.match(player, /buildAudioRetrySource/);
-  assert.match(player, /const \[audioSource,\s*setAudioSource\] = useState\(src\)/);
-  assert.match(player, /src=\{audioSource\}/);
-  assert.match(player, /playbackActiveRef/);
-  assert.match(player, /pendingRetryRef/);
-  assert.match(player, /onError=/);
-  assert.doesNotMatch(player, /downloadAudioBuffer|decryptAudio|audio-cache/);
-  assert.match(playerRetry, /searchParams\.set\("streamRetry"/);
+test("player baixa o audio completo no cache criptografado antes de entregar o blob ao elemento audio", () => {
+  assert.match(player, /getEncryptedAudioUrl/);
+  assert.match(player, /mode:\s*"temporary"/);
+  assert.match(player, /URL\.revokeObjectURL/);
+  assert.match(player, /src=\{activeAudioSource \|\| undefined\}/);
+  assert.match(player, /Baixando audio/);
+  assert.match(player, /downloadPercent/);
+  assert.doesNotMatch(player, /preload="metadata"/);
 });
 
-test("player redefine a tentativa apenas quando a origem muda", () => {
-  assert.match(
-    player,
-    /if \(sourceProp !== src\) \{[\s\S]*setAudioSource\(src\);[\s\S]*\}/,
-  );
-  assert.match(
-    player,
-    /useEffect\(\(\) => \{[\s\S]*audioRetryStateRef\.current = \{[\s\S]*automaticRetryCount:\s*0,[\s\S]*\};[\s\S]*\}, \[src\]\)/,
-  );
-  const metadataHandler = player.match(/onLoadedMetadata=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
-  assert.doesNotMatch(metadataHandler, /automaticRetryCount:\s*0/);
+test("player descarta downloads antigos quando a origem muda", () => {
+  assert.match(player, /URL\.revokeObjectURL\(downloadedAudio\.objectUrl\)/);
+  assert.match(player, /audioSource\?\.source === src \? audioSource\.objectUrl : ""/);
+  assert.match(player, /}, \[src\]\)/);
+  assert.doesNotMatch(player, /sourceProp/);
 });
 
 test("player registra intencao antes de play e nao a apaga em pause induzido por erro", () => {
   assert.match(player, /desiredPlaybackRef\.current = true;[\s\S]*?\.play\(\)/);
-  assert.match(player, /desiredPlayback:\s*desiredPlaybackRef\.current/);
   const pauseHandler = player.match(/onPause=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
   assert.doesNotMatch(pauseHandler, /desiredPlaybackRef\.current = false/);
 });
 
-test("play manual depois de erro inicia nova revisao sem sobrepor recarga pendente", () => {
-  assert.match(player, /if \(pendingRetryRef\.current\) return/);
-  assert.match(player, /playbackError \|\| audio\.error/);
-  assert.match(player, /reason:\s*"manual"/);
-  assert.match(player, /advanceAudioRetryState/);
+test("play manual baixa uma unica vez e bloqueia interacoes durante o download", () => {
+  assert.match(player, /if \(downloadPromiseRef\.current\) return downloadPromiseRef\.current/);
+  assert.match(audioCache, /credentials:\s*"include"/);
+  assert.match(player, /if \(!audio \|\| downloadingAudio\) return/);
+  assert.match(player, /disabled=\{downloadingAudio\}/);
   assert.match(player, /role="alert"/);
 });
 
-test("erro terminal tem prioridade sobre estado paused possivelmente obsoleto", () => {
+test("toggle baixa antes de reproduzir quando o audio esta pausado", () => {
   const toggleStart = player.indexOf("function toggle()");
   const toggleEnd = player.indexOf("function decreaseKaraokeFont", toggleStart);
   const toggleBlock = player.slice(toggleStart, toggleEnd);
-  const fatalErrorIndex = toggleBlock.indexOf("playbackError || audio.error");
+  const downloadIndex = toggleBlock.indexOf("playDownloadedAudio");
   const pausedIndex = toggleBlock.indexOf("if (audio.paused)");
-  assert.ok(fatalErrorIndex >= 0);
+  assert.ok(downloadIndex >= 0);
   assert.ok(pausedIndex >= 0);
-  assert.ok(fatalErrorIndex < pausedIndex);
+  assert.ok(downloadIndex > pausedIndex);
 });
 
-test("erro durante recarga libera pendencia antes da tentativa automatica", () => {
+test("erro do elemento local nao tenta reiniciar streaming", () => {
   const errorHandler = player.match(/onError=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
-  const captureIndex = errorHandler.indexOf("resolveInterruptedAudioRetry");
-  const clearIndex = errorHandler.indexOf("pendingRetryRef.current = null");
-  const automaticIndex = errorHandler.indexOf('reason: "automatic"');
-  assert.ok(captureIndex >= 0);
-  assert.ok(clearIndex > captureIndex);
-  assert.ok(automaticIndex > clearIndex);
-  assert.match(errorHandler, /if \(beginAudioReload\(\{[\s\S]*reason:\s*"automatic"[\s\S]*\}\)\) return/);
+  assert.doesNotMatch(errorHandler, /resolveInterruptedAudioRetry|beginAudioReload|shouldRetryMediaError/);
   assert.match(errorHandler, /setPlaybackError\(PLAYBACK_CONNECTION_ERROR\)/);
 });
 

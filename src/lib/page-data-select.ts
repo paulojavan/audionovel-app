@@ -39,6 +39,7 @@ export const PUBLIC_NOVEL_SELECT = {
   author: true,
   synopsis: true,
   coverUrl: true,
+  status: true,
   viewCount: true,
   ratingScore: true,
   ratingCount: true,

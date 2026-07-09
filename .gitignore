@@ -50,6 +50,7 @@ next-env.d.ts
 # local agent/tool state
 /.agents/
 /.codex/
+/.codex-publish/
 /.projects/
 /.superpowers/
 /.worktrees/

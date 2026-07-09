@@ -1,14 +1,10 @@
 "use client";
 
-import { Gauge, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  advanceAudioRetryState,
-  buildAudioRetrySource,
-  resolveInterruptedAudioRetry,
-  shouldRetryMediaError,
-  type AudioRetryState,
-} from "@/lib/audio-player-retry";
+import { PlayerSettingsMenu } from "@/components/player-settings-menu";
+import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
+import { getEncryptedAudioUrl } from "@/lib/audio-cache";
 import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import {
   getActiveChapterPartIndex,
@@ -38,6 +34,8 @@ export function AudioPlayer({
   novelTitle,
   coverUrl,
   chapterParts = [],
+  accountScope,
+  nextChapterHref = null,
 }: {
   chapterId: string;
   src: string;
@@ -49,6 +47,8 @@ export function AudioPlayer({
   novelTitle: string;
   coverUrl: string;
   chapterParts?: ChapterPlaybackPart[];
+  accountScope: string;
+  nextChapterHref?: string | null;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingStartRef = useRef<number | null>(null);
@@ -60,29 +60,21 @@ export function AudioPlayer({
   const playbackStartedRef = useRef(false);
   const playbackActiveRef = useRef(false);
   const desiredPlaybackRef = useRef(false);
-  const audioRetryStateRef = useRef<AudioRetryState>({
-    sourceRevision: 0,
-    automaticRetryCount: 0,
-  });
-  const pendingRetryRef = useRef<{ position: number; shouldResume: boolean } | null>(null);
-  const [audioSource, setAudioSource] = useState(src);
-  const [sourceProp, setSourceProp] = useState(src);
+  const downloadedAudioRef = useRef<{ source: string; objectUrl: string } | null>(null);
+  const downloadPromiseRef = useRef<Promise<string> | null>(null);
+  const [audioSource, setAudioSource] = useState<{ source: string; objectUrl: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
   const [current, setCurrent] = useState(initialPosition);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const [karaokeFontLevel, setKaraokeFontLevel] = useState(1);
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
-  const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
-
-  if (sourceProp !== src) {
-    setSourceProp(src);
-    setAudioSource(src);
-  }
+  const [audioDownload, setAudioDownload] = useState<{ source: string; active: boolean; percent: number | null } | null>(null);
+  const { settings, updateSettings } = useAudioPlayerSettings();
+  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter } = settings;
 
   const activeIndex = useMemo(() => {
     if (!transcript.length) return -1;
@@ -100,6 +92,9 @@ export function AudioPlayer({
   const nextCue = activeIndex >= 0 && activeIndex < transcript.length - 1 ? transcript[activeIndex + 1] : null;
   const progressDuration = resolvedDuration || duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (current / progressDuration) * 100));
+  const activeAudioSource = audioSource?.source === src ? audioSource.objectUrl : "";
+  const downloadingAudio = audioDownload?.source === src && audioDownload.active;
+  const downloadPercent = audioDownload?.source === src ? audioDownload.percent : null;
   const groupedChapterParts = chapterParts.length > 1 ? chapterParts : [];
   const absoluteCurrent = startOffset + current;
   const activeChapterPartIndex = getActiveChapterPartIndex(groupedChapterParts, absoluteCurrent);
@@ -133,13 +128,19 @@ export function AudioPlayer({
   ][karaokeFontLevel];
 
   useEffect(() => {
-    audioRetryStateRef.current = {
-      sourceRevision: 0,
-      automaticRetryCount: 0,
-    };
-    pendingRetryRef.current = null;
+    downloadPromiseRef.current = null;
+    const downloadedAudio = downloadedAudioRef.current;
+    if (downloadedAudio) URL.revokeObjectURL(downloadedAudio.objectUrl);
+    downloadedAudioRef.current = null;
     playbackActiveRef.current = false;
     desiredPlaybackRef.current = false;
+
+    return () => {
+      downloadPromiseRef.current = null;
+      const activeDownload = downloadedAudioRef.current;
+      if (activeDownload) URL.revokeObjectURL(activeDownload.objectUrl);
+      downloadedAudioRef.current = null;
+    };
   }, [src]);
 
   const saveProgress = useCallback(async ({
@@ -183,68 +184,107 @@ export function AudioPlayer({
     }
   }, [chapterId, duration, resolvedDuration, startOffset]);
 
-  function beginAudioReload({
-    reason,
-    position,
-    shouldResume,
-  }: {
-    reason: "automatic" | "manual";
-    position: number;
-    shouldResume: boolean;
-  }) {
-    if (pendingRetryRef.current) return false;
+  const getDownloadedAudioUrl = useCallback(async () => {
+    const downloadedAudio = downloadedAudioRef.current;
+    if (downloadedAudio?.source === src) return downloadedAudio.objectUrl;
+    if (downloadPromiseRef.current) return downloadPromiseRef.current;
 
-    const nextRetryState = advanceAudioRetryState({
-      state: audioRetryStateRef.current,
-      reason,
-    });
-    audioRetryStateRef.current = nextRetryState;
-    pendingRetryRef.current = { position, shouldResume };
-    desiredPlaybackRef.current = shouldResume;
+    setAudioDownload({ source: src, active: true, percent: 0 });
     setPlaybackError("");
-    setAudioSource(
-      buildAudioRetrySource(src, nextRetryState.sourceRevision),
-    );
-    return true;
-  }
+
+    const downloadPromise = getEncryptedAudioUrl(chapterId, src, {
+      accountScope,
+      mode: "temporary",
+      onProgress({ percent }) {
+        setAudioDownload({ source: src, active: true, percent });
+      },
+    })
+      .then((objectUrl) => {
+        const currentDownload = downloadedAudioRef.current;
+        if (currentDownload) URL.revokeObjectURL(currentDownload.objectUrl);
+        downloadedAudioRef.current = { source: src, objectUrl };
+        setAudioSource({ source: src, objectUrl });
+        setAudioDownload({ source: src, active: false, percent: 100 });
+        return objectUrl;
+      })
+      .catch((error) => {
+        setAudioDownload({ source: src, active: false, percent: null });
+        setPlaybackError("Nao foi possivel baixar o audio. Verifique a conexao e toque em play novamente.");
+        throw error;
+      })
+      .finally(() => {
+        downloadPromiseRef.current = null;
+        setAudioDownload((current) => current?.source === src ? { ...current, active: false } : current);
+      });
+
+    downloadPromiseRef.current = downloadPromise;
+    return downloadPromise;
+  }, [accountScope, chapterId, src]);
+
+  const waitForMetadata = useCallback((audio: HTMLAudioElement) => {
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+        audio.removeEventListener("error", onError);
+      };
+      const onLoadedMetadata = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Nao foi possivel carregar os metadados do audio."));
+      };
+
+      audio.addEventListener("loadedmetadata", onLoadedMetadata, { once: true });
+      audio.addEventListener("error", onError, { once: true });
+    });
+  }, []);
+
+  const playDownloadedAudio = useCallback(async (position?: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      const objectUrl = await getDownloadedAudioUrl();
+      if (!audioRef.current) return;
+      const activeAudio = audioRef.current;
+      if (activeAudio.src !== objectUrl) {
+        activeAudio.src = objectUrl;
+        activeAudio.load();
+      }
+      await waitForMetadata(activeAudio);
+      const nextPosition =
+        position ??
+        (activeAudio.currentTime < startOffset || (activeAudio.currentTime === 0 && (initialPosition > 0 || startOffset > 0))
+          ? startOffset + initialPosition
+          : activeAudio.currentTime);
+      activeAudio.currentTime = nextPosition;
+      setKaraokeMode(playMode === "karaoke");
+      setPlaybackError("");
+      activeAudio.playbackRate = playbackRate;
+      activeAudio.volume = volume;
+      activeAudio.muted = muted;
+      desiredPlaybackRef.current = true;
+      await activeAudio.play();
+      setPlaying(true);
+    } catch {
+      desiredPlaybackRef.current = false;
+      playbackActiveRef.current = false;
+      setPlaying(false);
+      setKaraokeMode(false);
+      setPlaybackError((currentError) => currentError || PLAYBACK_CONNECTION_ERROR);
+    }
+  }, [getDownloadedAudioUrl, initialPosition, muted, playbackRate, playMode, startOffset, volume, waitForMetadata]);
 
   function toggle() {
     const audio = audioRef.current;
-    if (!audio) return;
-    if (pendingRetryRef.current) return;
-
-    if (playbackError || audio.error) {
-      setKaraokeMode(playMode === "karaoke");
-      beginAudioReload({
-        reason: "manual",
-        position: audio.currentTime,
-        shouldResume: true,
-      });
-      return;
-    }
+    if (!audio || downloadingAudio) return;
 
     if (audio.paused) {
-      if (audio.currentTime < startOffset || (audio.currentTime === 0 && (initialPosition > 0 || startOffset > 0))) {
-        audio.currentTime = startOffset + initialPosition;
-      }
-      setKaraokeMode(playMode === "karaoke");
-      setPlaybackError("");
-      audio.playbackRate = playbackRate;
-      audio.volume = volume;
-      audio.muted = muted;
-      desiredPlaybackRef.current = true;
-      audio
-        .play()
-        .then(() => {
-          setPlaying(true);
-        })
-        .catch(() => {
-          desiredPlaybackRef.current = false;
-          playbackActiveRef.current = false;
-          setPlaying(false);
-          setKaraokeMode(false);
-          setPlaybackError(PLAYBACK_CONNECTION_ERROR);
-        });
+      void playDownloadedAudio();
     } else {
       desiredPlaybackRef.current = false;
       audio.pause();
@@ -278,25 +318,9 @@ export function AudioPlayer({
     if (audio) audio.currentTime = startSec;
     setCurrent(nextRelativeTime);
 
-    if (!audio || !autoplay) return;
-
-    setPlaybackError("");
-    setKaraokeMode(playMode === "karaoke");
-    audio.playbackRate = playbackRate;
-    audio.volume = volume;
-    audio.muted = muted;
-    desiredPlaybackRef.current = true;
-    audio
-      .play()
-      .then(() => setPlaying(true))
-      .catch(() => {
-        desiredPlaybackRef.current = false;
-        playbackActiveRef.current = false;
-        setPlaying(false);
-        setKaraokeMode(false);
-        setPlaybackError(PLAYBACK_CONNECTION_ERROR);
-      });
-  }, [muted, playbackRate, playMode, startOffset, volume]);
+    if (!autoplay) return;
+    void playDownloadedAudio(startSec);
+  }, [playDownloadedAudio, startOffset]);
 
   useEffect(() => {
     if (!shouldScrollActiveCueRef.current || activeIndex < 0) return;
@@ -345,7 +369,7 @@ export function AudioPlayer({
 
   function updatePlaybackRate(nextRate: number) {
     const audio = audioRef.current;
-    setPlaybackRate(nextRate);
+    updateSettings({ playbackRate: nextRate });
     if (audio) audio.playbackRate = nextRate;
   }
 
@@ -401,14 +425,7 @@ export function AudioPlayer({
 
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ["play", () => {
-        const audio = audioRef.current;
-        if (audio) {
-          desiredPlaybackRef.current = true;
-          void audio.play().catch(() => {
-            desiredPlaybackRef.current = false;
-            setPlaybackError(PLAYBACK_CONNECTION_ERROR);
-          });
-        }
+        void playDownloadedAudio();
       }],
       ["pause", () => {
         desiredPlaybackRef.current = false;
@@ -436,37 +453,23 @@ export function AudioPlayer({
       }
       mediaSession.metadata = null;
     };
-  }, [chapterTitle, coverUrl, novelTitle, seekBy]);
+  }, [chapterTitle, coverUrl, novelTitle, playDownloadedAudio, seekBy]);
 
   return (
     <>
       <div id="chapter-player" className="grid gap-5 rounded-lg bg-[#06272b] p-4">
         <audio
           ref={audioRef}
-          src={audioSource}
-          preload="metadata"
+          src={activeAudioSource || undefined}
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
-            const pendingRetry = pendingRetryRef.current;
             setResolvedDuration(duration || audioDuration);
-            if (pendingRetry) event.currentTarget.currentTime = pendingRetry.position;
-            else if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
+            if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
             else if (initialPosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialPosition;
             event.currentTarget.volume = volume;
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
             setPlaybackError("");
-            pendingRetryRef.current = null;
-            if (pendingRetry?.shouldResume) {
-              desiredPlaybackRef.current = true;
-              event.currentTarget.play().catch(() => {
-                desiredPlaybackRef.current = false;
-                playbackActiveRef.current = false;
-                setPlaying(false);
-                setKaraokeMode(false);
-                setPlaybackError(PLAYBACK_CONNECTION_ERROR);
-              });
-            }
           }}
           onTimeUpdate={(event) => {
             const relativePosition = Math.max(0, event.currentTarget.currentTime - startOffset);
@@ -500,28 +503,15 @@ export function AudioPlayer({
             setPlaying(false);
             setKaraokeMode(false);
             setCurrent(progressDuration);
-            void saveProgress({ completed: true, force: true, keepalive: true });
+            const progressSave = saveProgress({ completed: true, force: true, keepalive: true });
+            if (autoPlayNextChapter && nextChapterHref) {
+              void progressSave.finally(() => {
+                window.location.href = nextChapterHref;
+              });
+            }
           }}
           onError={(event) => {
-            const audio = event.currentTarget;
-            const interruptedRetry = resolveInterruptedAudioRetry({
-              pendingRetry: pendingRetryRef.current,
-              currentPosition: audio.currentTime,
-              desiredPlayback: desiredPlaybackRef.current,
-            });
-            pendingRetryRef.current = null;
-
-            if (shouldRetryMediaError({
-              errorCode: audio.error?.code ?? null,
-              retryCount: audioRetryStateRef.current.automaticRetryCount,
-            })) {
-              if (beginAudioReload({
-                reason: "automatic",
-                position: interruptedRetry.position,
-                shouldResume: interruptedRetry.shouldResume,
-              })) return;
-            }
-
+            void event.currentTarget;
             desiredPlaybackRef.current = false;
             playbackActiveRef.current = false;
             setPlaying(false);
@@ -530,23 +520,15 @@ export function AudioPlayer({
           }}
         />
 
-        {groupedChapterParts.length > 0 ? (
-          <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-bold">Pausar entre capitulos</p>
-              <p className="text-xs text-zinc-400">Quando ligado, a reproducao pausa ao fim de cada capitulo dentro deste bloco.</p>
+        {downloadingAudio ? (
+          <div role="status" className="grid gap-2 rounded-md bg-black/30 p-3">
+            <div className="flex items-center justify-between gap-3 text-sm font-bold">
+              <span>Baixando audio</span>
+              <span>{downloadPercent === null ? "..." : `${downloadPercent}%`}</span>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={pauseAtChapterEnd}
-              onClick={() => setPauseAtChapterEnd((value) => !value)}
-              className={`flex min-h-11 w-20 items-center rounded-full p-1 transition ${
-                pauseAtChapterEnd ? "justify-end bg-[#18b7bd]" : "justify-start bg-white/15"
-              }`}
-            >
-              <span className={`h-9 w-9 rounded-full bg-white shadow ${pauseAtChapterEnd ? "text-[#021114]" : "text-zinc-500"}`} />
-            </button>
+            <div className="h-3 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full bg-[#18b7bd] transition-[width]" style={{ width: `${downloadPercent ?? 8}%` }} />
+            </div>
           </div>
         ) : null}
 
@@ -599,8 +581,9 @@ export function AudioPlayer({
           <button
             type="button"
             onClick={toggle}
+            disabled={downloadingAudio}
             aria-label={playing ? "Pausar capítulo" : "Reproduzir capítulo"}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[#18b7bd] text-[#021114] shadow-lg shadow-[#18b7bd]/20"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-[#18b7bd] text-[#021114] shadow-lg shadow-[#18b7bd]/20 disabled:cursor-wait disabled:opacity-70"
           >
             {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
           </button>
@@ -623,6 +606,16 @@ export function AudioPlayer({
               <SkipForward size={22} fill="currentColor" />
             </button>
           ) : null}
+          <PlayerSettingsMenu
+            playbackRate={playbackRate}
+            pauseAtChapterEnd={pauseAtChapterEnd}
+            autoPlayNextChapter={autoPlayNextChapter}
+            onPlaybackRateChange={updatePlaybackRate}
+            onPauseAtChapterEndChange={(value) => updateSettings({ pauseAtChapterEnd: value })}
+            onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
+            showPauseBetweenChapters={groupedChapterParts.length > 0}
+            autoPlayNextChapterDisabled={!nextChapterHref}
+          />
           <div className="w-full min-w-0 sm:flex-1">
             <div className="h-3 overflow-hidden rounded-full bg-white/10">
               <div className="h-full bg-[#18b7bd]" style={{ width: `${progressPercent}%` }} />
@@ -636,11 +629,8 @@ export function AudioPlayer({
 
         {playing && playMode === "page" ? (
           <div className="grid gap-3 rounded-md bg-black/30 p-3">
-            <p className="text-sm font-bold text-zinc-200">Controles de volume e velocidade</p>
-            <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_220px]">
-              <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} />
-              <KaraokeSpeedControl playbackRate={playbackRate} onPlaybackRate={updatePlaybackRate} />
-            </div>
+            <p className="text-sm font-bold text-zinc-200">Controle de volume</p>
+            <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} />
           </div>
         ) : null}
 
@@ -739,8 +729,9 @@ export function AudioPlayer({
                 <button
                   type="button"
                   onClick={toggle}
+                  disabled={downloadingAudio}
                   aria-label={playing ? "Pausar capítulo" : "Reproduzir capítulo"}
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black"
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black disabled:cursor-wait disabled:opacity-70"
                 >
                   {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
                 </button>
@@ -775,12 +766,30 @@ export function AudioPlayer({
               <div className="grid grid-cols-[auto_minmax(64px,84px)_auto] items-center justify-center gap-2 sm:grid-cols-[auto_90px_auto] lg:hidden">
                 <KaraokeFontControls onDecrease={decreaseKaraokeFont} onIncrease={increaseKaraokeFont} />
                 <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} compact />
-                <KaraokeSpeedControl playbackRate={playbackRate} onPlaybackRate={updatePlaybackRate} compact />
+                <PlayerSettingsMenu
+                  playbackRate={playbackRate}
+                  pauseAtChapterEnd={pauseAtChapterEnd}
+                  autoPlayNextChapter={autoPlayNextChapter}
+                  onPlaybackRateChange={updatePlaybackRate}
+                  onPauseAtChapterEndChange={(value) => updateSettings({ pauseAtChapterEnd: value })}
+                  onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
+                  showPauseBetweenChapters={groupedChapterParts.length > 0}
+                  autoPlayNextChapterDisabled={!nextChapterHref}
+                />
               </div>
               <div className="hidden grid-cols-[auto_84px_auto] items-center gap-2 lg:grid">
                 <KaraokeFontControls onDecrease={decreaseKaraokeFont} onIncrease={increaseKaraokeFont} />
                 <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} compact />
-                <KaraokeSpeedControl playbackRate={playbackRate} onPlaybackRate={updatePlaybackRate} compact />
+                <PlayerSettingsMenu
+                  playbackRate={playbackRate}
+                  pauseAtChapterEnd={pauseAtChapterEnd}
+                  autoPlayNextChapter={autoPlayNextChapter}
+                  onPlaybackRateChange={updatePlaybackRate}
+                  onPauseAtChapterEndChange={(value) => updateSettings({ pauseAtChapterEnd: value })}
+                  onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
+                  showPauseBetweenChapters={groupedChapterParts.length > 0}
+                  autoPlayNextChapterDisabled={!nextChapterHref}
+                />
               </div>
             </div>
           </footer>
@@ -855,34 +864,6 @@ function KaraokeFontControls({
         A+
       </button>
     </div>
-  );
-}
-
-function KaraokeSpeedControl({
-  playbackRate,
-  onPlaybackRate,
-  compact = false,
-}: {
-  playbackRate: number;
-  onPlaybackRate: (rate: number) => void;
-  compact?: boolean;
-}) {
-  return (
-    <label className={`flex items-center gap-3 text-sm text-zinc-300 ${compact ? "" : "rounded-md bg-black/30 p-3"}`}>
-      <Gauge size={18} className="text-white" />
-      <span className="font-bold">{compact ? "Vel." : "Velocidade"}</span>
-      <select
-        value={playbackRate}
-        onChange={(event) => onPlaybackRate(Number(event.target.value))}
-        className="ml-auto min-h-11 rounded-md border border-white/10 bg-black px-3 py-2 text-white"
-      >
-        {[0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-          <option key={rate} value={rate}>
-            {rate}x
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 

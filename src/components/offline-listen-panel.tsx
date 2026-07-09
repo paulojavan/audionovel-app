@@ -1,7 +1,9 @@
 "use client";
 
 import { ChevronDown, FastForward, Pause, Play, Rewind, Volume2 } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { PlayerSettingsMenu } from "@/components/player-settings-menu";
+import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
 import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio, saveOfflineItem } from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
@@ -13,18 +15,19 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
   const [audioSrc, setAudioSrc] = useState("");
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(0.85);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [pauseAtChapterEnd, setPauseAtChapterEnd] = useState(false);
   const [message, setMessage] = useState("");
   const [availableItems, setAvailableItems] = useState<OfflineItem[] | null>(null);
   const [pending, startTransition] = useTransition();
+  const { settings, updateSettings } = useAudioPlayerSettings();
+  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter } = settings;
   const offlineCryptoSupported = useOfflineCryptoSupported();
-  const checkedItems = availableItems ?? [];
+  const checkedItems = useMemo(() => availableItems ?? [], [availableItems]);
   const checkingCache = offlineCryptoSupported && availableItems === null;
   const activeItem = checkedItems.find((item) => item.id === activeId);
   const activeChapterParts = activeItem?.chapterParts && activeItem.chapterParts.length > 1 ? activeItem.chapterParts : [];
+  const playbackQueue = useMemo(() => sortOfflineItems(checkedItems), [checkedItems]);
   const groupedItems = groupByNovel(checkedItems);
 
   useEffect(() => {
@@ -81,6 +84,11 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     if (!audioRef.current) return;
     audioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
+
+  function updatePlaybackRate(nextRate: number) {
+    updateSettings({ playbackRate: nextRate });
+    if (audioRef.current) audioRef.current.playbackRate = nextRate;
+  }
 
   function playItem(item: OfflineItem) {
     startTransition(async () => {
@@ -170,6 +178,17 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     setPlaying(false);
   }
 
+  function playNextOfflineItem() {
+    if (!autoPlayNextChapter || !activeItem) return false;
+
+    const activeIndex = playbackQueue.findIndex((item) => item.id === activeItem.id);
+    const nextItem = activeIndex >= 0 ? playbackQueue[activeIndex + 1] : null;
+    if (!nextItem) return false;
+
+    playItem(nextItem);
+    return true;
+  }
+
   const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   return (
@@ -180,7 +199,10 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
           src={audioSrc || undefined}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
+          onEnded={() => {
+            setPlaying(false);
+            playNextOfflineItem();
+          }}
           onTimeUpdate={(event) => {
             setCurrentTime(event.currentTarget.currentTime);
             pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
@@ -197,25 +219,6 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
               <h2 className="mt-1 text-xl font-black">{activeItem.title}</h2>
               <p className="text-sm text-zinc-400">{activeItem.novelTitle} - {activeItem.volumeTitle}</p>
             </div>
-            {activeChapterParts.length > 0 ? (
-              <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-bold">Pausar entre capitulos</p>
-                  <p className="text-xs text-zinc-400">Quando ligado, o audio pausa ao fim de cada capitulo dentro deste bloco.</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={pauseAtChapterEnd}
-                  onClick={() => setPauseAtChapterEnd((value) => !value)}
-                  className={`flex min-h-11 w-20 items-center rounded-full p-1 transition ${
-                    pauseAtChapterEnd ? "justify-end bg-[#18b7bd]" : "justify-start bg-white/15"
-                  }`}
-                >
-                  <span className="h-9 w-9 rounded-full bg-white shadow" />
-                </button>
-              </div>
-            ) : null}
             <div className="grid gap-2">
               <div className="h-2 overflow-hidden rounded-full bg-black/50">
                 <div className="h-full bg-[#18b7bd]" style={{ width: `${progressPercent}%` }} />
@@ -258,21 +261,16 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
                   aria-label="Volume"
                 />
               </label>
-              <label className="col-span-3 flex items-center gap-2 text-xs font-bold text-zinc-300 sm:col-span-1">
-                Velocidade
-                <select
-                  value={playbackRate}
-                  onChange={(event) => setPlaybackRate(Number(event.target.value))}
-                  className="min-h-11 rounded-full border border-white/10 bg-black px-3 py-2 text-sm font-black text-white outline-none focus:border-[#18b7bd]"
-                  aria-label="Velocidade"
-                >
-                  <option value={0.75}>0.75x</option>
-                  <option value={1}>1x</option>
-                  <option value={1.25}>1.25x</option>
-                  <option value={1.5}>1.5x</option>
-                  <option value={2}>2x</option>
-                </select>
-              </label>
+              <PlayerSettingsMenu
+                playbackRate={playbackRate}
+                pauseAtChapterEnd={pauseAtChapterEnd}
+                autoPlayNextChapter={autoPlayNextChapter}
+                onPlaybackRateChange={updatePlaybackRate}
+                onPauseAtChapterEndChange={(value) => updateSettings({ pauseAtChapterEnd: value })}
+                onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
+                showPauseBetweenChapters={activeChapterParts.length > 0}
+                autoPlayNextChapterDisabled={playbackQueue.length < 2}
+              />
             </div>
           </div>
         ) : (
@@ -334,6 +332,10 @@ function formatTime(value: number) {
   const minutes = Math.floor(value / 60);
   const seconds = Math.floor(value % 60);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function sortOfflineItems(items: OfflineItem[]) {
+  return [...items].sort((a, b) => a.novelTitle.localeCompare(b.novelTitle, "pt-BR") || a.volumeTitle.localeCompare(b.volumeTitle, "pt-BR") || a.chapterPosition - b.chapterPosition);
 }
 
 function groupByNovel(items: OfflineItem[]) {

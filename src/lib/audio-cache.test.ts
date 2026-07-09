@@ -17,15 +17,21 @@ test("cache de audio separa registros por conta", () => {
   );
 });
 
-test("salvar offline reutiliza somente o cache offline da mesma conta", () => {
-  assert.deepEqual(getReusableAudioCacheModes("offline"), ["offline"]);
+test("salvar offline reutiliza cache offline ou temporario da mesma conta", () => {
+  assert.deepEqual(getReusableAudioCacheModes("offline"), ["offline", "temporary"]);
 });
 
-test("player online transmite pelo proxy sem baixar o audio inteiro ao montar", () => {
+test("play online reutiliza cache temporario por dois dias", () => {
+  assert.deepEqual(getReusableAudioCacheModes("temporary"), ["temporary"]);
+});
+
+test("player online baixa o audio inteiro no cache criptografado apenas depois do play", () => {
   const playerSource = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
-  assert.doesNotMatch(playerSource, /getEncryptedAudioUrl\(chapterId, src\)/);
-  assert.doesNotMatch(playerSource, /setAudioSrc/);
-  assert.match(playerSource, /src=\{audioSource\}/);
+  assert.match(playerSource, /getEncryptedAudioUrl\(chapterId, src,/);
+  assert.match(playerSource, /mode:\s*"temporary"/);
+  assert.match(playerSource, /accountScope/);
+  assert.match(playerSource, /src=\{activeAudioSource \|\| undefined\}/);
+  assert.match(playerSource, /function toggle\(\)/);
 });
 
 test("download de audio retoma do byte recebido quando a conexao cai", async () => {

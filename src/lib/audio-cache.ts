@@ -156,7 +156,7 @@ export function getAudioCacheId(accountScope: string, chapterId: string, mode: A
 }
 
 export function getReusableAudioCacheModes(mode: AudioCacheMode): AudioCacheMode[] {
-  return mode === "offline" ? ["offline"] : [];
+  return mode === "offline" ? ["offline", "temporary"] : ["temporary"];
 }
 
 function getCacheTtl(mode: AudioCacheMode) {

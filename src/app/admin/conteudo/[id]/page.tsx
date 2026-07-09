@@ -6,6 +6,7 @@ import { AdminDeleteButton } from "@/components/admin-delete-button";
 import { AdminVolumeAccordion } from "@/components/admin-volume-accordion";
 import { getNextChapterPosition } from "@/lib/admin-chapter-sequence";
 import { getTotalStoredChapterCount } from "@/lib/chapter-count";
+import { getNovelStatusLabel } from "@/lib/novel-status";
 import { ADMIN_NOVEL_PANEL_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
@@ -31,7 +32,7 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-3xl font-black">{novel.title}</h2>
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{novel.status}</span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{getNovelStatusLabel(novel.status)}</span>
           </div>
           <p className="mt-2 text-zinc-400">{novel.author}</p>
           {novel.tags.length ? (

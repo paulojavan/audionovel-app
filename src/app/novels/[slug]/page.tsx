@@ -6,6 +6,7 @@ import { CommentThread } from "@/components/comment-thread";
 import { FavoriteNovelButton } from "@/components/favorite-novel-button";
 import { NovelVolumeList } from "@/components/novel-volume-list";
 import { StarRating } from "@/components/star-rating";
+import { getNovelStatusLabel } from "@/lib/novel-status";
 import { COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getCachedPublicNovel } from "@/lib/public-data";
@@ -52,11 +53,17 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
   const lastListenedChapterId = listenedProgress.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0]?.chapterId ?? null;
   const isLoggedIn = Boolean(session?.user?.id && !session.user.isBlocked);
   const canUseOffline = hasPremiumAccess(session?.user);
+  const statusLabel = getNovelStatusLabel(novel.status);
 
   return (
     <div className="px-4 py-6 md:px-8">
       <section className="mb-8 grid gap-6 md:grid-cols-[220px_1fr]">
-        <Image src={novel.coverUrl} alt="" width={520} height={520} className="aspect-square w-full max-w-[260px] rounded-lg object-cover shadow-2xl" />
+        <div className="relative aspect-square w-full max-w-[260px] overflow-hidden rounded-lg shadow-2xl">
+          <Image src={novel.coverUrl} alt="" fill sizes="(min-width: 768px) 220px, 260px" className="object-cover" />
+          <span className="absolute right-3 top-3 rounded-full bg-[#18b7bd] px-3 py-1 text-xs font-black uppercase text-[#021114] shadow-lg shadow-black/30">
+            {statusLabel}
+          </span>
+        </div>
         <div className="self-end">
           <p className="mb-2 text-sm font-bold uppercase text-zinc-400">Novel</p>
           <h1 className="text-4xl font-black tracking-tight md:text-6xl">{novel.title}</h1>
@@ -69,6 +76,9 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
             >
               {novel.author}
             </Link>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase text-zinc-200">
+              Status: {statusLabel}
+            </span>
             <span className="text-sm text-zinc-500">- {novel.viewCount} visualizacoes</span>
           </div>
           {novel.tags.length ? (
