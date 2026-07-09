@@ -13,7 +13,10 @@ const rankingSwitcher = readFileSync(join(process.cwd(), "src", "components", "h
 
 test("menu de configuracoes pode abrir para cima no karaoke", () => {
   assert.match(playerSettingsMenu, /placement\?:\s*"bottom"\s*\|\s*"top"/);
-  assert.match(playerSettingsMenu, /bottom-full/);
+  assert.match(playerSettingsMenu, /bottom:\s*"100%"/);
+  assert.match(playerSettingsMenu, /top:\s*"100%"/);
+  assert.match(playerSettingsMenu, /style=\{panelPosition\}/);
+  assert.doesNotMatch(playerSettingsMenu, /bottom-full|mt-2/);
   assert.match(audioPlayer, /placement="top"/);
 });
 

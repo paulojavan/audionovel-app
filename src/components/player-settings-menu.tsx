@@ -25,7 +25,9 @@ export function PlayerSettingsMenu({
   placement = "bottom",
 }: PlayerSettingsMenuProps) {
   const [open, setOpen] = useState(false);
-  const panelPosition = placement === "top" ? "bottom-full mb-2" : "mt-2";
+  const panelPosition = placement === "top"
+    ? { bottom: "100%", marginBottom: "0.5rem" }
+    : { top: "100%", marginTop: "0.5rem" };
 
   return (
     <div className="relative">
@@ -39,7 +41,10 @@ export function PlayerSettingsMenu({
         <Settings size={20} />
       </button>
       {open ? (
-        <div className={`absolute right-0 z-30 grid w-[min(86vw,320px)] gap-4 rounded-md border border-white/10 bg-[#031316] p-4 text-left shadow-2xl shadow-black/40 ${panelPosition}`}>
+        <div
+          className="absolute right-0 z-30 grid w-[min(86vw,320px)] gap-4 rounded-md border border-white/10 bg-[#031316] p-4 text-left shadow-2xl shadow-black/40"
+          style={panelPosition}
+        >
           <label className="grid gap-2 text-sm font-bold text-zinc-200">
             <span>Velocidade</span>
             <select
