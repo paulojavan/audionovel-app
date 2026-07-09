@@ -13,6 +13,7 @@ export type LatestChapterItem = {
       title: string;
       slug: string;
       coverUrl: string;
+      status: string;
     };
   };
 };

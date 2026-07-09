@@ -10,6 +10,7 @@ type PlayerSettingsMenuProps = AudioPlayerSettings & {
   onAutoPlayNextChapterChange: (value: boolean) => void;
   showPauseBetweenChapters?: boolean;
   autoPlayNextChapterDisabled?: boolean;
+  placement?: "bottom" | "top";
 };
 
 export function PlayerSettingsMenu({
@@ -21,8 +22,10 @@ export function PlayerSettingsMenu({
   onAutoPlayNextChapterChange,
   showPauseBetweenChapters = false,
   autoPlayNextChapterDisabled = false,
+  placement = "bottom",
 }: PlayerSettingsMenuProps) {
   const [open, setOpen] = useState(false);
+  const panelPosition = placement === "top" ? "bottom-full mb-2" : "mt-2";
 
   return (
     <div className="relative">
@@ -36,7 +39,7 @@ export function PlayerSettingsMenu({
         <Settings size={20} />
       </button>
       {open ? (
-        <div className="absolute right-0 z-30 mt-2 grid w-[min(86vw,320px)] gap-4 rounded-md border border-white/10 bg-[#031316] p-4 text-left shadow-2xl shadow-black/40">
+        <div className={`absolute right-0 z-30 grid w-[min(86vw,320px)] gap-4 rounded-md border border-white/10 bg-[#031316] p-4 text-left shadow-2xl shadow-black/40 ${panelPosition}`}>
           <label className="grid gap-2 text-sm font-bold text-zinc-200">
             <span>Velocidade</span>
             <select

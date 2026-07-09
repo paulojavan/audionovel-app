@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Download, Headphones, LockKeyhole, Play, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { HomeRankingSwitcher } from "@/components/home-ranking-switcher";
+import { NovelStatusCover } from "@/components/novel-status-cover";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { formatLaunchAge, groupLatestChapters } from "@/lib/latest-chapters";
 import { prisma } from "@/lib/prisma";
@@ -57,12 +58,12 @@ export default async function Home() {
                 className="grid grid-cols-[76px_1fr] gap-3 border-b border-white/10 bg-[#06272b] p-3 last:border-b-0 sm:grid-cols-[96px_1fr] sm:gap-4 sm:p-4"
               >
                 <Link href={`/novels/${group.novel.slug}`} className="self-start">
-                  <Image
+                  <NovelStatusCover
                     src={group.novel.coverUrl}
-                    alt={`Capa de ${group.novel.title}`}
-                    width={240}
-                    height={320}
-                    className="aspect-[3/4] w-full rounded-md object-cover shadow-lg"
+                    title={group.novel.title}
+                    status={group.novel.status}
+                    className="aspect-[3/4] w-full rounded-md shadow-lg"
+                    sizes="(min-width: 640px) 96px, 76px"
                   />
                 </Link>
                 <div className="min-w-0">
@@ -111,7 +112,13 @@ export default async function Home() {
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           {recommendations.map((novel) => (
             <Link key={novel.id} href={`/novels/${novel.slug}`} className="rounded-md bg-[#06272b] p-3 transition hover:bg-[#08353a]">
-              <Image src={novel.coverUrl} alt="" width={360} height={360} className="aspect-square w-full rounded-md object-cover" />
+              <NovelStatusCover
+                src={novel.coverUrl}
+                title={novel.title}
+                status={novel.status}
+                className="aspect-square w-full rounded-md"
+                sizes="(min-width: 1280px) 16vw, (min-width: 768px) 33vw, 50vw"
+              />
               <h3 className="mt-3 line-clamp-2 font-bold">{novel.title}</h3>
               <p className="mt-1 line-clamp-1 text-sm text-zinc-400">{novel.author}</p>
               <p className="mt-1 text-sm font-bold text-yellow-200">{formatRating(novel.ratingScore, novel.ratingCount)}</p>

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 import { redirect } from "next/navigation";
+import { NovelStatusCover } from "@/components/novel-status-cover";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { LIBRARY_USER_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +50,13 @@ export default async function LibraryPage() {
           {user.favorites.length ? (
             user.favorites.map((favorite) => (
               <Link key={favorite.id} href={`/novels/${favorite.novel.slug}`} className="rounded-md bg-[#06272b] p-3 hover:bg-[#08353a]">
-                <Image src={favorite.novel.coverUrl} alt="" width={360} height={360} className="aspect-square w-full rounded object-cover" />
+                <NovelStatusCover
+                  src={favorite.novel.coverUrl}
+                  title={favorite.novel.title}
+                  status={favorite.novel.status}
+                  className="aspect-square w-full rounded"
+                  sizes="(min-width: 1280px) 16vw, (min-width: 768px) 25vw, 50vw"
+                />
                 <h3 className="mt-2 font-bold">{favorite.novel.title}</h3>
               </Link>
             ))

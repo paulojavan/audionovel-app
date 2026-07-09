@@ -89,6 +89,7 @@ export const CATALOG_NOVEL_SELECT = {
   title: true,
   author: true,
   coverUrl: true,
+  status: true,
   ratingScore: true,
   ratingCount: true,
   tags: {
@@ -116,6 +117,7 @@ export const LIBRARY_USER_SELECT = {
           slug: true,
           coverUrl: true,
           title: true,
+          status: true,
         },
       },
     },

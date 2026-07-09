@@ -1,15 +1,16 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Play, TrendingUp } from "lucide-react";
 import { useState } from "react";
+import { NovelStatusCover } from "@/components/novel-status-cover";
 
 type RankingNovel = {
   id: string;
   slug: string;
   title: string;
   coverUrl: string;
+  status: string;
   viewCount: number;
   ratingScore: number;
   ratingCount: number;
@@ -53,7 +54,14 @@ export function HomeRankingSwitcher({
         {rankingList.map((novel, index) => (
           <Link key={novel.id} href={`/novels/${novel.slug}`} className="grid grid-cols-[40px_56px_1fr_auto] items-center gap-4 rounded-md px-3 py-2 hover:bg-white/10">
             <span className="text-lg font-black text-zinc-500">{index + 1}</span>
-            <Image src={novel.coverUrl} alt="" width={56} height={56} className="h-14 w-14 rounded object-cover" />
+            <NovelStatusCover
+              src={novel.coverUrl}
+              title={novel.title}
+              status={novel.status}
+              className="h-14 w-14 rounded"
+              sizes="56px"
+              compact
+            />
             <div>
               <h3 className="font-bold">{novel.title}</h3>
               <p className="text-sm text-zinc-400">

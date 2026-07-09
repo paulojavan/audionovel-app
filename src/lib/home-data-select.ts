@@ -6,6 +6,7 @@ export const HOME_NOVEL_SELECT = {
   title: true,
   author: true,
   coverUrl: true,
+  status: true,
   ratingScore: true,
   ratingCount: true,
 } as const satisfies Prisma.NovelSelect;
@@ -15,6 +16,7 @@ export const HOME_RANKING_NOVEL_SELECT = {
   slug: true,
   title: true,
   coverUrl: true,
+  status: true,
   viewCount: true,
   ratingScore: true,
   ratingCount: true,
@@ -37,6 +39,7 @@ export const LATEST_CHAPTER_SELECT = {
           title: true,
           slug: true,
           coverUrl: true,
+          status: true,
         },
       },
     },

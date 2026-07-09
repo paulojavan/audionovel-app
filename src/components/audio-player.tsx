@@ -775,6 +775,7 @@ export function AudioPlayer({
                   onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
                   showPauseBetweenChapters={groupedChapterParts.length > 0}
                   autoPlayNextChapterDisabled={!nextChapterHref}
+                  placement="top"
                 />
               </div>
               <div className="hidden grid-cols-[auto_84px_auto] items-center gap-2 lg:grid">
@@ -789,6 +790,7 @@ export function AudioPlayer({
                   onAutoPlayNextChapterChange={(value) => updateSettings({ autoPlayNextChapter: value })}
                   showPauseBetweenChapters={groupedChapterParts.length > 0}
                   autoPlayNextChapterDisabled={!nextChapterHref}
+                  placement="top"
                 />
               </div>
             </div>

@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Search, Star, X } from "lucide-react";
+import { NovelStatusCover } from "@/components/novel-status-cover";
 import { normalizeCatalogQuery } from "@/lib/catalog-query";
 import { getCachedCatalogPage, getCachedCatalogTags } from "@/lib/public-data";
 
@@ -79,7 +79,13 @@ export default async function NovelsPage({
           novels.map((novel) => (
             <article key={novel.id} className="rounded-md bg-[#06272b] p-3 transition hover:bg-[#08353a]">
               <Link href={`/novels/${novel.slug}`}>
-                <Image src={novel.coverUrl} alt="" width={360} height={360} className="aspect-square w-full rounded-md object-cover" />
+                <NovelStatusCover
+                  src={novel.coverUrl}
+                  title={novel.title}
+                  status={novel.status}
+                  className="aspect-square w-full rounded-md"
+                  sizes="(min-width: 1280px) 16vw, (min-width: 768px) 33vw, 50vw"
+                />
                 <h2 className="mt-3 line-clamp-2 font-bold hover:text-[#8ff7ff]">{novel.title}</h2>
               </Link>
               <Link

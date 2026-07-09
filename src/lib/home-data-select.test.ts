@@ -10,6 +10,9 @@ test("selecoes da home nao solicitam relacionamentos e textos pesados", () => {
   assert.equal("volumes" in HOME_NOVEL_SELECT, false);
   assert.equal("synopsis" in HOME_NOVEL_SELECT, false);
   assert.equal("synopsis" in HOME_RANKING_NOVEL_SELECT, false);
+  assert.equal(HOME_NOVEL_SELECT.status, true);
+  assert.equal(HOME_RANKING_NOVEL_SELECT.status, true);
+  assert.equal(LATEST_CHAPTER_SELECT.volume.select.novel.select.status, true);
   assert.equal("transcriptJson" in LATEST_CHAPTER_SELECT, false);
   assert.equal("chapterPartsJson" in LATEST_CHAPTER_SELECT, false);
   assert.equal("audioUrl" in LATEST_CHAPTER_SELECT, false);

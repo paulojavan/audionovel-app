@@ -10,6 +10,7 @@ import {
   CHAPTER_MEDIA_SOURCE_SELECT,
   CHAPTER_PAGE_SELECT,
   CHAPTER_PROGRESS_SELECT,
+  CATALOG_NOVEL_SELECT,
   CATALOG_TAG_SELECT,
   LIBRARY_USER_SELECT,
   NOTIFICATION_SELECT,
@@ -41,6 +42,7 @@ test("biblioteca exclui senha e payloads grandes de capitulos", () => {
   const chapter = LIBRARY_USER_SELECT.listeningProgress.select.chapter.select;
   assert.equal("transcriptJson" in chapter, false);
   assert.equal(chapter.title, true);
+  assert.equal(LIBRARY_USER_SELECT.favorites.select.novel.select.status, true);
 });
 
 test("perfil e offline nao carregam dados privados ou transcricoes", () => {
@@ -108,4 +110,5 @@ test("autorizacao de APIs carrega identidade, bloqueio e estado Premium", () => 
 
 test("filtros do catalogo nao carregam metadados internos das tags", () => {
   assert.deepEqual(Object.keys(CATALOG_TAG_SELECT).sort(), ["id", "name", "slug"]);
+  assert.equal(CATALOG_NOVEL_SELECT.status, true);
 });
