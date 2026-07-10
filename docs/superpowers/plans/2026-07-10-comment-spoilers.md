@@ -179,7 +179,7 @@ Confirm that the stateful spoiler component has a focused `"use client"` boundar
 
 ```ts
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
@@ -298,7 +298,7 @@ git commit -m "feat: reveal comment spoilers on click"
 
 ```ts
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const thread = readFileSync("src/components/comment-thread.tsx", "utf8");
