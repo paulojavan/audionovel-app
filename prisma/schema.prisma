@@ -106,6 +106,7 @@ model Novel {
   volumes        Volume[]
   comments       Comment[]
   favorites      Favorite[]
+  notifications  Notification[]
   reactions      NovelReaction[]
   tags           NovelTag[]
 }
@@ -156,6 +157,7 @@ model Chapter {
   transcriptJson   String              @default("[]")
   premiumOnly      Boolean             @default(false)
   published        Boolean             @default(true)
+  publishedAt      DateTime?
   viewCount        Int                 @default(0)
   likeCount        Int                 @default(0)
   dislikeCount     Int                 @default(0)
@@ -256,6 +258,8 @@ model Notification {
   id        String    @id @default(cuid())
   userId    String
   commentId String?
+  novelId   String?
+  eventKey  String?
   type      String    @default("COMMENT_REPLY")
   title     String
   message   String
@@ -264,8 +268,11 @@ model Notification {
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   comment   Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  novel     Novel?    @relation(fields: [novelId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, type, eventKey])
   @@index([userId, readAt, createdAt])
+  @@index([novelId, createdAt])
 }
 
 model PaymentTransaction {
