@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -8,6 +8,10 @@ const settingsMenu = readFileSync(join(process.cwd(), "src", "components", "play
 const onlinePlayer = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
 const offlinePlayer = readFileSync(join(process.cwd(), "src", "components", "offline-listen-panel.tsx"), "utf8");
 const chapterPage = readFileSync(join(process.cwd(), "src", "app", "chapters", "[id]", "page.tsx"), "utf8");
+const karaokeVolumeMenuPath = join(process.cwd(), "src", "components", "karaoke-volume-menu.tsx");
+const karaokeVolumeMenu = existsSync(karaokeVolumeMenuPath)
+  ? readFileSync(karaokeVolumeMenuPath, "utf8")
+  : "";
 
 test("configuracoes do player persistem com pausas e proximo capitulo desligados por padrao", () => {
   assert.match(settingsHook, /audio-novel-player-settings-v1/);
@@ -34,6 +38,29 @@ test("player online usa menu de configuracoes para velocidade, pausa e proximo c
   assert.doesNotMatch(onlinePlayer, /setPlayMode/);
   assert.doesNotMatch(onlinePlayer, /setPauseAtChapterEnd/);
   assert.doesNotMatch(onlinePlayer, /setPlaybackRate/);
+});
+
+test("karaoke usa icone que abre o controle de volume acima dos controles", () => {
+  assert.match(onlinePlayer, /KaraokeVolumeMenu/);
+  assert.doesNotMatch(onlinePlayer, /function KaraokeVolumeControl/);
+  assert.match(karaokeVolumeMenu, /createPortal/);
+  assert.match(karaokeVolumeMenu, /bottom:/);
+  assert.match(karaokeVolumeMenu, /event\.key === "Escape"/);
+  assert.match(karaokeVolumeMenu, /pointerdown/);
+  assert.match(karaokeVolumeMenu, /aria-expanded=\{open\}/);
+  assert.match(karaokeVolumeMenu, /Volume \{Math\.round/);
+});
+
+test("modo pagina mantem volume ao lado das configuracoes e abre o controle abaixo", () => {
+  assert.match(
+    onlinePlayer,
+    /<KaraokeVolumeMenu[\s\S]*?placement="bottom"[\s\S]*?\/>\s*<PlayerSettingsMenu/,
+  );
+  assert.doesNotMatch(onlinePlayer, /function PageVolumeControl/);
+  assert.doesNotMatch(onlinePlayer, /playing && playMode === "page" \? \(/);
+  assert.match(karaokeVolumeMenu, /placement\?: "top" \| "bottom"/);
+  assert.match(karaokeVolumeMenu, /placement === "top"/);
+  assert.match(karaokeVolumeMenu, /top:/);
 });
 
 test("proximo capitulo automatico inicia playback no capitulo carregado", () => {

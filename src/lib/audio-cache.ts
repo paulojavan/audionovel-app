@@ -15,6 +15,7 @@ export type AudioCacheMode = "temporary" | "offline";
 type AudioCacheOptions = {
   accountScope?: string;
   mode?: AudioCacheMode;
+  expiresAt?: string | number;
   onProgress?: (progress: { loadedBytes: number; totalBytes: number | null; percent: number | null }) => void;
 };
 
@@ -161,6 +162,21 @@ export function getReusableAudioCacheModes(mode: AudioCacheMode): AudioCacheMode
 
 function getCacheTtl(mode: AudioCacheMode) {
   return mode === "offline" ? SEVEN_DAYS_MS : TWO_DAYS_MS;
+}
+
+export function getAudioCacheExpiry(
+  mode: AudioCacheMode,
+  now = Date.now(),
+  expiresAt?: string | number,
+) {
+  const defaultExpiry = now + getCacheTtl(mode);
+  if (expiresAt === undefined) return defaultExpiry;
+
+  const requestedExpiry =
+    typeof expiresAt === "number" ? expiresAt : new Date(expiresAt).getTime();
+  return Number.isFinite(requestedExpiry)
+    ? Math.min(defaultExpiry, requestedExpiry)
+    : defaultExpiry;
 }
 
 function parseContentRange(value: string | null) {
@@ -315,11 +331,28 @@ async function getValidCachedRecord(accountScope: string, chapterId: string, mod
   return null;
 }
 
-async function saveRecordForMode(accountScope: string, chapterId: string, mode: AudioCacheMode, record: AudioRecord) {
+async function saveRecordForMode(
+  accountScope: string,
+  chapterId: string,
+  mode: AudioCacheMode,
+  record: AudioRecord,
+  expiresAt?: string | number,
+) {
   await writeRecord({
     ...record,
     id: getAudioCacheId(accountScope, chapterId, mode),
-    expiresAt: Date.now() + getCacheTtl(mode),
+    expiresAt: getAudioCacheExpiry(
+      mode,
+      Date.now(),
+      Math.min(
+        record.expiresAt,
+        expiresAt === undefined
+          ? Number.POSITIVE_INFINITY
+          : typeof expiresAt === "number"
+            ? expiresAt
+            : new Date(expiresAt).getTime(),
+      ),
+    ),
   });
 }
 
@@ -340,8 +373,8 @@ export async function getSavedOfflineItems(accountScope: string) {
   const items = removeExpiredOfflineItems(await readAllOfflineItems(accountScope));
   const validItems = await Promise.all(
     items.map(async (item) => {
-      const hasAudio = await hasValidEncryptedAudio(accountScope, item.chapterId, "offline");
-      if (hasAudio) return item;
+      const cachedAudio = await getValidCachedRecord(accountScope, item.chapterId, "offline");
+      if (cachedAudio) return item;
       await deleteOfflineItem(accountScope, item.chapterId);
       return null;
     }),
@@ -363,7 +396,7 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
     if (!cached) continue;
 
     if (cachedMode !== mode) {
-      await saveRecordForMode(accountScope, chapterId, mode, cached);
+      await saveRecordForMode(accountScope, chapterId, mode, cached, options.expiresAt);
     }
 
     return createObjectUrlFromRecord(cached, key);
@@ -384,7 +417,7 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
     data: encrypted,
     iv: iv.buffer,
     mimeType,
-    expiresAt: Date.now() + getCacheTtl(mode),
+    expiresAt: getAudioCacheExpiry(mode, Date.now(), options.expiresAt),
   });
 
   return URL.createObjectURL(new Blob([buffer], { type: mimeType }));

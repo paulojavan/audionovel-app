@@ -50,7 +50,7 @@ export function NovelVolumeList({
   accountScope: string;
 }) {
   const scrollContainers = useRef<Array<HTMLDivElement | null>>([]);
-  const [savedOfflineChapterIds, setSavedOfflineChapterIds] = useState<Set<string>>(() => new Set());
+  const [savedOfflineChapterIds, setSavedOfflineChapterIds] = useState<Set<string> | null>(null);
   const hasLastListenedChapter = useMemo(() => volumes.some((volume) => volume.chapters.some((chapter) => chapter.lastListened)), [volumes]);
 
   useEffect(() => {
@@ -85,6 +85,14 @@ export function NovelVolumeList({
       active = false;
     };
   }, [accountScope, canUseOffline]);
+
+  function markChapterSaved(chapterId: string) {
+    setSavedOfflineChapterIds((current) => {
+      const next = new Set(current ?? []);
+      next.add(chapterId);
+      return next;
+    });
+  }
 
   return (
     <div className="grid gap-3">
@@ -140,7 +148,9 @@ export function NovelVolumeList({
                       chapterId={chapter.id}
                       contentType={chapter.contentType}
                       canUseOffline={canUseOffline}
-                      initialSaved={canUseOffline && savedOfflineChapterIds.has(chapter.id)}
+                      initialSaved={canUseOffline && Boolean(savedOfflineChapterIds?.has(chapter.id))}
+                      checkingInitialSaved={canUseOffline && savedOfflineChapterIds === null}
+                      onSaved={markChapterSaved}
                       metadata={{
                         chapterId: chapter.id,
                         title: chapter.title,
@@ -212,7 +222,9 @@ export function NovelVolumeList({
                           chapterId={chapter.id}
                           contentType={chapter.contentType}
                           canUseOffline={canUseOffline}
-                          initialSaved={canUseOffline && savedOfflineChapterIds.has(chapter.id)}
+                          initialSaved={canUseOffline && Boolean(savedOfflineChapterIds?.has(chapter.id))}
+                          checkingInitialSaved={canUseOffline && savedOfflineChapterIds === null}
+                          onSaved={markChapterSaved}
                           metadata={{
                             chapterId: chapter.id,
                             title: chapter.title,

@@ -1,8 +1,9 @@
-// Audio Novel BR - Service Worker v8
+// Audio Novel BR - Service Worker v9
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
+const RELEASE_REVISION = "player-overlays-2026-07-10";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -71,7 +72,7 @@ self.addEventListener("message", (event) => {
   }
 
   if (event.data?.type === "GET_VERSION") {
-    event.ports?.[0]?.postMessage({ version: CACHE_VERSION });
+    event.ports?.[0]?.postMessage({ version: CACHE_VERSION, revision: RELEASE_REVISION });
   }
 
   if (event.data?.type === "SET_ACCOUNT_SCOPE") {

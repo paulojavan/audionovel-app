@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { canPlayChapter, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { getOfflineLicenseExpiry } from "@/lib/offline-license";
 import { hasPremiumAccess } from "@/lib/subscription";
 
 export async function POST(request: Request) {
@@ -28,12 +29,17 @@ export async function POST(request: Request) {
   }
 
   const cacheKey = randomBytes(24).toString("base64url");
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  const now = new Date();
+  const expiresAt = getOfflineLicenseExpiry(
+    auth.user.premiumUntil,
+    now,
+    auth.user.role,
+  );
 
   await prisma.offlineDownload.upsert({
     where: { userId_chapterId: { userId: auth.user.id, chapterId } },
     create: { userId: auth.user.id, chapterId, cacheKey, expiresAt },
-    update: { cacheKey, expiresAt, lastUsedAt: new Date() },
+    update: { cacheKey, expiresAt, lastUsedAt: now },
   });
 
   return NextResponse.json({

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
+import { OfflinePremiumGate } from "@/components/offline-premium-gate";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { OFFLINE_DOWNLOAD_SELECT } from "@/lib/page-data-select";
+import { createOfflineLicense } from "@/lib/offline-license";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -12,6 +14,7 @@ export default async function OfflinePage() {
   const session = await getActiveServerSession();
   if (!session?.user?.id) redirect("/login");
   if (session.user.isBlocked) redirect("/login?blocked=1");
+  if (!session.user.sessionId) redirect("/login");
   const canUseOffline = hasPremiumAccess(session.user);
 
   if (!canUseOffline) {
@@ -37,6 +40,12 @@ export default async function OfflinePage() {
     orderBy: { lastUsedAt: "desc" },
     select: OFFLINE_DOWNLOAD_SELECT,
   });
+  const license = createOfflineLicense({
+    userId: session.user.id,
+    sessionId: session.user.sessionId,
+    premiumUntil: session.user.premiumUntil ?? null,
+    role: session.user.role,
+  });
 
   return (
     <>
@@ -48,30 +57,36 @@ export default async function OfflinePage() {
           <p className="mt-2 text-zinc-400">Capitulos salvos ficam criptografados no navegador e podem expirar conforme a chave offline.</p>
         </section>
 
-        <OfflineListenPanel
+        <OfflinePremiumGate
           accountScope={session.user.id}
-          items={downloads.map((download) => {
-            const chapterParts = getChapterPartsForDisplay(download.chapter).map((part) => ({
-              position: part.position,
-              title: part.title,
-              startSec: part.startSec,
-              endSec: part.endSec,
-            }));
+          sessionId={session.user.sessionId}
+          license={license}
+        >
+          <OfflineListenPanel
+            accountScope={session.user.id}
+            items={downloads.map((download) => {
+              const chapterParts = getChapterPartsForDisplay(download.chapter).map((part) => ({
+                position: part.position,
+                title: part.title,
+                startSec: part.startSec,
+                endSec: part.endSec,
+              }));
 
-            return {
-              id: download.id,
-              chapterId: download.chapterId,
-              title: download.chapter.title,
-              novelTitle: download.chapter.volume.novel.title,
-              volumeTitle: download.chapter.volume.title,
-              chapterPosition: download.chapter.position,
-              chapterPositionLabel: getChapterPositionLabel(download.chapter.position, download.chapter.positionEnd),
-              chapterParts,
-              cacheKey: download.cacheKey,
-              expiresAt: download.expiresAt.toISOString(),
-            };
-          })}
-        />
+              return {
+                id: download.id,
+                chapterId: download.chapterId,
+                title: download.chapter.title,
+                novelTitle: download.chapter.volume.novel.title,
+                volumeTitle: download.chapter.volume.title,
+                chapterPosition: download.chapter.position,
+                chapterPositionLabel: getChapterPositionLabel(download.chapter.position, download.chapter.positionEnd),
+                chapterParts,
+                cacheKey: download.cacheKey,
+                expiresAt: download.expiresAt.toISOString(),
+              };
+            })}
+          />
+        </OfflinePremiumGate>
       </div>
     </>
   );

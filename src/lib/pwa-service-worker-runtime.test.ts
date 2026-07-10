@@ -146,16 +146,16 @@ test("preparacao rejeita resposta de outra conta e preserva o html anterior", as
   const created = createRuntime(async (request) => {
     const url = new URL(request.toString(), ORIGIN);
     if (url.pathname === "/offline") {
-      const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+      const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
       await accountCache.put("/__audio-novel-account-scope__", new Response("account-b"));
       return responseWithUrl(offlineHtml("account-b", "NEW-B"), `${ORIGIN}/offline`, "text/html");
     }
     return responseWithUrl("body{}", url.href, "text/css");
   }, caches);
 
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
-  const pageCache = await caches.open("audio-novel-br-pwa-pages-v8-account-a");
+  const pageCache = await caches.open("audio-novel-br-pwa-pages-v9-account-a");
   await pageCache.put("/offline", responseWithUrl(offlineHtml("account-a", "OLD-A"), `${ORIGIN}/offline`, "text/html"));
 
   await assert.rejects(created.runtime.prepareOfflinePage("account-a"), /Conta offline invalida/);
@@ -165,14 +165,14 @@ test("preparacao rejeita resposta de outra conta e preserva o html anterior", as
 test("navegacao online nao substitui shell valido com html de outra conta", async () => {
   const caches = new MemoryCacheStorage();
   const created = createRuntime(async () => {
-    const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+    const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
     await accountCache.put("/__audio-novel-account-scope__", new Response("account-b"));
     return responseWithUrl(offlineHtml("account-b", "NEW-B"), `${ORIGIN}/offline`, "text/html");
   }, caches);
 
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
-  const pageCache = await caches.open("audio-novel-br-pwa-pages-v8-account-a");
+  const pageCache = await caches.open("audio-novel-br-pwa-pages-v9-account-a");
   await pageCache.put("/offline", responseWithUrl(offlineHtml("account-a", "OLD-A"), `${ORIGIN}/offline`, "text/html"));
 
   const networkResponse = await created.runtime.accountScopedOfflinePage(new Request(`${ORIGIN}/offline`));
@@ -187,9 +187,9 @@ test("pagina visitada abre do cache sem redirecionar para offline", async () => 
     throw new TypeError("Failed to fetch");
   }, caches);
 
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
-  const pageCache = await caches.open("audio-novel-br-pwa-pages-v8-account-a");
+  const pageCache = await caches.open("audio-novel-br-pwa-pages-v9-account-a");
   await pageCache.put(
     `${ORIGIN}/`,
     responseWithUrl(offlineHtml("account-a", "HOME-A"), `${ORIGIN}/`, "text/html"),
@@ -209,9 +209,9 @@ test("pagina inedita sem rede mostra fallback estatico e nao redireciona para of
     throw new TypeError("Failed to fetch");
   }, caches);
 
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
-  const staticCache = await caches.open("audio-novel-br-pwa-v8");
+  const staticCache = await caches.open("audio-novel-br-pwa-v9");
   await staticCache.put(
     "/offline-fallback.html",
     responseWithUrl("FALLBACK", `${ORIGIN}/offline-fallback.html`, "text/html"),
@@ -232,7 +232,7 @@ test("navegacao online salva a pagina no cache da conta", async () => {
     const url = new URL(request.toString(), ORIGIN);
     return responseWithUrl(offlineHtml("account-a", "ONLINE"), url.href, "text/html");
   }, caches);
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-a"));
 
   const response = await created.runtime.networkFirstWithPageCache(
@@ -241,7 +241,7 @@ test("navegacao online salva a pagina no cache da conta", async () => {
 
   assert.equal(response.status, 200);
   assert.match(await response.text(), /ONLINE/);
-  const pageCache = await caches.open("audio-novel-br-pwa-pages-v8-account-a");
+  const pageCache = await caches.open("audio-novel-br-pwa-pages-v9-account-a");
   assert.match(await (await pageCache.match(`${ORIGIN}/novels`))!.text(), /ONLINE/);
 });
 
@@ -250,14 +250,14 @@ test("biblioteca em cache nunca atravessa contas", async () => {
   const created = createRuntime(async () => {
     throw new TypeError("Failed to fetch");
   }, caches);
-  const accountCache = await caches.open("audio-novel-br-pwa-account-v8");
+  const accountCache = await caches.open("audio-novel-br-pwa-account-v9");
   await accountCache.put("/__audio-novel-account-scope__", new Response("account-b"));
-  const accountAPages = await caches.open("audio-novel-br-pwa-pages-v8-account-a");
+  const accountAPages = await caches.open("audio-novel-br-pwa-pages-v9-account-a");
   await accountAPages.put(
     `${ORIGIN}/biblioteca`,
     responseWithUrl(offlineHtml("account-a", "LIBRARY-A"), `${ORIGIN}/biblioteca`, "text/html"),
   );
-  const staticCache = await caches.open("audio-novel-br-pwa-v8");
+  const staticCache = await caches.open("audio-novel-br-pwa-v9");
   await staticCache.put(
     "/offline-fallback.html",
     responseWithUrl("FALLBACK", `${ORIGIN}/offline-fallback.html`, "text/html"),
@@ -272,7 +272,7 @@ test("biblioteca em cache nunca atravessa contas", async () => {
 
 test("cacheFirst aguarda a gravacao antes de concluir a resposta", async () => {
   const created = createRuntime(async () => responseWithUrl("body{}", `${ORIGIN}/_next/static/css/app.css`, "text/css"));
-  const staticCache = await created.caches.open("audio-novel-br-pwa-v8");
+  const staticCache = await created.caches.open("audio-novel-br-pwa-v9");
   const originalPut = staticCache.put.bind(staticCache);
   let releaseWrite!: () => void;
   const writeGate = new Promise<void>((resolve) => {

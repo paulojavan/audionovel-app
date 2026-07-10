@@ -6,6 +6,23 @@ import * as audioCache from "./audio-cache";
 
 const { getReusableAudioCacheModes } = audioCache;
 
+test("cache offline nunca ultrapassa a validade da licenca", () => {
+  const now = new Date("2026-07-10T12:00:00.000Z").getTime();
+  const licenseExpiry = now + 60 * 60_000;
+  assert.equal(
+    audioCache.getAudioCacheExpiry("offline", now, licenseExpiry),
+    licenseExpiry,
+  );
+});
+
+test("cache temporario preserva seu limite padrao", () => {
+  const now = new Date("2026-07-10T12:00:00.000Z").getTime();
+  assert.equal(
+    audioCache.getAudioCacheExpiry("temporary", now),
+    now + 2 * 24 * 60 * 60_000,
+  );
+});
+
 test("cache de audio separa registros por conta", () => {
   assert.equal(
     audioCache.getAudioCacheId("user-a", "chapter-1", "offline"),

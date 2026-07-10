@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield, User } from "lucide-react";
+import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield } from "lucide-react";
 import { getCachedUnreadNotificationCount } from "@/lib/notifications";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import {
@@ -12,6 +12,7 @@ import {
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { PwaLifecycle } from "@/components/pwa-lifecycle";
+import { PwaInstallMenuItem } from "@/components/pwa-install-menu-item";
 import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { SessionHeartbeat } from "@/components/session-heartbeat";
@@ -141,6 +142,7 @@ export default async function RootLayout({
                     <Download size={18} /> Offline
                   </Link>
                 ) : null}
+                <PwaInstallMenuItem variant="sidebar" />
                 {activeSession?.user ? (
                   <Link className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-white/10" href="/notificacoes">
                     <Bell size={18} /> Notificacoes
@@ -163,17 +165,6 @@ export default async function RootLayout({
                   </Link>
                 ) : null}
               </nav>
-              <div className="mt-auto rounded-md bg-[#06272b] p-4 text-sm text-zinc-300">
-                {activeSession?.user ? (
-                  <Link className="flex items-center gap-2" href="/perfil">
-                    <User size={18} /> {activeSession.user.name}
-                  </Link>
-                ) : (
-                  <Link className="rounded-full bg-[#18b7bd] px-4 py-2 font-bold text-[#021114]" href="/login">
-                    Entrar
-                  </Link>
-                )}
-              </div>
             </aside>
             <main className="min-w-0 pb-32 md:pb-24">
               <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-white/10 bg-[#020809]/90 px-4 py-3 backdrop-blur md:px-8">
@@ -194,7 +185,6 @@ export default async function RootLayout({
                   <UserMenu
                     user={activeSession.user}
                     planLabel={subscriptionDisplay.planLabel}
-                    unreadNotificationCount={unreadNotificationCount}
                   />
                 ) : (
                   <div className="flex items-center gap-2">

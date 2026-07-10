@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getPwaInstallPromptState, isMobileUserAgent } from "./pwa-install";
+import { getPwaInstallPromptState, isMobileUserAgent, isPwaInstalled } from "./pwa-install";
+
+test("detecta PWA instalado nos modos standalone, fullscreen e iOS", () => {
+  assert.equal(isPwaInstalled({ standalone: true, fullscreen: false, iosStandalone: false }), true);
+  assert.equal(isPwaInstalled({ standalone: false, fullscreen: true, iosStandalone: false }), true);
+  assert.equal(isPwaInstalled({ standalone: false, fullscreen: false, iosStandalone: true }), true);
+  assert.equal(isPwaInstalled({ standalone: false, fullscreen: false, iosStandalone: false }), false);
+});
 
 test("mostra instrucao iOS quando app ainda nao esta instalado", () => {
   assert.deepEqual(

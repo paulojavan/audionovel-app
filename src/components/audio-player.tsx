@@ -1,7 +1,9 @@
 "use client";
 
-import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AudioDownloadModal } from "@/components/audio-download-modal";
+import { KaraokeVolumeMenu } from "@/components/karaoke-volume-menu";
 import { PlayerSettingsMenu } from "@/components/player-settings-menu";
 import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { getEncryptedAudioUrl } from "@/lib/audio-cache";
@@ -396,13 +398,6 @@ export function AudioPlayer({
     }
   }
 
-  function toggleMuted() {
-    const audio = audioRef.current;
-    const nextMuted = !muted;
-    setMuted(nextMuted);
-    if (audio) audio.muted = nextMuted;
-  }
-
   function updatePlaybackRate(nextRate: number) {
     const audio = audioRef.current;
     updateSettings({ playbackRate: nextRate });
@@ -561,17 +556,7 @@ export function AudioPlayer({
           }}
         />
 
-        {downloadingAudio ? (
-          <div role="status" className="grid gap-2 rounded-md bg-black/30 p-3">
-            <div className="flex items-center justify-between gap-3 text-sm font-bold">
-              <span>Baixando audio</span>
-              <span>{downloadPercent === null ? "..." : `${downloadPercent}%`}</span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full bg-[#18b7bd] transition-[width]" style={{ width: `${downloadPercent ?? 8}%` }} />
-            </div>
-          </div>
-        ) : null}
+        <AudioDownloadModal open={downloadingAudio} percent={downloadPercent} />
 
         <div className="flex flex-col gap-3 rounded-md bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -647,6 +632,12 @@ export function AudioPlayer({
               <SkipForward size={22} fill="currentColor" />
             </button>
           ) : null}
+          <KaraokeVolumeMenu
+            muted={muted}
+            volume={volume}
+            onVolume={updateVolume}
+            placement="bottom"
+          />
           <PlayerSettingsMenu
             playbackRate={playbackRate}
             pauseAtChapterEnd={pauseAtChapterEnd}
@@ -667,13 +658,6 @@ export function AudioPlayer({
           </div>
         </div>
         {playbackError ? <p role="alert" className="rounded-md bg-red-500/10 p-3 text-sm text-red-200">{playbackError}</p> : null}
-
-        {playing && playMode === "page" ? (
-          <div className="grid gap-3 rounded-md bg-black/30 p-3">
-            <p className="text-sm font-bold text-zinc-200">Controle de volume</p>
-            <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} />
-          </div>
-        ) : null}
 
         <section>
           <h2 className="mb-3 text-xl font-bold">Texto do capítulo</h2>
@@ -804,9 +788,9 @@ export function AudioPlayer({
                 <span className="text-xs text-zinc-400">{formatTime(progressDuration)}</span>
                 </div>
               </div>
-              <div className="grid grid-cols-[auto_minmax(64px,84px)_auto] items-center justify-center gap-2 sm:grid-cols-[auto_90px_auto] lg:hidden">
+              <div className="grid grid-cols-[auto_auto_auto] items-center justify-center gap-2 lg:hidden">
                 <KaraokeFontControls onDecrease={decreaseKaraokeFont} onIncrease={increaseKaraokeFont} />
-                <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} compact />
+                <KaraokeVolumeMenu muted={muted} volume={volume} onVolume={updateVolume} placement="top" />
                 <PlayerSettingsMenu
                   playbackRate={playbackRate}
                   pauseAtChapterEnd={pauseAtChapterEnd}
@@ -819,9 +803,9 @@ export function AudioPlayer({
                   placement="top"
                 />
               </div>
-              <div className="hidden grid-cols-[auto_84px_auto] items-center gap-2 lg:grid">
+              <div className="hidden grid-cols-[auto_auto_auto] items-center gap-2 lg:grid">
                 <KaraokeFontControls onDecrease={decreaseKaraokeFont} onIncrease={increaseKaraokeFont} />
-                <KaraokeVolumeControl muted={muted} volume={volume} onMute={toggleMuted} onVolume={updateVolume} compact />
+                <KaraokeVolumeMenu muted={muted} volume={volume} onVolume={updateVolume} placement="top" />
                 <PlayerSettingsMenu
                   playbackRate={playbackRate}
                   pauseAtChapterEnd={pauseAtChapterEnd}
@@ -839,45 +823,6 @@ export function AudioPlayer({
         </div>
       ) : null}
     </>
-  );
-}
-
-function KaraokeVolumeControl({
-  muted,
-  volume,
-  onMute,
-  onVolume,
-  compact = false,
-}: {
-  muted: boolean;
-  volume: number;
-  onMute: () => void;
-  onVolume: (volume: number) => void;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`flex items-center gap-3 ${compact ? "" : "rounded-md bg-black/30 p-3"}`}>
-      <button
-        type="button"
-        onClick={onMute}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
-        aria-label={muted ? "Ativar volume" : "Silenciar"}
-      >
-        {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-      </button>
-      <label className={`grid min-w-0 gap-1 text-xs text-zinc-300 ${compact ? "w-16 sm:w-20" : "flex-1"}`}>
-        <span>{compact ? "Volume" : `Volume ${muted ? 0 : Math.round(volume * 100)}%`}</span>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={muted ? 0 : volume}
-          onChange={(event) => onVolume(Number(event.target.value))}
-          className="w-full accent-white"
-        />
-      </label>
-    </div>
   );
 }
 

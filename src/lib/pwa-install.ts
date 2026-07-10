@@ -8,6 +8,18 @@ type PwaInstallPromptInput = {
   dismissed: boolean;
 };
 
+export function isPwaInstalled({
+  standalone,
+  fullscreen,
+  iosStandalone,
+}: {
+  standalone: boolean;
+  fullscreen: boolean;
+  iosStandalone: boolean;
+}) {
+  return standalone || fullscreen || iosStandalone;
+}
+
 export function getPwaInstallPromptState({
   isIos,
   isMobile,

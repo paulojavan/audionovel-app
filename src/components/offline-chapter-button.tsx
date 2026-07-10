@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, PlaySquare, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
 import { getEncryptedAudioUrl, hasValidEncryptedAudio, saveOfflineItem } from "@/lib/audio-cache";
 import { enqueueOfflineDownload, type OfflineDownloadQueueStatus } from "@/lib/offline-download-queue";
@@ -15,6 +15,8 @@ type OfflineChapterButtonProps = {
   contentType: string;
   canUseOffline: boolean;
   initialSaved?: boolean;
+  checkingInitialSaved?: boolean;
+  onSaved?: (chapterId: string) => void;
   metadata: Omit<OfflineItem, "id" | "cacheKey" | "expiresAt">;
 };
 
@@ -24,7 +26,7 @@ type OfflinePreparePayload = {
   expiresAt: string;
 };
 
-export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, initialSaved = false, metadata }: OfflineChapterButtonProps) {
+export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, initialSaved = false, checkingInitialSaved = false, onSaved, metadata }: OfflineChapterButtonProps) {
   const [message, setMessage] = useState("");
   const savedStateKey = `${accountScope}:${chapterId}`;
   const [readyState, setReadyState] = useState({ key: savedStateKey, saved: false });
@@ -38,37 +40,12 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
 
   function markReady() {
     setReadyState({ key: savedStateKey, saved: true });
+    onSaved?.(chapterId);
   }
 
   function markAudioSaved() {
     setAudioSavedState({ key: savedStateKey, saved: true });
   }
-
-  useEffect(() => {
-    let active = true;
-
-    if (!offlineCryptoSupported) {
-      return () => {
-        active = false;
-      };
-    }
-
-    hasValidEncryptedAudio(accountScope, chapterId, "offline")
-      .then((hasOfflineAudio) => {
-        if (active && hasOfflineAudio) {
-          const nextKey = `${accountScope}:${chapterId}`;
-          setAudioSavedState({ key: nextKey, saved: true });
-          setReadyState({ key: nextKey, saved: true });
-        }
-      })
-      .catch(() => {
-        // A verificacao inicial nao deve impedir o usuario de tentar salvar offline.
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [accountScope, chapterId, offlineCryptoSupported]);
 
   if (contentType === "YOUTUBE") {
     return (
@@ -191,6 +168,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
           await getEncryptedAudioUrl(chapterId, payload.audioUrl, {
             accountScope,
             mode: "offline",
+            expiresAt: payload.expiresAt,
             onProgress: (progress) => setDownloadProgress(progress.percent),
           });
           await savePreparedOfflineMetadata(payload);
@@ -218,17 +196,17 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
     : audioSaved
       ? "Preparando..."
       : "Baixando...";
-  const buttonLabel = ready ? "Salvo" : pending ? busyLabel : audioSaved ? "Preparar offline" : "Ouvir offline";
+  const buttonLabel = checkingInitialSaved ? "Verificando..." : ready ? "Salvo" : pending ? busyLabel : audioSaved ? "Preparar offline" : "Ouvir offline";
 
   return (
     <div className="grid justify-items-start gap-1 md:justify-items-end">
       <button
         type="button"
         onClick={prepareOffline}
-        disabled={pending || ready}
-        title={ready ? "Capitulo salvo offline" : audioSaved ? "Preparar pagina offline" : "Ouvir offline"}
+        disabled={pending || ready || checkingInitialSaved}
+        title={checkingInitialSaved ? "Verificando capitulos salvos" : ready ? "Capitulo salvo offline" : audioSaved ? "Preparar pagina offline" : "Ouvir offline"}
         className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-xs font-black disabled:cursor-not-allowed ${
-          ready
+          ready || checkingInitialSaved
             ? "bg-white/10 text-zinc-300"
             : "bg-red-500/90 text-white hover:bg-red-500 disabled:opacity-60"
         }`}

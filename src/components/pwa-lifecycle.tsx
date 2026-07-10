@@ -25,6 +25,7 @@ export function PwaLifecycle() {
   const [installDismissed, setInstallDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [manualInstallRequested, setManualInstallRequested] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -57,21 +58,28 @@ export function PwaLifecycle() {
       setPromptEvent(null);
       setIsStandalone(true);
       setInstalled(true);
+      setManualInstallRequested(false);
       // Mostrar confirmação brevemente
       dismissTimerRef.current = setTimeout(() => setInstalled(false), 4000);
     };
 
     const handleUpdateAvailable = () => setUpdateAvailable(true);
+    const handleInstallRequested = () => {
+      setInstallDismissed(false);
+      setManualInstallRequested(true);
+    };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
     window.addEventListener("pwa-update-available", handleUpdateAvailable);
+    window.addEventListener("pwa-install-requested", handleInstallRequested);
 
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
       window.removeEventListener("pwa-update-available", handleUpdateAvailable);
+      window.removeEventListener("pwa-install-requested", handleInstallRequested);
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
   }, []);
@@ -83,9 +91,9 @@ export function PwaLifecycle() {
         isMobile,
         isStandalone,
         hasNativeInstallPrompt: Boolean(promptEvent),
-        dismissed: installDismissed,
+        dismissed: manualInstallRequested ? false : installDismissed,
       }),
-    [installDismissed, isIos, isMobile, isStandalone, promptEvent],
+    [installDismissed, isIos, isMobile, isStandalone, manualInstallRequested, promptEvent],
   );
 
   if (!mounted) return null;
@@ -134,9 +142,13 @@ export function PwaLifecycle() {
           await promptEvent.prompt();
           const choice = await promptEvent.userChoice;
           setPromptEvent(null);
+          setManualInstallRequested(false);
           if (choice.outcome === "dismissed") dismissInstallPrompt(setInstallDismissed);
         }}
-        onDismiss={() => dismissInstallPrompt(setInstallDismissed)}
+        onDismiss={() => {
+          setManualInstallRequested(false);
+          dismissInstallPrompt(setInstallDismissed);
+        }}
       />
     );
   }
@@ -144,7 +156,10 @@ export function PwaLifecycle() {
   // ── Instruções iOS (Safari) ──────────────────────────────────────────────
   if (installState === "ios-instructions") {
     return (
-      <IosInstallGuide onDismiss={() => dismissInstallPrompt(setInstallDismissed)} />
+      <IosInstallGuide onDismiss={() => {
+        setManualInstallRequested(false);
+        dismissInstallPrompt(setInstallDismissed);
+      }} />
     );
   }
 
@@ -163,8 +178,14 @@ export function PwaLifecycle() {
           </>
         }
         actionLabel="Entendi"
-        onAction={() => dismissInstallPrompt(setInstallDismissed)}
-        onDismiss={() => dismissInstallPrompt(setInstallDismissed)}
+        onAction={() => {
+          setManualInstallRequested(false);
+          dismissInstallPrompt(setInstallDismissed);
+        }}
+        onDismiss={() => {
+          setManualInstallRequested(false);
+          dismissInstallPrompt(setInstallDismissed);
+        }}
       />
     );
   }

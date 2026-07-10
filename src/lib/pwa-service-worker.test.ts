@@ -12,7 +12,12 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v8"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v9"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "player-overlays-2026-07-10"/);
+  assert.match(
+    serviceWorkerSource,
+    /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
+  );
   assert.match(
     serviceWorkerSource,
     /url\.pathname\.startsWith\("\/_next\/static\/"\)[\s\S]*?event\.respondWith\(cacheFirst\(request\)\)/,

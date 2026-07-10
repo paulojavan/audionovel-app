@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -15,6 +15,8 @@ const audioUpstream = readFileSync(
   join(process.cwd(), "src", "lib", "audio-upstream.ts"),
   "utf8",
 );
+const downloadModalPath = join(process.cwd(), "src", "components", "audio-download-modal.tsx");
+const downloadModal = existsSync(downloadModalPath) ? readFileSync(downloadModalPath, "utf8") : "";
 
 test("troca para karaoke fica bloqueada durante reproducao em modo pagina", () => {
   assert.match(player, /disabled=\{playing && playMode === "page"\}/);
@@ -40,9 +42,22 @@ test("player baixa o audio completo no cache criptografado antes de entregar o b
   assert.match(player, /mode:\s*"temporary"/);
   assert.match(player, /URL\.revokeObjectURL/);
   assert.match(player, /src=\{activeAudioSource \|\| undefined\}/);
-  assert.match(player, /Baixando audio/);
+  assert.match(downloadModal, /Baixando audio/);
   assert.match(player, /downloadPercent/);
+  assert.match(player, /AudioDownloadModal/);
+  assert.doesNotMatch(player, /h-3 overflow-hidden[\s\S]{0,300}downloadPercent/);
   assert.doesNotMatch(player, /preload="metadata"/);
+});
+
+test("download mostra modal circular bloqueante sem fechamento manual", () => {
+  assert.match(downloadModal, /createPortal/);
+  assert.match(downloadModal, /if \(!open\) return null/);
+  assert.match(downloadModal, /role="dialog"/);
+  assert.match(downloadModal, /aria-modal="true"/);
+  assert.match(downloadModal, /animate-spin/);
+  assert.match(downloadModal, /fixed inset-0 z-\[100\]/);
+  assert.match(downloadModal, /percent === null \? "\.\.\."/);
+  assert.doesNotMatch(downloadModal, /onClose|aria-label="Fechar"|<X\b/);
 });
 
 test("player descarta downloads antigos quando a origem muda", () => {

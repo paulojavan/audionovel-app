@@ -107,7 +107,11 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
           return;
         }
 
-        const url = await getEncryptedAudioUrl(item.chapterId, source, { accountScope, mode: "offline" });
+        const url = await getEncryptedAudioUrl(item.chapterId, source, {
+          accountScope,
+          mode: "offline",
+          expiresAt: item.expiresAt,
+        });
         if (audioSrc.startsWith("blob:")) URL.revokeObjectURL(audioSrc);
         setAudioSrc(url);
         setActiveId(item.id);

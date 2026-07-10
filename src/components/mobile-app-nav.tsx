@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Bug, CreditCard, Download, Home, Library, Search, Shield } from "lucide-react";
+import { PwaInstallMenuItem } from "@/components/pwa-install-menu-item";
 
 type MobileAppNavProps = {
   role?: string | null;
@@ -48,6 +49,7 @@ export function MobileAppNav({ role, showSubscriptionsLink, unreadNotificationCo
             </Link>
           );
         })}
+        <PwaInstallMenuItem variant="mobile" />
       </div>
     </nav>
   );
