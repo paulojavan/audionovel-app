@@ -4,6 +4,7 @@ import { chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript 
 import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getChapterPersistenceBounds, normalizeChapterParts } from "@/lib/chapter-grouping";
+import { notifyFavoriteUsersAboutPublishedChapter } from "@/lib/favorite-chapter-notifications";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -21,29 +22,50 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (parsed.data.contentType === "AUDIO" && !parsed.data.audioUrl) throw new Error("audio");
     const chapterParts = normalizeChapterParts(parsed.data.chapterParts);
     const bounds = getChapterPersistenceBounds(parsed.data.position, chapterParts);
+    const publicationDate = new Date();
 
-    const chapter = await prisma.chapter.update({
-      where: { id },
-      data: {
-        volumeId: parsed.data.volumeId,
-        title: parsed.data.title,
-        position: bounds.position,
-        positionEnd: bounds.positionEnd,
-        contentType: parsed.data.contentType,
-        durationSec: parsed.data.durationSec,
-        audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
-        youtubeUrl: parsed.data.contentType === "YOUTUBE" ? cleanedUrl : null,
-        youtubeVideoId,
-        coverUrl: parsed.data.coverUrl || null,
-        startSec: parsed.data.startSec,
-        chapterPartsJson: JSON.stringify(chapterParts),
-        transcriptJson: parsed.data.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(parsed.data.transcriptJson, parsed.data.title, parsed.data.durationSec)) : "[]",
-        premiumOnly: parsed.data.premiumOnly,
-        published: parsed.data.published,
-      },
+    const { chapter, notificationEvent } = await prisma.$transaction(async (tx) => {
+      const publicationClaim = parsed.data.published
+        ? await tx.chapter.updateMany({
+            where: { id, publishedAt: null },
+            data: { publishedAt: publicationDate },
+          })
+        : { count: 0 };
+      const notificationEvent = publicationClaim.count === 1;
+
+      const chapter = await tx.chapter.update({
+        where: { id },
+        data: {
+          volumeId: parsed.data.volumeId,
+          title: parsed.data.title,
+          position: bounds.position,
+          positionEnd: bounds.positionEnd,
+          contentType: parsed.data.contentType,
+          durationSec: parsed.data.durationSec,
+          audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
+          youtubeUrl: parsed.data.contentType === "YOUTUBE" ? cleanedUrl : null,
+          youtubeVideoId,
+          coverUrl: parsed.data.coverUrl || null,
+          startSec: parsed.data.startSec,
+          chapterPartsJson: JSON.stringify(chapterParts),
+          transcriptJson: parsed.data.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(parsed.data.transcriptJson, parsed.data.title, parsed.data.durationSec)) : "[]",
+          premiumOnly: parsed.data.premiumOnly,
+          published: parsed.data.published,
+        },
+      });
+
+      if (notificationEvent) {
+        await notifyFavoriteUsersAboutPublishedChapter(tx, {
+          volumeId: parsed.data.volumeId,
+          publishedAt: publicationDate,
+        });
+      }
+
+      return { chapter, notificationEvent };
     });
 
     revalidateTag(CACHE_TAGS.content, "max");
+    if (notificationEvent) revalidateTag(CACHE_TAGS.notifications, "max");
     return NextResponse.json(chapter);
   } catch {
     return NextResponse.json({ error: "Capitulo duplicado, inexistente ou dados invalidos." }, { status: 409 });
