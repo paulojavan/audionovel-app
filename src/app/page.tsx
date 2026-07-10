@@ -64,6 +64,7 @@ export default async function Home() {
                     status={group.novel.status}
                     className="aspect-[3/4] w-full rounded-md shadow-lg"
                     sizes="(min-width: 640px) 96px, 76px"
+                    showStatus={false}
                   />
                 </Link>
                 <div className="min-w-0">

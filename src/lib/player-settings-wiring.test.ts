@@ -13,6 +13,8 @@ test("configuracoes do player persistem com pausas e proximo capitulo desligados
   assert.match(settingsHook, /audio-novel-player-settings-v1/);
   assert.match(settingsHook, /pauseAtChapterEnd:\s*false/);
   assert.match(settingsHook, /autoPlayNextChapter:\s*false/);
+  assert.match(settingsHook, /playMode:\s*"karaoke"/);
+  assert.match(settingsHook, /normalizePlayMode/);
   assert.match(settingsHook, /localStorage\.setItem/);
   assert.match(settingsMenu, /Settings/);
   assert.match(settingsMenu, /Velocidade/);
@@ -26,8 +28,22 @@ test("player online usa menu de configuracoes para velocidade, pausa e proximo c
   assert.match(onlinePlayer, /autoPlayNextChapter/);
   assert.match(onlinePlayer, /nextChapterHref/);
   assert.match(onlinePlayer, /window\.location\.href = nextChapterHref/);
+  assert.match(onlinePlayer, /playMode/);
+  assert.match(onlinePlayer, /updateSettings\(\{ playMode: "karaoke" \}\)/);
+  assert.match(onlinePlayer, /updateSettings\(\{ playMode: "page" \}\)/);
+  assert.doesNotMatch(onlinePlayer, /setPlayMode/);
   assert.doesNotMatch(onlinePlayer, /setPauseAtChapterEnd/);
   assert.doesNotMatch(onlinePlayer, /setPlaybackRate/);
+});
+
+test("proximo capitulo automatico inicia playback no capitulo carregado", () => {
+  assert.match(onlinePlayer, /NEXT_CHAPTER_AUTOPLAY_KEY/);
+  assert.match(onlinePlayer, /sessionStorage\.setItem\(NEXT_CHAPTER_AUTOPLAY_KEY,\s*nextChapterHref\)/);
+  assert.match(onlinePlayer, /sessionStorage\.getItem\(NEXT_CHAPTER_AUTOPLAY_KEY\)/);
+  assert.match(onlinePlayer, /targetUrl\.pathname === window\.location\.pathname/);
+  assert.match(onlinePlayer, /window\.setTimeout\(\(\) => \{[\s\S]*void playDownloadedAudio\(\)/);
+  assert.match(onlinePlayer, /window\.clearTimeout\(autoplayTimer\)/);
+  assert.match(onlinePlayer, /setKaraokeMode\(playMode === "karaoke"\)/);
 });
 
 test("player offline compartilha o mesmo menu de configuracoes e avanca fila salva", () => {

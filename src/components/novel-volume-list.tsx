@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { ChevronDown, Lock, Play, PlaySquare } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getChapterPartsForDisplay, type ChapterPart } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { getSavedOfflineItems } from "@/lib/audio-cache";
 import { OfflineChapterButton } from "./offline-chapter-button";
 
 type NovelVolume = {
@@ -49,6 +50,7 @@ export function NovelVolumeList({
   accountScope: string;
 }) {
   const scrollContainers = useRef<Array<HTMLDivElement | null>>([]);
+  const [savedOfflineChapterIds, setSavedOfflineChapterIds] = useState<Set<string>>(() => new Set());
   const hasLastListenedChapter = useMemo(() => volumes.some((volume) => volume.chapters.some((chapter) => chapter.lastListened)), [volumes]);
 
   useEffect(() => {
@@ -60,6 +62,29 @@ export function NovelVolumeList({
       container.scrollTop = Math.max(0, centeredScrollTop);
     }
   }, [volumes]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!canUseOffline) {
+      return () => {
+        active = false;
+      };
+    }
+
+    getSavedOfflineItems(accountScope)
+      .then((items) => {
+        if (!active) return;
+        setSavedOfflineChapterIds(new Set(items.map((item) => item.chapterId)));
+      })
+      .catch(() => {
+        if (active) setSavedOfflineChapterIds(new Set());
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accountScope, canUseOffline]);
 
   return (
     <div className="grid gap-3">
@@ -115,6 +140,7 @@ export function NovelVolumeList({
                       chapterId={chapter.id}
                       contentType={chapter.contentType}
                       canUseOffline={canUseOffline}
+                      initialSaved={canUseOffline && savedOfflineChapterIds.has(chapter.id)}
                       metadata={{
                         chapterId: chapter.id,
                         title: chapter.title,
@@ -186,6 +212,7 @@ export function NovelVolumeList({
                           chapterId={chapter.id}
                           contentType={chapter.contentType}
                           canUseOffline={canUseOffline}
+                          initialSaved={canUseOffline && savedOfflineChapterIds.has(chapter.id)}
                           metadata={{
                             chapterId: chapter.id,
                             title: chapter.title,

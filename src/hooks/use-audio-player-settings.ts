@@ -4,16 +4,20 @@ import { useCallback, useState } from "react";
 
 export const AUDIO_SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
+export type AudioPlayerMode = "karaoke" | "page";
+
 export type AudioPlayerSettings = {
   playbackRate: number;
   pauseAtChapterEnd: boolean;
   autoPlayNextChapter: boolean;
+  playMode: AudioPlayerMode;
 };
 
 export const DEFAULT_AUDIO_PLAYER_SETTINGS: AudioPlayerSettings = {
   playbackRate: 1,
   pauseAtChapterEnd: false,
   autoPlayNextChapter: false,
+  playMode: "karaoke",
 };
 
 const STORAGE_KEY = "audio-novel-player-settings-v1";
@@ -23,11 +27,16 @@ function normalizePlaybackRate(value: unknown) {
   return AUDIO_SPEED_OPTIONS.some((rate) => rate === numericValue) ? numericValue : DEFAULT_AUDIO_PLAYER_SETTINGS.playbackRate;
 }
 
+function normalizePlayMode(value: unknown): AudioPlayerMode {
+  return value === "page" || value === "karaoke" ? value : DEFAULT_AUDIO_PLAYER_SETTINGS.playMode;
+}
+
 function normalizeSettings(value: Partial<AudioPlayerSettings> | null | undefined): AudioPlayerSettings {
   return {
     playbackRate: normalizePlaybackRate(value?.playbackRate),
     pauseAtChapterEnd: value?.pauseAtChapterEnd === true,
     autoPlayNextChapter: value?.autoPlayNextChapter === true,
+    playMode: normalizePlayMode(value?.playMode),
   };
 }
 

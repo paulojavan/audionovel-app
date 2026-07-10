@@ -22,11 +22,13 @@ type Cue = {
 
 const PLAYBACK_CONNECTION_ERROR =
   "Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.";
+const NEXT_CHAPTER_AUTOPLAY_KEY = "audio-novel-next-chapter-autoplay-v1";
 
 export function AudioPlayer({
   chapterId,
   src,
   initialPosition,
+  initialCompleted = false,
   duration,
   startOffset = 0,
   transcript,
@@ -40,6 +42,7 @@ export function AudioPlayer({
   chapterId: string;
   src: string;
   initialPosition: number;
+  initialCompleted?: boolean;
   duration: number;
   startOffset?: number;
   transcript: Cue[];
@@ -64,9 +67,9 @@ export function AudioPlayer({
   const downloadPromiseRef = useRef<Promise<string> | null>(null);
   const [audioSource, setAudioSource] = useState<{ source: string; objectUrl: string } | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [playMode, setPlayMode] = useState<"karaoke" | "page">("karaoke");
   const [karaokeMode, setKaraokeMode] = useState(false);
-  const [current, setCurrent] = useState(initialPosition);
+  const initialResumePosition = initialCompleted || isPlaybackComplete(initialPosition, duration) ? 0 : initialPosition;
+  const [current, setCurrent] = useState(initialResumePosition);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [karaokeFontLevel, setKaraokeFontLevel] = useState(1);
@@ -74,7 +77,7 @@ export function AudioPlayer({
   const [playbackError, setPlaybackError] = useState("");
   const [audioDownload, setAudioDownload] = useState<{ source: string; active: boolean; percent: number | null } | null>(null);
   const { settings, updateSettings } = useAudioPlayerSettings();
-  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter } = settings;
+  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, playMode } = settings;
 
   const activeIndex = useMemo(() => {
     if (!transcript.length) return -1;
@@ -256,11 +259,15 @@ export function AudioPlayer({
         activeAudio.load();
       }
       await waitForMetadata(activeAudio);
+      const currentRelativePosition = Math.max(0, activeAudio.currentTime - startOffset);
+      const shouldReplayFromBeginning = activeAudio.ended || isPlaybackComplete(currentRelativePosition, progressDuration);
       const nextPosition =
         position ??
-        (activeAudio.currentTime < startOffset || (activeAudio.currentTime === 0 && (initialPosition > 0 || startOffset > 0))
-          ? startOffset + initialPosition
-          : activeAudio.currentTime);
+        (shouldReplayFromBeginning
+          ? startOffset
+          : activeAudio.currentTime < startOffset || (activeAudio.currentTime === 0 && (initialResumePosition > 0 || startOffset > 0))
+            ? startOffset + initialResumePosition
+            : activeAudio.currentTime);
       activeAudio.currentTime = nextPosition;
       setKaraokeMode(playMode === "karaoke");
       setPlaybackError("");
@@ -277,7 +284,7 @@ export function AudioPlayer({
       setKaraokeMode(false);
       setPlaybackError((currentError) => currentError || PLAYBACK_CONNECTION_ERROR);
     }
-  }, [getDownloadedAudioUrl, initialPosition, muted, playbackRate, playMode, startOffset, volume, waitForMetadata]);
+  }, [getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, startOffset, volume, waitForMetadata]);
 
   function toggle() {
     const audio = audioRef.current;
@@ -321,6 +328,35 @@ export function AudioPlayer({
     if (!autoplay) return;
     void playDownloadedAudio(startSec);
   }, [playDownloadedAudio, startOffset]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let shouldAutoPlay = false;
+    try {
+      const storedTarget = window.sessionStorage.getItem(NEXT_CHAPTER_AUTOPLAY_KEY);
+      if (storedTarget) {
+        const targetUrl = new URL(storedTarget, window.location.href);
+        const isTargetChapter = targetUrl.pathname === window.location.pathname;
+        if (isTargetChapter) window.sessionStorage.removeItem(NEXT_CHAPTER_AUTOPLAY_KEY);
+        shouldAutoPlay = isTargetChapter && autoPlayNextChapter;
+      }
+    } catch {
+      try {
+        window.sessionStorage.removeItem(NEXT_CHAPTER_AUTOPLAY_KEY);
+      } catch {
+        // Mantem a reproducao manual disponivel quando sessionStorage esta indisponivel.
+      }
+    }
+
+    if (!shouldAutoPlay) return;
+
+    const autoplayTimer = window.setTimeout(() => {
+      void playDownloadedAudio();
+    }, 0);
+
+    return () => window.clearTimeout(autoplayTimer);
+  }, [autoPlayNextChapter, chapterId, playDownloadedAudio]);
 
   useEffect(() => {
     if (!shouldScrollActiveCueRef.current || activeIndex < 0) return;
@@ -465,7 +501,7 @@ export function AudioPlayer({
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
             setResolvedDuration(duration || audioDuration);
             if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
-            else if (initialPosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialPosition;
+            else if (initialResumePosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialResumePosition;
             event.currentTarget.volume = volume;
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
@@ -505,6 +541,11 @@ export function AudioPlayer({
             setCurrent(progressDuration);
             const progressSave = saveProgress({ completed: true, force: true, keepalive: true });
             if (autoPlayNextChapter && nextChapterHref) {
+              try {
+                window.sessionStorage.setItem(NEXT_CHAPTER_AUTOPLAY_KEY, nextChapterHref);
+              } catch {
+                // A navegacao continua mesmo se o navegador bloquear sessionStorage.
+              }
               void progressSave.finally(() => {
                 window.location.href = nextChapterHref;
               });
@@ -540,7 +581,7 @@ export function AudioPlayer({
           <div className="grid grid-cols-2 rounded-full bg-black p-1 text-sm font-bold">
             <button
               type="button"
-              onClick={() => setPlayMode("karaoke")}
+              onClick={() => updateSettings({ playMode: "karaoke" })}
               disabled={playing && playMode === "page"}
               aria-disabled={playing && playMode === "page"}
               title={playing && playMode === "page" ? "Pause o audio antes de ativar o Karaoke." : undefined}
@@ -550,7 +591,7 @@ export function AudioPlayer({
             </button>
             <button
               type="button"
-              onClick={() => setPlayMode("page")}
+              onClick={() => updateSettings({ playMode: "page" })}
               className={`min-h-11 rounded-full px-4 py-2 ${playMode === "page" ? "bg-[#18b7bd] text-[#021114]" : "text-zinc-300 hover:bg-white/10"}`}
             >
               Página

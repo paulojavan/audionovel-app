@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 const player = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
+const chapterPage = readFileSync(join(process.cwd(), "src", "app", "chapters", "[id]", "page.tsx"), "utf8");
 const progressRoute = readFileSync(join(process.cwd(), "src", "app", "api", "progress", "route.ts"), "utf8");
 const audioRoute = readFileSync(
   join(process.cwd(), "src", "app", "api", "chapters", "[id]", "audio", "route.ts"),
@@ -74,6 +75,16 @@ test("toggle baixa antes de reproduzir quando o audio esta pausado", () => {
   assert.ok(downloadIndex >= 0);
   assert.ok(pausedIndex >= 0);
   assert.ok(downloadIndex > pausedIndex);
+});
+
+test("capitulo ja concluido pode ser reproduzido novamente do inicio", () => {
+  assert.match(chapterPage, /initialCompleted=\{progress\?\.completed \?\? false\}/);
+  assert.match(player, /initialCompleted \|\| isPlaybackComplete\(initialPosition, duration\) \? 0 : initialPosition/);
+  assert.match(player, /useState\(initialResumePosition\)/);
+  assert.match(player, /activeAudio\.ended \|\| isPlaybackComplete\(currentRelativePosition, progressDuration\)/);
+  assert.match(player, /shouldReplayFromBeginning[\s\S]*\? startOffset/);
+  assert.match(player, /startOffset \+ initialResumePosition/);
+  assert.doesNotMatch(player, /startOffset \+ initialPosition/);
 });
 
 test("erro do elemento local nao tenta reiniciar streaming", () => {

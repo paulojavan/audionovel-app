@@ -39,7 +39,7 @@ export const getCachedHomeData = unstable_cache(
       }),
       prisma.chapter.findMany({
         where: { published: true },
-        take: 8,
+        take: 12,
         orderBy: { createdAt: "desc" },
         select: LATEST_CHAPTER_SELECT,
       }),

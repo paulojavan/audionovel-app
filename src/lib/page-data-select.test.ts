@@ -50,8 +50,8 @@ test("perfil e offline nao carregam dados privados ou transcricoes", () => {
   assert.equal("transcriptJson" in OFFLINE_DOWNLOAD_SELECT.chapter.select, false);
 });
 
-test("progresso da pagina de capitulo carrega apenas a posicao", () => {
-  assert.deepEqual(Object.keys(CHAPTER_PROGRESS_SELECT), ["positionSec"]);
+test("progresso da pagina de capitulo carrega posicao e conclusao", () => {
+  assert.deepEqual(Object.keys(CHAPTER_PROGRESS_SELECT).sort(), ["completed", "positionSec"]);
 });
 
 test("painel da novel e pagamentos administrativos usam selecoes minimas", () => {

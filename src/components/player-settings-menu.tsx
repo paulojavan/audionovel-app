@@ -5,7 +5,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import { AUDIO_SPEED_OPTIONS, type AudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 
-type PlayerSettingsMenuProps = AudioPlayerSettings & {
+type PlayerSettingsMenuProps = Pick<AudioPlayerSettings, "playbackRate" | "pauseAtChapterEnd" | "autoPlayNextChapter"> & {
   onPlaybackRateChange: (rate: number) => void;
   onPauseAtChapterEndChange: (value: boolean) => void;
   onAutoPlayNextChapterChange: (value: boolean) => void;

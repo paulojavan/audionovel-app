@@ -192,6 +192,7 @@ export const OFFLINE_DOWNLOAD_SELECT = {
 
 export const CHAPTER_PROGRESS_SELECT = {
   positionSec: true,
+  completed: true,
 } as const satisfies Prisma.ListeningProgressSelect;
 
 export const NOTIFICATION_SELECT = {

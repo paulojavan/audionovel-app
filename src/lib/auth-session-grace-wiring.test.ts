@@ -12,6 +12,10 @@ const authTypesSource = readFileSync(
   join(process.cwd(), "src", "types", "next-auth.d.ts"),
   "utf8",
 );
+const safeAuthSource = readFileSync(
+  join(process.cwd(), "src", "lib", "safe-auth-session.ts"),
+  "utf8",
+);
 
 function sourceBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -77,4 +81,13 @@ test("handles explicit invalid device sessions before any user-state refresh", (
   assert.ok(clearIdentityIndex > explicitInvalidIndex);
   assert.ok(returnIndex > clearIdentityIndex);
   assert.ok(userRefreshIndex > returnIndex);
+});
+
+test("safe session fallback preserves validated JWT during transient database failure", () => {
+  assert.match(safeAuthSource, /isTransientPrismaSessionError/);
+  assert.match(safeAuthSource, /evaluateSessionDatabaseGrace/);
+  assert.match(safeAuthSource, /buildSessionFromToken/);
+  assert.match(safeAuthSource, /catch \(error\)[\s\S]*isTransientPrismaSessionError\(error\)/);
+  assert.match(safeAuthSource, /grace\.allowed[\s\S]*return buildSessionFromToken/);
+  assert.match(safeAuthSource, /return null/);
 });

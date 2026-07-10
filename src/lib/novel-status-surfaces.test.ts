@@ -10,6 +10,7 @@ const homePage = readFileSync(join(process.cwd(), "src", "app", "page.tsx"), "ut
 const catalogPage = readFileSync(join(process.cwd(), "src", "app", "novels", "page.tsx"), "utf8");
 const libraryPage = readFileSync(join(process.cwd(), "src", "app", "biblioteca", "page.tsx"), "utf8");
 const rankingSwitcher = readFileSync(join(process.cwd(), "src", "components", "home-ranking-switcher.tsx"), "utf8");
+const publicData = readFileSync(join(process.cwd(), "src", "lib", "public-data.ts"), "utf8");
 
 test("menu de configuracoes pode abrir para cima no karaoke", () => {
   assert.match(playerSettingsMenu, /placement\?:\s*"bottom"\s*\|\s*"top"/);
@@ -27,11 +28,18 @@ test("menu de configuracoes pode abrir para cima no karaoke", () => {
 test("selo de status da capa usa rotulo traduzido", () => {
   assert.match(coverBadge, /getNovelStatusLabel\(status\)/);
   assert.match(coverBadge, /absolute/);
+  assert.match(coverBadge, /showStatus = true/);
 });
 
-test("home, catalogo e biblioteca renderizam capas com selo de status", () => {
+test("home, catalogo e biblioteca renderizam capas com selo de status onde a capa comporta o selo", () => {
   assert.match(homePage, /NovelStatusCover/);
   assert.match(catalogPage, /NovelStatusCover/);
   assert.match(libraryPage, /NovelStatusCover/);
   assert.match(rankingSwitcher, /NovelStatusCover/);
+  assert.match(homePage, /showStatus=\{false\}/);
+  assert.match(rankingSwitcher, /showStatus=\{false\}/);
+});
+
+test("home busca doze capitulos para lancamentos", () => {
+  assert.match(publicData, /prisma\.chapter\.findMany\(\{[\s\S]*take:\s*12/);
 });

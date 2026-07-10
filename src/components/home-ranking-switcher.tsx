@@ -61,6 +61,7 @@ export function HomeRankingSwitcher({
               className="h-14 w-14 rounded"
               sizes="56px"
               compact
+              showStatus={false}
             />
             <div>
               <h3 className="font-bold">{novel.title}</h3>

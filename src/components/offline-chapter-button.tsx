@@ -1,9 +1,10 @@
 "use client";
 
 import { Download, PlaySquare, XCircle } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
-import { getEncryptedAudioUrl, saveOfflineItem } from "@/lib/audio-cache";
+import { getEncryptedAudioUrl, hasValidEncryptedAudio, saveOfflineItem } from "@/lib/audio-cache";
+import { enqueueOfflineDownload, type OfflineDownloadQueueStatus } from "@/lib/offline-download-queue";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import type { OfflineItem } from "@/lib/offline-items";
 import { prepareOfflinePage } from "@/lib/pwa-offline";
@@ -13,16 +14,61 @@ type OfflineChapterButtonProps = {
   chapterId: string;
   contentType: string;
   canUseOffline: boolean;
+  initialSaved?: boolean;
   metadata: Omit<OfflineItem, "id" | "cacheKey" | "expiresAt">;
 };
 
-export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, metadata }: OfflineChapterButtonProps) {
+type OfflinePreparePayload = {
+  audioUrl: string;
+  cacheKey: string;
+  expiresAt: string;
+};
+
+export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, initialSaved = false, metadata }: OfflineChapterButtonProps) {
   const [message, setMessage] = useState("");
-  const [ready, setReady] = useState(false);
-  const [audioSaved, setAudioSaved] = useState(false);
+  const savedStateKey = `${accountScope}:${chapterId}`;
+  const [readyState, setReadyState] = useState({ key: savedStateKey, saved: false });
+  const [audioSavedState, setAudioSavedState] = useState({ key: savedStateKey, saved: false });
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<OfflineDownloadQueueStatus | null>(null);
   const offlineCryptoSupported = useOfflineCryptoSupported();
+  const ready = initialSaved || (readyState.key === savedStateKey && readyState.saved);
+  const audioSaved = audioSavedState.key === savedStateKey && audioSavedState.saved;
+
+  function markReady() {
+    setReadyState({ key: savedStateKey, saved: true });
+  }
+
+  function markAudioSaved() {
+    setAudioSavedState({ key: savedStateKey, saved: true });
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    if (!offlineCryptoSupported) {
+      return () => {
+        active = false;
+      };
+    }
+
+    hasValidEncryptedAudio(accountScope, chapterId, "offline")
+      .then((hasOfflineAudio) => {
+        if (active && hasOfflineAudio) {
+          const nextKey = `${accountScope}:${chapterId}`;
+          setAudioSavedState({ key: nextKey, saved: true });
+          setReadyState({ key: nextKey, saved: true });
+        }
+      })
+      .catch(() => {
+        // A verificacao inicial nao deve impedir o usuario de tentar salvar offline.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accountScope, chapterId, offlineCryptoSupported]);
 
   if (contentType === "YOUTUBE") {
     return (
@@ -67,22 +113,69 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
   }
 
   function prepareOffline() {
-    startTransition(async () => {
-      const prepareSavedPage = async () => {
-        await prepareOfflinePage(accountScope);
-        setReady(true);
-        setDownloadProgress(100);
-        setMessage("Offline salvo.");
-      };
-      const showShellPreparationError = () => {
-        setMessage("Audio salvo, mas a pagina offline ainda nao ficou pronta. Toque novamente para tentar.");
-      };
+    if (pending || ready) return;
 
-      try {
-        setMessage("");
-        setDownloadProgress(null);
+    const prepareSavedPage = async () => {
+      await prepareOfflinePage(accountScope);
+      markReady();
+      setDownloadProgress(100);
+      setMessage("Offline salvo.");
+    };
+    const showShellPreparationError = () => {
+      setMessage("Audio salvo, mas a pagina offline ainda nao ficou pronta. Toque novamente para tentar.");
+    };
+    const prepareOfflineMetadata = async (): Promise<OfflinePreparePayload | null> => {
+      const response = await fetch("/api/offline/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chapterId }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { audioUrl?: string; cacheKey?: string; expiresAt?: string; error?: string };
 
-        if (audioSaved) {
+      if (!response.ok || !payload.audioUrl || !payload.cacheKey || !payload.expiresAt) {
+        setMessage(payload.error ?? "Nao foi possivel salvar offline.");
+        return null;
+      }
+
+      return {
+        audioUrl: payload.audioUrl,
+        cacheKey: payload.cacheKey,
+        expiresAt: payload.expiresAt,
+      };
+    };
+    const savePreparedOfflineMetadata = async (payload: { cacheKey: string; expiresAt: string }) => {
+      await saveOfflineItem(accountScope, {
+        ...metadata,
+        id: chapterId,
+        cacheKey: payload.cacheKey,
+        expiresAt: payload.expiresAt,
+      });
+      markAudioSaved();
+      setDownloadProgress(100);
+    };
+
+    if (audioSaved) {
+      setPending(true);
+      setMessage("");
+      setDownloadProgress(null);
+      void prepareSavedPage()
+        .catch(showShellPreparationError)
+        .finally(() => setPending(false));
+      return;
+    }
+
+    setPending(true);
+    setQueueStatus(null);
+    setMessage("");
+    setDownloadProgress(null);
+
+    void hasValidEncryptedAudio(accountScope, chapterId, "offline")
+      .then(async (hasOfflineAudio) => {
+        if (hasOfflineAudio) {
+          const payload = await prepareOfflineMetadata();
+          if (!payload) return;
+
+          await savePreparedOfflineMetadata(payload);
           try {
             await prepareSavedPage();
           } catch {
@@ -91,43 +184,41 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
           return;
         }
 
-        const response = await fetch("/api/offline/prepare", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chapterId }),
-        });
-        const payload = (await response.json().catch(() => ({}))) as { audioUrl?: string; cacheKey?: string; expiresAt?: string; error?: string };
+        await enqueueOfflineDownload(async () => {
+          const payload = await prepareOfflineMetadata();
+          if (!payload) return;
 
-        if (!response.ok || !payload.audioUrl || !payload.cacheKey || !payload.expiresAt) {
-          setMessage(payload.error ?? "Nao foi possivel salvar offline.");
-          return;
-        }
+          await getEncryptedAudioUrl(chapterId, payload.audioUrl, {
+            accountScope,
+            mode: "offline",
+            onProgress: (progress) => setDownloadProgress(progress.percent),
+          });
+          await savePreparedOfflineMetadata(payload);
 
-        await getEncryptedAudioUrl(chapterId, payload.audioUrl, {
-          accountScope,
-          mode: "offline",
-          onProgress: (progress) => setDownloadProgress(progress.percent),
-        });
-        await saveOfflineItem(accountScope, {
-          ...metadata,
-          id: chapterId,
-          cacheKey: payload.cacheKey,
-          expiresAt: payload.expiresAt,
-        });
-        setAudioSaved(true);
-        setDownloadProgress(100);
-
-        try {
-          await prepareSavedPage();
-        } catch {
-          showShellPreparationError();
-        }
-      } catch (error) {
+          try {
+            await prepareSavedPage();
+          } catch {
+            showShellPreparationError();
+          }
+        }, setQueueStatus);
+      })
+      .catch((error) => {
         setDownloadProgress(null);
         setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel salvar offline.");
-      }
-    });
+      })
+      .finally(() => {
+        setQueueStatus(null);
+        setPending(false);
+      });
   }
+
+  const queued = pending && queueStatus?.state === "queued";
+  const busyLabel = queued
+    ? `Na fila (${queueStatus.position})`
+    : audioSaved
+      ? "Preparando..."
+      : "Baixando...";
+  const buttonLabel = ready ? "Salvo" : pending ? busyLabel : audioSaved ? "Preparar offline" : "Ouvir offline";
 
   return (
     <div className="grid justify-items-start gap-1 md:justify-items-end">
@@ -136,9 +227,13 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
         onClick={prepareOffline}
         disabled={pending || ready}
         title={ready ? "Capitulo salvo offline" : audioSaved ? "Preparar pagina offline" : "Ouvir offline"}
-        className="inline-flex min-h-11 items-center gap-2 rounded-full bg-red-500/90 px-3 py-2 text-xs font-black text-white hover:bg-red-500 disabled:opacity-60"
+        className={`inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-xs font-black disabled:cursor-not-allowed ${
+          ready
+            ? "bg-white/10 text-zinc-300"
+            : "bg-red-500/90 text-white hover:bg-red-500 disabled:opacity-60"
+        }`}
       >
-        <Download size={16} /> {ready ? "Offline salvo" : audioSaved ? "Preparar offline" : "Ouvir offline"}
+        <Download size={16} /> {buttonLabel}
       </button>
       {pending ? (
         <div className="grid w-40 gap-1">
@@ -146,7 +241,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
             <div className={`h-full bg-red-400 ${downloadProgress === null ? "w-1/2 animate-pulse" : ""}`} style={downloadProgress === null ? undefined : { width: `${downloadProgress}%` }} />
           </div>
           <span className="text-right text-[11px] text-zinc-300">
-            {audioSaved ? "Preparando..." : downloadProgress === null ? "Baixando..." : `${downloadProgress}%`}
+            {queued ? `Aguardando download ${queueStatus.position}` : audioSaved ? "Preparando..." : downloadProgress === null ? "Baixando..." : `${downloadProgress}%`}
           </span>
         </div>
       ) : null}

@@ -123,11 +123,12 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
       {isYouTubeChapter && access.chapter.youtubeVideoId ? (
         <YouTubeChapter videoId={access.chapter.youtubeVideoId} title={access.chapter.title} />
       ) : (
-        <AudioPlayer
-          chapterId={id}
-          src={`/api/chapters/${id}/audio`}
-          initialPosition={progress?.positionSec ?? 0}
-          duration={access.chapter.durationSec}
+          <AudioPlayer
+            chapterId={id}
+            src={`/api/chapters/${id}/audio`}
+            initialPosition={progress?.positionSec ?? 0}
+            initialCompleted={progress?.completed ?? false}
+            duration={access.chapter.durationSec}
           startOffset={access.chapter.startSec}
           transcript={transcript}
           chapterTitle={access.chapter.title}
