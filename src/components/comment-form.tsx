@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState, useTransition } from "react";
+import { CommentSpoilerHint } from "./comment-spoiler-hint";
 
 type CommentFormProps = {
   target: "novel" | "chapter";
@@ -74,6 +75,7 @@ export function CommentForm({ target, targetId, isLoggedIn, parentId, compact = 
         placeholder={parentId ? "Escreva sua resposta..." : "Compartilhe sua opiniao..."}
         className="resize-y rounded-md border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#18b7bd]"
       />
+      <CommentSpoilerHint />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className={`text-sm ${message.includes("moderacao") ? "text-[#18b7bd]" : "text-red-300"}`}>{message}</p>
         <button type="submit" disabled={pending || body.trim().length < 2} className="rounded-full bg-[#18b7bd] px-5 py-2 font-black text-[#021114] disabled:opacity-50">

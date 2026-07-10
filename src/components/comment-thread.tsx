@@ -1,4 +1,5 @@
 import { CommentActions } from "./comment-actions";
+import { CommentBodyText } from "./comment-body-text";
 
 type CommentThreadProps = {
   target: "novel" | "chapter";
@@ -86,9 +87,13 @@ function CommentBody({ comment }: { comment: CommentItem | ReplyItem }) {
         <span className="text-xs text-zinc-500">{comment.createdAt.toLocaleString("pt-BR")}</span>
         {comment.editedAt && !removed ? <span className="text-xs text-zinc-500">editado</span> : null}
       </div>
-      <p className={`mt-1 whitespace-pre-wrap ${removed ? "italic text-zinc-500" : "text-zinc-300"}`}>
-        {removed ? "Comentario removido pelo administrador." : comment.body}
-      </p>
+      {removed ? (
+        <p className="mt-1 whitespace-pre-wrap italic text-zinc-500">
+          Comentario removido pelo administrador.
+        </p>
+      ) : (
+        <CommentBodyText key={comment.body} body={comment.body} />
+      )}
     </>
   );
 }

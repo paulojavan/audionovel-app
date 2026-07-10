@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useState, useTransition } from "react";
 import { CommentForm } from "./comment-form";
+import { CommentSpoilerHint } from "./comment-spoiler-hint";
 
 type CommentActionsProps = {
   target: "novel" | "chapter";
@@ -91,6 +92,7 @@ export function CommentActions({ target, targetId, commentId, body, isLoggedIn, 
             rows={3}
             className="resize-y rounded-md border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#18b7bd]"
           />
+          <CommentSpoilerHint />
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => setEditOpen(false)} className="rounded-full px-4 py-2 text-sm font-bold text-zinc-300 hover:bg-white/10">
               Cancelar
