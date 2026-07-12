@@ -9,6 +9,19 @@ const OFFLINE_ITEMS_STORE_NAME = "offlineItems";
 const KEY_NAME = "audio-novel-br-audio-cache-key";
 const TWO_DAYS_MS = 1000 * 60 * 60 * 24 * 2;
 const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
+const DEFAULT_AUDIO_DOWNLOAD_ERROR = "Nao foi possivel baixar o audio.";
+const MAX_AUDIO_ERROR_BODY_BYTES = 1_024;
+const MAX_AUDIO_ERROR_MESSAGE_LENGTH = 200;
+
+export class AudioDownloadHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message = DEFAULT_AUDIO_DOWNLOAD_ERROR,
+  ) {
+    super(message);
+    this.name = "AudioDownloadHttpError";
+  }
+}
 
 export type AudioCacheMode = "temporary" | "offline";
 
@@ -201,13 +214,64 @@ function emitDownloadProgress(
   });
 }
 
+async function getAudioDownloadHttpErrorMessage(response: Response) {
+  if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+  }
+
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_AUDIO_ERROR_BODY_BYTES) {
+    return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_AUDIO_ERROR_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(body)) as { error?: unknown };
+    const message = typeof parsed.error === "string" ? parsed.error.trim() : "";
+    return message.length > 0 && message.length <= MAX_AUDIO_ERROR_MESSAGE_LENGTH
+      ? message
+      : DEFAULT_AUDIO_DOWNLOAD_ERROR;
+  } catch {
+    return DEFAULT_AUDIO_DOWNLOAD_ERROR;
+  }
+}
+
 export async function downloadAudioBuffer(sourceUrl: string, options: DownloadAudioBufferOptions = {}) {
   const fetcher = options.fetcher ?? fetch;
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   const chunks: Uint8Array[] = [];
   let loadedBytes = 0;
   let totalBytes: number | null = null;
-  let lastError: unknown = new Error("Nao foi possivel baixar o audio.");
+  let lastError: unknown = new Error(DEFAULT_AUDIO_DOWNLOAD_ERROR);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -218,7 +282,12 @@ export async function downloadAudioBuffer(sourceUrl: string, options: DownloadAu
         credentials: "include",
         headers,
       });
-      if (!response.ok) throw new Error("Nao foi possivel baixar o audio.");
+      if (!response.ok) {
+        throw new AudioDownloadHttpError(
+          response.status,
+          await getAudioDownloadHttpErrorMessage(response),
+        );
+      }
 
       const contentRange = parseContentRange(response.headers.get("content-range"));
       if (loadedBytes > 0 && response.status !== 206) {
@@ -268,6 +337,13 @@ export async function downloadAudioBuffer(sourceUrl: string, options: DownloadAu
       return buffer.buffer;
     } catch (error) {
       lastError = error;
+      if (
+        error instanceof AudioDownloadHttpError &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        break;
+      }
       if (attempt === maxAttempts) break;
     }
   }

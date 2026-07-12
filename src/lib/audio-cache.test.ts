@@ -6,6 +6,19 @@ import * as audioCache from "./audio-cache";
 
 const { getReusableAudioCacheModes } = audioCache;
 
+type AudioDownloadHttpErrorConstructor = new (
+  status: number,
+  message?: string,
+) => Error & { status: number };
+
+function getAudioDownloadHttpErrorConstructor() {
+  return (
+    audioCache as typeof audioCache & {
+      AudioDownloadHttpError?: AudioDownloadHttpErrorConstructor;
+    }
+  ).AudioDownloadHttpError;
+}
+
 test("cache offline nunca ultrapassa a validade da licenca", () => {
   const now = new Date("2026-07-10T12:00:00.000Z").getTime();
   const licenseExpiry = now + 60 * 60_000;
@@ -104,4 +117,57 @@ test("download de audio retoma do byte recebido quando a conexao cai", async () 
 
   assert.deepEqual([...new Uint8Array(result)], [1, 2, 3, 4]);
   assert.deepEqual(requests, [{ range: null }, { range: "bytes=2-" }]);
+});
+
+test("download preserva 401 e a mensagem segura da API sem repetir a requisicao", async () => {
+  const AudioDownloadHttpError = getAudioDownloadHttpErrorConstructor();
+  assert.equal(typeof AudioDownloadHttpError, "function");
+  if (!AudioDownloadHttpError) return;
+
+  let attempts = 0;
+  await assert.rejects(
+    audioCache.downloadAudioBuffer("/audio", {
+      fetcher: async () => {
+        attempts += 1;
+        return Response.json(
+          { error: "Autenticacao obrigatoria." },
+          { status: 401 },
+        );
+      },
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof AudioDownloadHttpError);
+      assert.equal(error.status, 401);
+      assert.equal(error.message, "Autenticacao obrigatoria.");
+      return true;
+    },
+  );
+  assert.equal(attempts, 1);
+});
+
+test("download ignora corpo HTTP grande e usa mensagem segura generica", async () => {
+  const AudioDownloadHttpError = getAudioDownloadHttpErrorConstructor();
+  assert.equal(typeof AudioDownloadHttpError, "function");
+  if (!AudioDownloadHttpError) return;
+
+  await assert.rejects(
+    audioCache.downloadAudioBuffer("/audio", {
+      fetcher: async () => new Response(
+        JSON.stringify({ error: "x".repeat(2_000) }),
+        {
+          status: 403,
+          headers: {
+            "Content-Length": "2012",
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof AudioDownloadHttpError);
+      assert.equal(error.status, 403);
+      assert.equal(error.message, "Nao foi possivel baixar o audio.");
+      return true;
+    },
+  );
 });
