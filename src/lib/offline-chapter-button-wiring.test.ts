@@ -20,7 +20,7 @@ test("botao prepara a pagina somente depois de salvar os metadados locais", () =
 });
 
 test("botao permite tentar preparar a pagina novamente sem baixar o audio", () => {
-  const audioSavedBlock = source.match(/if \(audioSaved\) \{[\s\S]*?return;\n    \}/)?.[0] ?? "";
+  const audioSavedBlock = source.match(/if \(audioSaved\) \{[\s\S]*?return;\r?\n    \}/)?.[0] ?? "";
   assert.match(audioSavedBlock, /void prepareSavedPage\(\)/);
   assert.doesNotMatch(audioSavedBlock, /enqueueOfflineDownload/);
   assert.match(
@@ -57,7 +57,7 @@ test("lista aguarda uma verificacao centralizada antes de mostrar ouvir offline"
 
 test("leitura em lote de capitulos salvos limpa o cache apenas uma vez", () => {
   const getSavedItemsBlock = audioCache.match(
-    /export async function getSavedOfflineItems[\s\S]*?\n}\n\nexport async function getEncryptedAudioUrl/,
+    /export async function getSavedOfflineItems[\s\S]*?\r?\n}\r?\n\r?\nexport async function getEncryptedAudioUrl/,
   )?.[0] ?? "";
 
   assert.match(getSavedItemsBlock, /cleanupExpiredAudioCache\(\)/);
