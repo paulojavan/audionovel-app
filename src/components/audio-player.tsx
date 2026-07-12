@@ -15,6 +15,7 @@ import {
   type ChapterPlaybackPart,
   type ChapterSeekDetail,
 } from "@/lib/chapter-playback";
+import { resolveOnlineAudioFailure } from "@/lib/online-audio-playback";
 
 type Cue = {
   start: number;
@@ -214,7 +215,6 @@ export function AudioPlayer({
       })
       .catch((error) => {
         setAudioDownload({ source: src, active: false, percent: null });
-        setPlaybackError("Nao foi possivel baixar o audio. Verifique a conexao e toque em play novamente.");
         throw error;
       })
       .finally(() => {
@@ -253,11 +253,28 @@ export function AudioPlayer({
     if (!audio) return;
 
     try {
-      const objectUrl = await getDownloadedAudioUrl();
+      let playbackSource: string;
+      try {
+        playbackSource = await getDownloadedAudioUrl();
+      } catch (error) {
+        const failure = resolveOnlineAudioFailure(error);
+        if (failure.kind === "error") {
+          desiredPlaybackRef.current = false;
+          playbackActiveRef.current = false;
+          setPlaying(false);
+          setKaraokeMode(false);
+          setPlaybackError(failure.message);
+          return;
+        }
+
+        playbackSource = src;
+        setAudioSource({ source: src, objectUrl: src });
+      }
+
       if (!audioRef.current) return;
       const activeAudio = audioRef.current;
-      if (activeAudio.src !== objectUrl) {
-        activeAudio.src = objectUrl;
+      if (activeAudio.getAttribute("src") !== playbackSource) {
+        activeAudio.src = playbackSource;
         activeAudio.load();
       }
       await waitForMetadata(activeAudio);
@@ -286,7 +303,7 @@ export function AudioPlayer({
       setKaraokeMode(false);
       setPlaybackError((currentError) => currentError || PLAYBACK_CONNECTION_ERROR);
     }
-  }, [getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, startOffset, volume, waitForMetadata]);
+  }, [getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, src, startOffset, volume, waitForMetadata]);
 
   function toggle() {
     const audio = audioRef.current;

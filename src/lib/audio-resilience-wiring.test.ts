@@ -4,6 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 const player = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
+const offlinePlayer = readFileSync(
+  join(process.cwd(), "src", "components", "offline-listen-panel.tsx"),
+  "utf8",
+);
 const chapterPage = readFileSync(join(process.cwd(), "src", "app", "chapters", "[id]", "page.tsx"), "utf8");
 const progressRoute = readFileSync(join(process.cwd(), "src", "app", "api", "progress", "route.ts"), "utf8");
 const audioRoute = readFileSync(
@@ -47,6 +51,31 @@ test("player baixa o audio completo no cache criptografado antes de entregar o b
   assert.match(player, /AudioDownloadModal/);
   assert.doesNotMatch(player, /h-3 overflow-hidden[\s\S]{0,300}downloadPercent/);
   assert.doesNotMatch(player, /preload="metadata"/);
+});
+
+test("player online usa streaming direto somente quando o cache permite fallback", () => {
+  assert.match(
+    player,
+    /import \{ resolveOnlineAudioFailure \} from "@\/lib\/online-audio-playback"/,
+  );
+  assert.match(
+    player,
+    /getEncryptedAudioUrl\(chapterId, src,[\s\S]*?catch \(error\)[\s\S]*?resolveOnlineAudioFailure\(error\)/,
+  );
+  assert.match(
+    player,
+    /if \(failure\.kind === "error"\) \{[\s\S]*?setPlaybackError\(failure\.message\);[\s\S]*?return;/,
+  );
+  assert.match(player, /playbackSource = src/);
+  assert.match(
+    player,
+    /activeAudio\.getAttribute\("src"\) !== playbackSource/,
+  );
+  assert.match(player, /activeAudio\.src = playbackSource/);
+  assert.doesNotMatch(
+    offlinePlayer,
+    /resolveOnlineAudioFailure|playbackSource = src/,
+  );
 });
 
 test("download mostra modal circular bloqueante sem fechamento manual", () => {
