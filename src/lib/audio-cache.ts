@@ -2,6 +2,10 @@ import type { OfflineItem } from "./offline-items";
 import { assertOfflineCryptoSupported } from "./offline-crypto";
 import { removeExpiredOfflineItems } from "./offline-items";
 import { buildAccountStorageKey, normalizeAccountScope } from "./account-scope";
+import {
+  selectAvailableOfflineItems,
+  selectRecoverableOfflineItems,
+} from "./offline-catalog";
 
 const DB_NAME = "audio-novel-br-audio-cache";
 const STORE_NAME = "audios";
@@ -48,6 +52,11 @@ type AudioRecord = {
 
 type ScopedOfflineItem = OfflineItem & {
   storageId: string;
+};
+
+type OfflineCatalogSnapshot = {
+  items: OfflineItem[];
+  audioRecordIds: IDBValidKey[];
 };
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -123,22 +132,45 @@ async function deleteRecord(id: string) {
   }).finally(() => db.close());
 }
 
-async function readAllOfflineItems(accountScope: string) {
+function filterScopedOfflineItems(
+  records: ScopedOfflineItem[],
+  accountScope: string,
+) {
+  const prefix = buildAccountStorageKey(accountScope, "");
+  return records
+    .filter((item) => item.storageId.startsWith(prefix))
+    .map(({ storageId, ...item }) => {
+      void storageId;
+      return item;
+    });
+}
+
+async function readOfflineCatalogSnapshot(accountScope: string) {
   const db = await openAudioDb();
-  return new Promise<OfflineItem[]>((resolve, reject) => {
-    const request = db.transaction(OFFLINE_ITEMS_STORE_NAME, "readonly").objectStore(OFFLINE_ITEMS_STORE_NAME).getAll();
-    request.onsuccess = () => {
-      const prefix = buildAccountStorageKey(accountScope, "");
-      const records = (request.result as ScopedOfflineItem[])
-        .filter((item) => item.storageId.startsWith(prefix))
-        .map(({ storageId, ...item }) => {
-          void storageId;
-          return item;
-        });
-      resolve(records);
-    };
-    request.onerror = () => reject(request.error);
+  return new Promise<OfflineCatalogSnapshot>((resolve, reject) => {
+    const transaction = db.transaction(
+      [OFFLINE_ITEMS_STORE_NAME, STORE_NAME],
+      "readonly",
+    );
+    const itemRequest = transaction
+      .objectStore(OFFLINE_ITEMS_STORE_NAME)
+      .getAll();
+    const keyRequest = transaction.objectStore(STORE_NAME).getAllKeys();
+    transaction.oncomplete = () => resolve({
+      items: filterScopedOfflineItems(
+        itemRequest.result as ScopedOfflineItem[],
+        accountScope,
+      ),
+      audioRecordIds: keyRequest.result,
+    });
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   }).finally(() => db.close());
+}
+
+async function readAllOfflineItems(accountScope: string) {
+  const snapshot = await readOfflineCatalogSnapshot(accountScope);
+  return snapshot.items;
 }
 
 async function writeOfflineItem(accountScope: string, item: OfflineItem) {
@@ -447,32 +479,21 @@ export async function saveOfflineItem(accountScope: string, item: OfflineItem) {
 }
 
 export async function getSavedOfflineItems(accountScope: string) {
-  await cleanupExpiredAudioCache();
-  await cleanupExpiredOfflineItems(accountScope);
-  const items = removeExpiredOfflineItems(await readAllOfflineItems(accountScope));
-  const validItems = await Promise.all(
-    items.map(async (item) => {
-      const cachedAudio = await getValidCachedRecord(accountScope, item.chapterId, "offline");
-      if (cachedAudio) return item;
-      await deleteOfflineItem(accountScope, item.chapterId);
-      return null;
-    }),
+  const snapshot = await readOfflineCatalogSnapshot(accountScope);
+  return selectAvailableOfflineItems(
+    snapshot.items,
+    snapshot.audioRecordIds,
+    accountScope,
   );
-
-  return validItems.filter((item): item is OfflineItem => Boolean(item));
 }
 
 export async function getRecoverableOfflineItems(accountScope: string) {
-  const items = await readAllOfflineItems(accountScope);
-  const recoverableItems = await Promise.all(
-    items.map(async (item) => {
-      const record = await readRecord(
-        getAudioCacheId(accountScope, item.chapterId, "offline"),
-      );
-      return record ? item : null;
-    }),
+  const snapshot = await readOfflineCatalogSnapshot(accountScope);
+  return selectRecoverableOfflineItems(
+    snapshot.items,
+    snapshot.audioRecordIds,
+    accountScope,
   );
-  return recoverableItems.filter((item): item is OfflineItem => Boolean(item));
 }
 
 export async function extendOfflineAudioExpiry(

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeOfflineItems, removeExpiredOfflineItems } from "./offline-items";
+import {
+  mergeAvailableOfflineItems,
+  mergeOfflineItems,
+  removeExpiredOfflineItems,
+} from "./offline-items";
 
 const baseItem = {
   id: "download-1",
@@ -34,6 +38,19 @@ test("mergeOfflineItems preserves server chapter parts for older local metadata"
   assert.equal(merged[0].id, "local");
   assert.equal(merged[0].title, "Local");
   assert.deepEqual(merged[0].chapterParts, chapterParts);
+});
+
+test("mergeAvailableOfflineItems nunca adiciona capitulo que nao existe localmente", () => {
+  const merged = mergeAvailableOfflineItems(
+    [
+      { ...baseItem, chapterId: "local", id: "server-local", title: "Servidor" },
+      { ...baseItem, chapterId: "server-only", id: "server-only" },
+    ],
+    [{ ...baseItem, chapterId: "local", id: "local", title: "Local" }],
+  );
+
+  assert.deepEqual(merged.map((item) => item.chapterId), ["local"]);
+  assert.equal(merged[0].title, "Local");
 });
 
 test("removeExpiredOfflineItems removes expired metadata", () => {

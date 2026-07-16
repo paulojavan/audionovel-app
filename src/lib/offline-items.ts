@@ -41,6 +41,16 @@ export function mergeOfflineItems(serverItems: OfflineItem[], localItems: Offlin
   });
 }
 
+export function mergeAvailableOfflineItems(
+  serverItems: OfflineItem[],
+  localItems: OfflineItem[],
+) {
+  const availableChapterIds = new Set(localItems.map((item) => item.chapterId));
+  return mergeOfflineItems(serverItems, localItems).filter((item) => (
+    availableChapterIds.has(item.chapterId)
+  ));
+}
+
 export function removeExpiredOfflineItems(items: OfflineItem[], now = Date.now()) {
   return items.filter((item) => new Date(item.expiresAt).getTime() > now);
 }

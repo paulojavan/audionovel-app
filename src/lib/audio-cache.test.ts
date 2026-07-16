@@ -45,13 +45,14 @@ test("cache offline acompanha uma licenca premium superior a sete dias", () => {
   );
 });
 
-test("recuperacao le itens e blobs expirados sem executar limpeza primeiro", () => {
+test("recuperacao consulta chaves sem materializar blobs expirados", () => {
   const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
   const recoverableBlock = source.match(
     /export async function getRecoverableOfflineItems[\s\S]*?\r?\n}\r?\n/,
   )?.[0] ?? "";
-  assert.match(recoverableBlock, /readAllOfflineItems/);
-  assert.match(recoverableBlock, /readRecord/);
+  assert.match(recoverableBlock, /readOfflineCatalogSnapshot/);
+  assert.match(recoverableBlock, /selectRecoverableOfflineItems/);
+  assert.doesNotMatch(recoverableBlock, /readRecord/);
   assert.doesNotMatch(recoverableBlock, /cleanupExpired/);
 });
 

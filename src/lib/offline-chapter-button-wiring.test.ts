@@ -8,6 +8,7 @@ const source = readFileSync(
   "utf8",
 );
 const volumeList = readFileSync(join(process.cwd(), "src", "components", "novel-volume-list.tsx"), "utf8");
+const offlinePanel = readFileSync(join(process.cwd(), "src", "components", "offline-listen-panel.tsx"), "utf8");
 const audioCache = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
 
 test("botao prepara a pagina somente depois de salvar os metadados locais", () => {
@@ -55,14 +56,25 @@ test("lista aguarda uma verificacao centralizada antes de mostrar ouvir offline"
   assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?hasValidEncryptedAudio\(accountScope, chapterId, "offline"\)/);
 });
 
-test("leitura em lote de capitulos salvos limpa o cache apenas uma vez", () => {
+test("leitura em lote de capitulos salvos consulta somente metadados e chaves", () => {
   const getSavedItemsBlock = audioCache.match(
-    /export async function getSavedOfflineItems[\s\S]*?\r?\n}\r?\n\r?\nexport async function getEncryptedAudioUrl/,
+    /export async function getSavedOfflineItems[\s\S]*?\r?\n}\r?\n\r?\nexport async function getRecoverableOfflineItems/,
   )?.[0] ?? "";
 
-  assert.match(getSavedItemsBlock, /cleanupExpiredAudioCache\(\)/);
-  assert.match(getSavedItemsBlock, /getValidCachedRecord\(accountScope, item\.chapterId, "offline"\)/);
-  assert.doesNotMatch(getSavedItemsBlock, /hasValidEncryptedAudio\(/);
+  assert.match(audioCache, /objectStore\(STORE_NAME\)\.getAllKeys\(\)/);
+  assert.doesNotMatch(getSavedItemsBlock, /cleanupExpiredAudioCache\(\)/);
+  assert.doesNotMatch(getSavedItemsBlock, /getValidCachedRecord\(/);
+  assert.doesNotMatch(getSavedItemsBlock, /readRecord\(/);
+});
+
+test("painel offline nao valida nem regrava cada capitulo durante a listagem", () => {
+  const listEffect = offlinePanel.match(
+    /getSavedOfflineItems\(accountScope\)[\s\S]*?\.catch\(/,
+  )?.[0] ?? "";
+
+  assert.match(listEffect, /mergeAvailableOfflineItems/);
+  assert.doesNotMatch(listEffect, /hasValidEncryptedAudio/);
+  assert.doesNotMatch(listEffect, /saveOfflineItem/);
 });
 
 test("download concluido sincroniza o estado salvo entre os layouts da lista", () => {

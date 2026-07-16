@@ -5,9 +5,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PlayerSettingsMenu } from "@/components/player-settings-menu";
 import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
-import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio, saveOfflineItem } from "@/lib/audio-cache";
+import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio } from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
-import { mergeOfflineItems, type OfflineItem } from "@/lib/offline-items";
+import { mergeAvailableOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
 export function OfflineListenPanel({ accountScope, items }: { accountScope: string; items: OfflineItem[] }) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -46,20 +46,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     }
 
     getSavedOfflineItems(accountScope)
-      .then(async (localItems) => {
-        const mergedItems = mergeOfflineItems(items, localItems);
-        const validItems = await Promise.all(
-          mergedItems.map(async (item) => {
-            const valid = await hasValidEncryptedAudio(accountScope, item.chapterId, "offline");
-            return valid ? item : null;
-          }),
-        );
-        return validItems.filter((item): item is OfflineItem => Boolean(item));
-      })
-      .then(async (validItems) => {
-        await Promise.all(validItems.map((item) => saveOfflineItem(accountScope, item)));
-        return validItems;
-      })
+      .then((localItems) => mergeAvailableOfflineItems(items, localItems))
       .then((validItems) => {
         if (!active) return;
         setAvailableItems(validItems);
