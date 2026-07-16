@@ -23,14 +23,21 @@ test("prepareOfflinePage espera o worker ativo e normaliza o escopo", async () =
   await prepareOfflinePage(" user-1 ", serviceWorker);
 
   assert.equal(readyWasRead, true);
-  assert.deepEqual(messages, [{ type: "PREPARE_OFFLINE_PAGE", scope: "user-1" }]);
+  assert.deepEqual(messages, [
+    { type: "SET_ACCOUNT_SCOPE", scope: "user-1" },
+    { type: "PREPARE_OFFLINE_PAGE", scope: "user-1" },
+  ]);
 });
 
 test("prepareOfflinePage propaga a mensagem de erro retornada pelo worker", async () => {
   const controller = {
-    postMessage(_message: unknown, transfer: Transferable[]) {
+    postMessage(message: unknown, transfer: Transferable[]) {
       const replyPort = transfer[0] as MessagePort;
-      replyPort.postMessage({ ok: false, error: "Pagina offline indisponivel." });
+      replyPort.postMessage(
+        (message as { type?: string }).type === "SET_ACCOUNT_SCOPE"
+          ? { ok: true }
+          : { ok: false, error: "Pagina offline indisponivel." },
+      );
     },
   };
 

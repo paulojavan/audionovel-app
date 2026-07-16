@@ -1,9 +1,9 @@
-// Audio Novel BR - Service Worker v9
+// Audio Novel BR - Service Worker v10
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v9";
-const RELEASE_REVISION = "player-overlays-2026-07-10";
+const CACHE_VERSION = "v10";
+const RELEASE_REVISION = "premium-offline-2026-07-16";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -76,7 +76,12 @@ self.addEventListener("message", (event) => {
   }
 
   if (event.data?.type === "SET_ACCOUNT_SCOPE") {
-    event.waitUntil(setAccountScope(event.data.scope));
+    const replyPort = event.ports?.[0];
+    event.waitUntil(
+      setAccountScope(event.data.scope)
+        .then(() => replyPort?.postMessage({ ok: true, scope: normalizeAccountScope(event.data.scope) }))
+        .catch(() => replyPort?.postMessage({ ok: false, error: "Nao foi possivel definir a conta offline." })),
+    );
   }
 
   if (event.data?.type === "PREPARE_OFFLINE_PAGE") {

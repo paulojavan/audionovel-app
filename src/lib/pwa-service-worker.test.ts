@@ -12,8 +12,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v9"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "player-overlays-2026-07-10"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v10"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "premium-offline-2026-07-16"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
@@ -30,6 +30,7 @@ test("service worker usa cache-first para chunks versionados do Next", () => {
 
 test("service worker limita cache de navegacao as rotas aprovadas e separa por conta", () => {
   assert.match(serviceWorkerSource, /SET_ACCOUNT_SCOPE/);
+  assert.match(serviceWorkerSource, /setAccountScope\(event\.data\.scope\)[\s\S]*?postMessage\(\{ ok: true/);
   assert.match(serviceWorkerSource, /isCacheableNavigationPath\(url\.pathname\)/);
   assert.match(serviceWorkerSource, /getAccountPageCacheName/);
   assert.match(

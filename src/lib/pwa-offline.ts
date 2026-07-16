@@ -25,8 +25,25 @@ export async function prepareOfflinePage(
   const registration = await withTimeout(serviceWorker.ready, timeoutMs);
   const worker = serviceWorker.controller ?? registration.active;
   if (!worker) throw new Error("Service worker indisponivel.");
-  const remainingTime = Math.max(1, deadline - Date.now());
+  const scope = normalizeAccountScope(accountScope);
 
+  await postWorkerRequest(
+    worker,
+    { type: "SET_ACCOUNT_SCOPE", scope },
+    Math.max(1, deadline - Date.now()),
+  );
+  await postWorkerRequest(
+    worker,
+    { type: "PREPARE_OFFLINE_PAGE", scope },
+    Math.max(1, deadline - Date.now()),
+  );
+}
+
+async function postWorkerRequest(
+  worker: ServiceWorkerMessageTarget,
+  message: { type: "SET_ACCOUNT_SCOPE" | "PREPARE_OFFLINE_PAGE"; scope: string },
+  timeoutMs: number,
+) {
   await new Promise<void>((resolve, reject) => {
     const channel = new MessageChannel();
     let settled = false;
@@ -43,7 +60,7 @@ export async function prepareOfflinePage(
 
     const timer = setTimeout(
       () => finish(new Error(OFFLINE_PREPARATION_TIMEOUT_MESSAGE)),
-      remainingTime,
+      timeoutMs,
     );
 
     channel.port1.onmessage = (event: MessageEvent<OfflinePagePreparationReply>) => {
@@ -52,13 +69,7 @@ export async function prepareOfflinePage(
     };
 
     try {
-      worker.postMessage(
-        {
-          type: "PREPARE_OFFLINE_PAGE",
-          scope: normalizeAccountScope(accountScope),
-        },
-        [channel.port2],
-      );
+      worker.postMessage(message, [channel.port2]);
     } catch (error) {
       finish(error instanceof Error ? error : new Error("Nao foi possivel contatar o service worker."));
     }
