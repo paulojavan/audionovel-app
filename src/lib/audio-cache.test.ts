@@ -36,6 +36,35 @@ test("cache temporario preserva seu limite padrao", () => {
   );
 });
 
+test("cache offline acompanha uma licenca premium superior a sete dias", () => {
+  const now = new Date("2026-07-10T12:00:00.000Z").getTime();
+  const premiumExpiry = now + 30 * 24 * 60 * 60_000;
+  assert.equal(
+    audioCache.getAudioCacheExpiry("offline", now, premiumExpiry),
+    premiumExpiry,
+  );
+});
+
+test("recuperacao le itens e blobs expirados sem executar limpeza primeiro", () => {
+  const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
+  const recoverableBlock = source.match(
+    /export async function getRecoverableOfflineItems[\s\S]*?\n}\n/,
+  )?.[0] ?? "";
+  assert.match(recoverableBlock, /readAllOfflineItems/);
+  assert.match(recoverableBlock, /readRecord/);
+  assert.doesNotMatch(recoverableBlock, /cleanupExpired/);
+});
+
+test("extensao de validade preserva o registro criptografado existente", () => {
+  const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
+  const extensionBlock = source.match(
+    /export async function extendOfflineAudioExpiry[\s\S]*?\n}\n/,
+  )?.[0] ?? "";
+  assert.match(extensionBlock, /readRecord/);
+  assert.match(extensionBlock, /writeRecord\(\{[\s\S]*?\.\.\.record[\s\S]*?expiresAt/);
+  assert.doesNotMatch(extensionBlock, /deleteRecord/);
+});
+
 test("cache de audio separa registros por conta", () => {
   assert.equal(
     audioCache.getAudioCacheId("user-a", "chapter-1", "offline"),

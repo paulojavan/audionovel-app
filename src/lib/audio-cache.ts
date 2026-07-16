@@ -187,6 +187,9 @@ export function getAudioCacheExpiry(
 
   const requestedExpiry =
     typeof expiresAt === "number" ? expiresAt : new Date(expiresAt).getTime();
+  if (mode === "offline" && Number.isFinite(requestedExpiry)) {
+    return requestedExpiry;
+  }
   return Number.isFinite(requestedExpiry)
     ? Math.min(defaultExpiry, requestedExpiry)
     : defaultExpiry;
@@ -457,6 +460,39 @@ export async function getSavedOfflineItems(accountScope: string) {
   );
 
   return validItems.filter((item): item is OfflineItem => Boolean(item));
+}
+
+export async function getRecoverableOfflineItems(accountScope: string) {
+  const items = await readAllOfflineItems(accountScope);
+  const recoverableItems = await Promise.all(
+    items.map(async (item) => {
+      const record = await readRecord(
+        getAudioCacheId(accountScope, item.chapterId, "offline"),
+      );
+      return record ? item : null;
+    }),
+  );
+  return recoverableItems.filter((item): item is OfflineItem => Boolean(item));
+}
+
+export async function extendOfflineAudioExpiry(
+  accountScope: string,
+  chapterId: string,
+  expiresAt: string | number,
+) {
+  const nextExpiry = typeof expiresAt === "number"
+    ? expiresAt
+    : new Date(expiresAt).getTime();
+  if (!Number.isFinite(nextExpiry) || nextExpiry <= Date.now()) return false;
+
+  const cacheId = getAudioCacheId(accountScope, chapterId, "offline");
+  const record = await readRecord(cacheId);
+  if (!record) return false;
+  await writeRecord({
+    ...record,
+    expiresAt: nextExpiry,
+  });
+  return true;
 }
 
 export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string, options: AudioCacheOptions = {}) {
