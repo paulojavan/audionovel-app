@@ -48,7 +48,7 @@ test("cache offline acompanha uma licenca premium superior a sete dias", () => {
 test("recuperacao le itens e blobs expirados sem executar limpeza primeiro", () => {
   const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
   const recoverableBlock = source.match(
-    /export async function getRecoverableOfflineItems[\s\S]*?\n}\n/,
+    /export async function getRecoverableOfflineItems[\s\S]*?\r?\n}\r?\n/,
   )?.[0] ?? "";
   assert.match(recoverableBlock, /readAllOfflineItems/);
   assert.match(recoverableBlock, /readRecord/);
@@ -58,7 +58,7 @@ test("recuperacao le itens e blobs expirados sem executar limpeza primeiro", () 
 test("extensao de validade preserva o registro criptografado existente", () => {
   const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
   const extensionBlock = source.match(
-    /export async function extendOfflineAudioExpiry[\s\S]*?\n}\n/,
+    /export async function extendOfflineAudioExpiry[\s\S]*?\r?\n}\r?\n/,
   )?.[0] ?? "";
   assert.match(extensionBlock, /readRecord/);
   assert.match(extensionBlock, /writeRecord\(\{[\s\S]*?\.\.\.record[\s\S]*?expiresAt/);
