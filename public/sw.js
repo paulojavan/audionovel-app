@@ -1,9 +1,9 @@
-// Audio Novel BR - Service Worker v10
+// Audio Novel BR - Service Worker v11
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v10";
-const RELEASE_REVISION = "premium-offline-2026-07-16";
+const CACHE_VERSION = "v11";
+const RELEASE_REVISION = "offline-loading-performance-2026-07-16";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -134,7 +134,7 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       url.pathname === "/offline"
-        ? accountScopedOfflinePage(request)
+        ? accountScopedOfflinePage(request, event)
         : isCacheableNavigationPath(url.pathname)
           ? networkFirstWithPageCache(request, event)
           : networkOnlyWithOfflineFallback(request),
@@ -254,27 +254,43 @@ async function publishNavigationPage(response, request, scope) {
   await cache.put(getNavigationCacheKey(request), response);
 }
 
-async function accountScopedOfflinePage(request) {
+async function accountScopedOfflinePage(request, event, timeoutMs = 4_000) {
   const scope = await getAccountScope();
   if (scope === ANONYMOUS_ACCOUNT_SCOPE) {
     return networkOnlyWithOfflineFallback(request);
   }
 
   const cache = await caches.open(getAccountPageCacheName(scope));
-
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
+  const cached = await cache.match(request);
+  const networkTask = fetch(request);
+  const refreshTask = networkTask
+    .then(async (response) => {
+      if (!response.ok) return;
       try {
         await publishOfflinePage(response.clone(), scope);
       } catch {
         // Mantem o shell anterior quando a resposta nao puder ser publicada com seguranca.
       }
-    }
-    return response;
+    })
+    .catch(() => undefined);
+
+  event?.waitUntil?.(refreshTask);
+  if (cached) return cached;
+
+  let timeoutId;
+  const timeoutTask = new Promise((resolve) => {
+    timeoutId = setTimeout(
+      () => resolve(getOfflineFallback()),
+      timeoutMs,
+    );
+  });
+
+  try {
+    const response = await Promise.race([networkTask, timeoutTask]);
+    clearTimeout(timeoutId);
+    return await response;
   } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
+    clearTimeout(timeoutId);
     return getOfflineFallback();
   }
 }
