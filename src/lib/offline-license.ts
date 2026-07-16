@@ -7,16 +7,28 @@ import {
   type KeyObject,
 } from "node:crypto";
 
-const OFFLINE_LICENSE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const ADMIN_OFFLINE_LICENSE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const ED25519_PKCS8_SEED_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
 
-export type OfflineLicensePayload = {
+export type OfflineLicensePayloadV1 = {
   version: 1;
   userId: string;
   sessionId: string;
+  deviceId?: never;
   issuedAt: string;
   expiresAt: string;
 };
+
+export type OfflineLicensePayloadV2 = {
+  version: 2;
+  userId: string;
+  deviceId: string;
+  sessionId?: never;
+  issuedAt: string;
+  expiresAt: string;
+};
+
+export type OfflineLicensePayload = OfflineLicensePayloadV1 | OfflineLicensePayloadV2;
 
 export type OfflineLicense = {
   token: string;
@@ -27,7 +39,8 @@ export type OfflineLicense = {
 
 type CreateOfflineLicenseInput = {
   userId: string;
-  sessionId: string;
+  sessionId?: string;
+  deviceId?: string;
   premiumUntil: Date | string | null;
   role?: string | null;
   now?: Date;
@@ -36,7 +49,8 @@ type CreateOfflineLicenseInput = {
 
 type VerifyOfflineLicenseInput = {
   userId: string;
-  sessionId: string;
+  sessionId?: string;
+  deviceId?: string;
   now?: Date;
   secret?: string;
 };
@@ -47,7 +61,9 @@ export function getOfflineLicenseExpiry(
   role?: string | null,
 ) {
   if (role === "ADMIN") {
-    return new Date(now.getTime() + OFFLINE_LICENSE_MAX_AGE_MS);
+    if (!premiumUntil) {
+      return new Date(now.getTime() + ADMIN_OFFLINE_LICENSE_MAX_AGE_MS);
+    }
   }
 
   if (!premiumUntil) throw new Error("Premium expirado.");
@@ -59,30 +75,37 @@ export function getOfflineLicenseExpiry(
     throw new Error("Premium expirado.");
   }
 
-  return new Date(
-    Math.min(
-      premiumExpiry.getTime(),
-      now.getTime() + OFFLINE_LICENSE_MAX_AGE_MS,
-    ),
-  );
+  return premiumExpiry;
 }
 
 export function createOfflineLicense({
   userId,
   sessionId,
+  deviceId,
   premiumUntil,
   role,
   now = new Date(),
   secret,
 }: CreateOfflineLicenseInput): OfflineLicense {
   const expiresAt = getOfflineLicenseExpiry(premiumUntil, now, role);
-  const payload: OfflineLicensePayload = {
-    version: 1,
-    userId,
-    sessionId,
-    issuedAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-  };
+  if (!deviceId && !sessionId) {
+    throw new Error("Dispositivo offline ausente.");
+  }
+  const payload: OfflineLicensePayload = deviceId
+    ? {
+        version: 2,
+        userId,
+        deviceId,
+        issuedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      }
+    : {
+        version: 1,
+        userId,
+        sessionId: sessionId as string,
+        issuedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      };
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const privateKey = getPrivateKey(secret);
   const signature = sign(null, Buffer.from(encodedPayload), privateKey).toString("base64url");
@@ -97,7 +120,7 @@ export function createOfflineLicense({
 
 export function verifyOfflineLicense(
   token: string,
-  { userId, sessionId, now = new Date(), secret }: VerifyOfflineLicenseInput,
+  { userId, sessionId, deviceId, now = new Date(), secret }: VerifyOfflineLicenseInput,
 ) {
   const [encodedPayload, encodedSignature, extraPart] = token.split(".");
   if (!encodedPayload || !encodedSignature || extraPart) {
@@ -123,9 +146,10 @@ export function verifyOfflineLicense(
   const issuedAt = new Date(payload.issuedAt).getTime();
   const expiresAt = new Date(payload.expiresAt).getTime();
   if (
-    payload.version !== 1 ||
+    (payload.version !== 1 && payload.version !== 2) ||
     payload.userId !== userId ||
-    payload.sessionId !== sessionId ||
+    (payload.version === 1 && (!sessionId || payload.sessionId !== sessionId)) ||
+    (payload.version === 2 && (!deviceId || payload.deviceId !== deviceId)) ||
     !Number.isFinite(issuedAt) ||
     !Number.isFinite(expiresAt) ||
     issuedAt >= expiresAt

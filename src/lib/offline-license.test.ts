@@ -18,10 +18,51 @@ test("licenca offline termina no premiumUntil quando ele vem antes de 24 horas",
   );
 });
 
-test("licenca offline dura no maximo 24 horas", () => {
+test("licenca offline acompanha os trinta dias restantes do premium", () => {
   assert.equal(
     getOfflineLicenseExpiry(new Date("2026-08-10T12:00:00.000Z"), NOW).toISOString(),
-    "2026-07-11T12:00:00.000Z",
+    "2026-08-10T12:00:00.000Z",
+  );
+});
+
+test("licenca v2 fica vinculada ao dispositivo estavel e nao a sessao", () => {
+  const license = createOfflineLicense({
+    userId: "user-1",
+    deviceId: "device-1",
+    premiumUntil: new Date("2026-08-10T12:00:00.000Z"),
+    now: NOW,
+    secret: SECRET,
+  });
+
+  const payload = verifyOfflineLicense(license.token, {
+    userId: "user-1",
+    deviceId: "device-1",
+    now: new Date("2026-07-12T12:00:00.000Z"),
+    secret: SECRET,
+  });
+
+  assert.equal(payload.version, 2);
+  assert.equal(payload.deviceId, "device-1");
+  assert.equal(payload.expiresAt, "2026-08-10T12:00:00.000Z");
+});
+
+test("licenca v2 rejeita outro dispositivo", () => {
+  const license = createOfflineLicense({
+    userId: "user-1",
+    deviceId: "device-1",
+    premiumUntil: new Date("2026-08-10T12:00:00.000Z"),
+    now: NOW,
+    secret: SECRET,
+  });
+
+  assert.throws(
+    () => verifyOfflineLicense(license.token, {
+      userId: "user-1",
+      deviceId: "device-2",
+      now: NOW,
+      secret: SECRET,
+    }),
+    /Licenca offline invalida/,
   );
 });
 

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { OfflineListenPanel } from "@/components/offline-listen-panel";
 import { OfflinePremiumGate } from "@/components/offline-premium-gate";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { DEVICE_COOKIE_NAME, getDeviceIdFromToken } from "@/lib/device-identity";
 import { OFFLINE_DOWNLOAD_SELECT } from "@/lib/page-data-select";
 import { createOfflineLicense } from "@/lib/offline-license";
 import { prisma } from "@/lib/prisma";
@@ -40,9 +42,13 @@ export default async function OfflinePage() {
     orderBy: { lastUsedAt: "desc" },
     select: OFFLINE_DOWNLOAD_SELECT,
   });
+  const deviceId = getDeviceIdFromToken(
+    (await cookies()).get(DEVICE_COOKIE_NAME)?.value,
+  );
   const license = createOfflineLicense({
     userId: session.user.id,
-    sessionId: session.user.sessionId,
+    deviceId: deviceId ?? undefined,
+    sessionId: deviceId ? undefined : session.user.sessionId,
     premiumUntil: session.user.premiumUntil ?? null,
     role: session.user.role,
   });
@@ -59,6 +65,7 @@ export default async function OfflinePage() {
 
         <OfflinePremiumGate
           accountScope={session.user.id}
+          deviceId={deviceId ?? undefined}
           sessionId={session.user.sessionId}
           license={license}
         >

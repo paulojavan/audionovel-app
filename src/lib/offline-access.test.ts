@@ -52,6 +52,47 @@ test("navegador rejeita licenca adulterada", async () => {
   assert.equal(result.state, "invalid");
 });
 
+test("licenca v2 continua valida depois de 24 horas e ignora rotacao da sessao", async () => {
+  const license = createOfflineLicense({
+    userId: "user-1",
+    deviceId: "device-1",
+    premiumUntil: "2026-08-10T12:00:00.000Z",
+    now: NOW,
+    secret: SECRET,
+  });
+
+  const result = await verifyOfflineLicenseForClient({
+    ...license,
+    userId: "user-1",
+    deviceId: "device-1",
+    sessionId: "uma-sessao-nova-nao-importa",
+    now: NOW.getTime() + 2 * 24 * 60 * 60_000,
+    lastObservedAt: NOW.getTime(),
+  });
+
+  assert.equal(result.state, "allowed");
+  assert.equal(result.payload?.version, 2);
+});
+
+test("licenca v2 distingue dispositivo diferente de premium vencido", async () => {
+  const license = createOfflineLicense({
+    userId: "user-1",
+    deviceId: "device-1",
+    premiumUntil: "2026-08-10T12:00:00.000Z",
+    now: NOW,
+    secret: SECRET,
+  });
+
+  const result = await verifyOfflineLicenseForClient({
+    ...license,
+    userId: "user-1",
+    deviceId: "device-2",
+    now: NOW.getTime(),
+  });
+
+  assert.equal(result.state, "device-mismatch");
+});
+
 test("acesso offline detecta retrocesso relevante do relogio", () => {
   assert.equal(
     getOfflineAccessState({

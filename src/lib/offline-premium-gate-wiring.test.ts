@@ -25,4 +25,6 @@ test("gate local valida assinatura e acompanha vencimento enquanto a pagina esta
   assert.match(gate, /localStorage/);
   assert.match(gate, /setInterval/);
   assert.match(gate, /Seu Premium venceu/);
+  assert.match(gate, /Nao foi possivel validar o acesso offline/);
+  assert.match(gate, /accessState === "expired"/);
 });

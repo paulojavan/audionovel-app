@@ -4,21 +4,35 @@ export type OfflineAccessState =
   | "allowed"
   | "expired"
   | "clock-rollback"
+  | "device-mismatch"
   | "invalid";
 
-type OfflineLicensePayload = {
+type OfflineLicensePayloadV1 = {
   version: 1;
   userId: string;
   sessionId: string;
+  deviceId?: never;
   issuedAt: string;
   expiresAt: string;
 };
+
+type OfflineLicensePayloadV2 = {
+  version: 2;
+  userId: string;
+  deviceId: string;
+  sessionId?: never;
+  issuedAt: string;
+  expiresAt: string;
+};
+
+type OfflineLicensePayload = OfflineLicensePayloadV1 | OfflineLicensePayloadV2;
 
 type VerifyOfflineLicenseForClientInput = {
   token: string;
   publicKey: string;
   userId: string;
-  sessionId: string;
+  sessionId?: string;
+  deviceId?: string;
   now?: number;
   lastObservedAt?: number | null;
 };
@@ -58,6 +72,7 @@ export async function verifyOfflineLicenseForClient({
   publicKey,
   userId,
   sessionId,
+  deviceId,
   now = Date.now(),
   lastObservedAt,
 }: VerifyOfflineLicenseForClientInput): Promise<{
@@ -89,11 +104,16 @@ export async function verifyOfflineLicenseForClient({
       new TextDecoder().decode(fromBase64Url(encodedPayload)),
     ) as OfflineLicensePayload;
     if (
-      payload.version !== 1 ||
-      payload.userId !== userId ||
-      payload.sessionId !== sessionId
+      (payload.version !== 1 && payload.version !== 2) ||
+      payload.userId !== userId
     ) {
       return { state: "invalid", payload: null };
+    }
+    if (payload.version === 1 && (!sessionId || payload.sessionId !== sessionId)) {
+      return { state: "invalid", payload: null };
+    }
+    if (payload.version === 2 && (!deviceId || payload.deviceId !== deviceId)) {
+      return { state: "device-mismatch", payload };
     }
 
     const state = getOfflineAccessState({

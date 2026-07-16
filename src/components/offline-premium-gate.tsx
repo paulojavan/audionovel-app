@@ -13,12 +13,14 @@ const ACCESS_CHECK_INTERVAL_MS = 5_000;
 
 export function OfflinePremiumGate({
   accountScope,
+  deviceId,
   sessionId,
   license,
   children,
 }: {
   accountScope: string;
-  sessionId: string;
+  deviceId?: string;
+  sessionId?: string;
   license: OfflineLicense;
   children: ReactNode;
 }) {
@@ -38,6 +40,7 @@ export function OfflinePremiumGate({
         token: license.token,
         publicKey: license.publicKey,
         userId: accountScope,
+        deviceId,
         sessionId,
         now,
         lastObservedAt,
@@ -65,7 +68,7 @@ export function OfflinePremiumGate({
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [accountScope, license.publicKey, license.token, sessionId]);
+  }, [accountScope, deviceId, license.publicKey, license.token, sessionId]);
 
   if (accessState === "checking") {
     return (
@@ -76,11 +79,16 @@ export function OfflinePremiumGate({
   }
 
   if (accessState !== "allowed") {
+    const premiumExpired = accessState === "expired";
     return (
       <section className="rounded-lg bg-[#06272b] p-5">
-        <h2 className="text-2xl font-black">Seu Premium venceu</h2>
+        <h2 className="text-2xl font-black">
+          {premiumExpired ? "Seu Premium venceu" : "Acesso offline precisa ser atualizado"}
+        </h2>
         <p className="mt-2 max-w-2xl text-zinc-400">
-          O acesso aos capitulos salvos foi bloqueado. Conecte-se a internet e renove o Premium para preparar uma nova licenca offline.
+          {premiumExpired
+            ? "O acesso aos capitulos salvos foi bloqueado. Conecte-se a internet e renove o Premium para preparar uma nova licenca offline."
+            : "Nao foi possivel validar o acesso offline. Conecte-se a internet para atualizar sua licenca sem baixar novamente os audios que ainda estiverem salvos."}
         </p>
         {accessState === "clock-rollback" ? (
           <p className="mt-3 rounded-md bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -88,10 +96,10 @@ export function OfflinePremiumGate({
           </p>
         ) : null}
         <Link
-          href="/assinaturas"
+          href={premiumExpired ? "/assinaturas" : "/offline"}
           className="mt-4 inline-flex rounded-full bg-[#18b7bd] px-5 py-3 font-black text-[#021114] hover:bg-[#22d3dc]"
         >
-          Ver planos Premium
+          {premiumExpired ? "Ver planos Premium" : "Atualizar acesso"}
         </Link>
       </section>
     );
