@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useTransition, type FormEvent } from "react";
+import { setBrowserAccountScopeConfirmed } from "@/lib/account-scope";
 import { getClientDeviceId, getClientDeviceName } from "@/lib/client-device";
 
 export function RegisterForm() {
@@ -42,9 +43,10 @@ export function RegisterForm() {
             redirect: false,
           });
         })
-        .then((result) => {
+        .then(async (result) => {
           if (result?.ok) {
-            window.location.href = "/";
+            const accountScopeCleared = await setBrowserAccountScopeConfirmed(null);
+            window.location.href = accountScopeCleared ? "/" : "/perfil";
             return;
           }
 

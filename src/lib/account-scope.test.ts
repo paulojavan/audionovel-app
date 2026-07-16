@@ -52,3 +52,15 @@ test("login limpa e confirma a conta anterior antes do callback offline", () => 
   assert.ok(navigationIndex > resetIndex);
   assert.match(loginForm, /accountScopeCleared \? safeCallbackUrl : "\/perfil"/);
 });
+
+test("cadastro limpa e confirma a conta anterior antes do login automatico navegar", () => {
+  const registerForm = readFileSync(
+    join(process.cwd(), "src", "components", "register-form.tsx"),
+    "utf8",
+  );
+  const resetIndex = registerForm.indexOf("await setBrowserAccountScopeConfirmed(null)");
+  const navigationIndex = registerForm.indexOf("window.location.href");
+
+  assert.ok(resetIndex >= 0);
+  assert.ok(navigationIndex > resetIndex);
+});
