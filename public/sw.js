@@ -319,10 +319,28 @@ async function migratePreviousOfflineCache() {
   const html = await cachedPage.clone().text();
   if (extractOfflineAccountScope(html) !== scope) return;
 
-  const accountCache = await caches.open(ACCOUNT_META_CACHE);
-  await accountCache.put(ACCOUNT_META_URL, new Response(scope));
+  const assetUrls = extractNextStaticAssetUrls(html);
+  if (assetUrls.length === 0) return;
+  const previousStaticCache = await caches.open(
+    `${CACHE_PREFIX}-${PREVIOUS_CACHE_VERSION}`,
+  );
+  const previousAssets = await Promise.all(
+    assetUrls.map(async (assetUrl) => ({
+      assetUrl,
+      response: await previousStaticCache.match(assetUrl),
+    })),
+  );
+  if (previousAssets.some((asset) => !asset.response)) return;
+
+  const staticCache = await caches.open(CACHE_NAME);
+  await Promise.all(previousAssets.map(({ assetUrl, response }) => (
+    staticCache.put(assetUrl, response)
+  )));
+
   const pageCache = await caches.open(getAccountPageCacheName(scope));
   await pageCache.put("/offline", cachedPage);
+  const accountCache = await caches.open(ACCOUNT_META_CACHE);
+  await accountCache.put(ACCOUNT_META_URL, new Response(scope));
 }
 
 async function setAccountScope(value) {

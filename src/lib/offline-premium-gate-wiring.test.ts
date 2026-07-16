@@ -34,7 +34,8 @@ test("gate atualiza uma licenca vencida do shell quando a rede esta disponivel",
 
   assert.match(gate, /useRouter/);
   assert.match(gate, /navigator\.onLine/);
-  assert.match(gate, /refreshedExpiredLicenseTokens\.has\(license\.token\)/);
+  assert.match(gate, /expiredLicenseRefreshAfter\.get\(license\.token\)/);
   assert.match(gate, /router\.refresh\(\)/);
+  assert.match(gate, /addEventListener\("online"/);
   assert.match(gate, /Atualizando seu acesso Premium/);
 });

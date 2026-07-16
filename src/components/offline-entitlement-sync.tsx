@@ -27,6 +27,7 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
   useEffect(() => {
     if (!navigator.onLine) return;
     const storageKey = `audio-novel-offline-sync:${accountScope}`;
+    const renewalCursorKey = `audio-novel-offline-renew-cursor:${accountScope}`;
     try {
       if (!shouldStartOfflineSync(sessionStorage.getItem(storageKey))) return;
     } catch {
@@ -38,6 +39,12 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
     const sync = (async () => {
       if (pathname === "/offline") {
         await waitForOfflineCatalogReady(accountScope);
+      }
+      let renewalCursor: string | null = null;
+      try {
+        renewalCursor = localStorage.getItem(renewalCursorKey);
+      } catch {
+        // A ordenacao deterministica ainda permite renovar o primeiro lote.
       }
       return reconcileOfflineEntitlement(accountScope, {
         ensureDeviceToken: ensureClientDeviceToken,
@@ -70,14 +77,19 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
         },
         updateItemsBatch: updateOfflineItemsBatch,
         preparePage: prepareOfflinePage,
-      });
+      }, renewalCursor);
     })()
-      .then(() => {
+      .then((result) => {
         try {
           sessionStorage.setItem(
             storageKey,
             String(getOfflineSyncNextAttemptAt("success")),
           );
+          if (result.nextCursor) {
+            localStorage.setItem(renewalCursorKey, result.nextCursor);
+          } else {
+            localStorage.removeItem(renewalCursorKey);
+          }
         } catch {
           // O resultado continua valido sem o marcador de intervalo.
         }

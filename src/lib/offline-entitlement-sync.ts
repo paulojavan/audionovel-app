@@ -2,6 +2,25 @@ import type { OfflineItem } from "./offline-items";
 
 const MAX_RENEWAL_BATCH_SIZE = 100;
 
+function selectRenewalBatch(
+  items: OfflineItem[],
+  renewalCursor?: string | null,
+) {
+  const sortedItems = [...items].sort((left, right) => (
+    left.chapterId.localeCompare(right.chapterId)
+  ));
+  if (sortedItems.length <= MAX_RENEWAL_BATCH_SIZE) return sortedItems;
+
+  const nextIndex = renewalCursor
+    ? sortedItems.findIndex((item) => item.chapterId > renewalCursor)
+    : 0;
+  const startIndex = nextIndex >= 0 ? nextIndex : 0;
+  return Array.from(
+    { length: MAX_RENEWAL_BATCH_SIZE },
+    (_, offset) => sortedItems[(startIndex + offset) % sortedItems.length],
+  );
+}
+
 export type RenewedOfflineItem = {
   chapterId: string;
   cacheKey: string;
@@ -22,18 +41,16 @@ type OfflineEntitlementSyncDependencies = {
 export async function reconcileOfflineEntitlement(
   accountScope: string,
   dependencies: OfflineEntitlementSyncDependencies,
-) {
+  renewalCursor?: string | null,
+): Promise<{ renewed: number; nextCursor?: string }> {
   await dependencies.ensureDeviceToken();
   const recoverableItems = await dependencies.getRecoverableItems(accountScope);
   if (!recoverableItems.length) return { renewed: 0 };
 
-  const chapterIds = recoverableItems.map((item) => item.chapterId);
-  const renewedItems: RenewedOfflineItem[] = [];
-  for (let index = 0; index < chapterIds.length; index += MAX_RENEWAL_BATCH_SIZE) {
-    renewedItems.push(...await dependencies.renewItems(
-      chapterIds.slice(index, index + MAX_RENEWAL_BATCH_SIZE),
-    ));
-  }
+  const renewalBatch = selectRenewalBatch(recoverableItems, renewalCursor);
+  const renewedItems = await dependencies.renewItems(
+    renewalBatch.map((item) => item.chapterId),
+  );
   const localByChapter = new Map(
     recoverableItems.map((item) => [item.chapterId, item]),
   );
@@ -55,5 +72,9 @@ export async function reconcileOfflineEntitlement(
   if (renewed > 0) {
     await dependencies.preparePage(accountScope);
   }
-  return { renewed };
+  const result: { renewed: number; nextCursor?: string } = { renewed };
+  if (recoverableItems.length > renewalBatch.length) {
+    result.nextCursor = renewalBatch.at(-1)?.chapterId;
+  }
+  return result;
 }

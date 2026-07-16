@@ -201,6 +201,11 @@ test("atualizacao do worker preserva o shell offline da versao anterior", async 
     "/offline",
     responseWithUrl(offlineHtml("account-a", "OLD-A"), `${ORIGIN}/offline`, "text/html"),
   );
+  const previousStaticCache = await caches.open("audio-novel-br-pwa-v10");
+  await previousStaticCache.put(
+    `${ORIGIN}/_next/static/css/app.css`,
+    responseWithUrl("body{}", `${ORIGIN}/_next/static/css/app.css`, "text/css"),
+  );
 
   await created.runtime.migratePreviousOfflineCache();
 
@@ -211,6 +216,11 @@ test("atualizacao do worker preserva o shell offline da versao anterior", async 
   );
   const currentPageCache = await caches.open("audio-novel-br-pwa-pages-v11-account-a");
   assert.match(await (await currentPageCache.match("/offline"))!.text(), /OLD-A/);
+  const currentStaticCache = await caches.open("audio-novel-br-pwa-v11");
+  assert.equal(
+    await (await currentStaticCache.match(`${ORIGIN}/_next/static/css/app.css`))!.text(),
+    "body{}",
+  );
 });
 
 test("pagina offline em cache abre sem aguardar uma rede lenta", async () => {

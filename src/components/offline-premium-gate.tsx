@@ -12,7 +12,7 @@ import {
 
 const ACCESS_CHECK_INTERVAL_MS = 5_000;
 const ONLINE_REFRESH_TIMEOUT_MS = 15_000;
-const refreshedExpiredLicenseTokens = new Set<string>();
+const expiredLicenseRefreshAfter = new Map<string, number>();
 
 export function OfflinePremiumGate({
   accountScope,
@@ -62,9 +62,12 @@ export function OfflinePremiumGate({
       if (
         result.state === "expired" &&
         navigator.onLine &&
-        !refreshedExpiredLicenseTokens.has(license.token)
+        (expiredLicenseRefreshAfter.get(license.token) ?? 0) <= now
       ) {
-        refreshedExpiredLicenseTokens.add(license.token);
+        expiredLicenseRefreshAfter.set(
+          license.token,
+          now + ONLINE_REFRESH_TIMEOUT_MS,
+        );
         setRefreshingOnlineAccess(true);
         refreshTimeoutId = window.setTimeout(() => {
           if (active) setRefreshingOnlineAccess(false);
@@ -79,13 +82,16 @@ export function OfflinePremiumGate({
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void checkAccess();
     };
+    const handleOnline = () => void checkAccess();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
 
     return () => {
       active = false;
       if (refreshTimeoutId !== null) window.clearTimeout(refreshTimeoutId);
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
     };
   }, [accountScope, deviceId, license.publicKey, license.token, router, sessionId]);
 

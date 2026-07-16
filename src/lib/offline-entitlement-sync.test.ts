@@ -76,7 +76,7 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
   assert.deepEqual(result, { renewed: 2 });
 });
 
-test("reconciliacao limita cada renovacao a cem capitulos sem deixar excedentes", async () => {
+test("reconciliacao renova um lote justo de cem capitulos por execucao", async () => {
   const baseItem = {
     id: "download",
     title: "Capitulo",
@@ -89,16 +89,17 @@ test("reconciliacao limita cada renovacao a cem capitulos sem deixar excedentes"
   const items = Array.from({ length: 101 }, (_, index) => ({
     ...baseItem,
     id: `download-${index}`,
-    chapterId: `chapter-${index}`,
+    chapterId: `chapter-${index.toString().padStart(3, "0")}`,
   }));
   const renewalBatchSizes: number[] = [];
+  const renewedChapterBatches: string[][] = [];
   const localBatchSizes: number[] = [];
-
-  const result = await reconcileOfflineEntitlement("user-1", {
+  const dependencies = {
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => items,
     renewItems: async (chapterIds) => {
       renewalBatchSizes.push(chapterIds.length);
+      renewedChapterBatches.push(chapterIds);
       return chapterIds.map((chapterId) => ({
         chapterId,
         cacheKey: `new-${chapterId}`,
@@ -110,11 +111,23 @@ test("reconciliacao limita cada renovacao a cem capitulos sem deixar excedentes"
       return renewedItems.length;
     },
     preparePage: async () => undefined,
-  });
+  };
 
-  assert.deepEqual(renewalBatchSizes, [100, 1]);
-  assert.deepEqual(localBatchSizes, [101]);
-  assert.deepEqual(result, { renewed: 101 });
+  const firstResult = await reconcileOfflineEntitlement(
+    "user-1",
+    dependencies,
+  );
+  const secondResult = await reconcileOfflineEntitlement(
+    "user-1",
+    dependencies,
+    firstResult.nextCursor,
+  );
+
+  assert.deepEqual(renewalBatchSizes, [100, 100]);
+  assert.deepEqual(localBatchSizes, [100, 100]);
+  assert.equal(firstResult.nextCursor, "chapter-099");
+  assert.equal(renewedChapterBatches[1][0], "chapter-100");
+  assert.equal(secondResult.renewed, 100);
 });
 
 test("layout monta sincronizacao somente para premium ativo", () => {
@@ -136,6 +149,7 @@ test("coordenador aguarda catalogo no offline e limita rede e repeticoes", () =>
   assert.match(component, /AbortController/);
   assert.match(component, /getOfflineSyncNextAttemptAt\("success"/);
   assert.match(component, /getOfflineSyncNextAttemptAt\("failure"/);
+  assert.match(component, /offline-renew-cursor/);
   assert.doesNotMatch(component, /extendOfflineAudioExpiry/);
   assert.doesNotMatch(component, /saveOfflineItem/);
 });
