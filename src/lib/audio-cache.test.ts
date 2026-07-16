@@ -92,6 +92,18 @@ test("remocao offline apaga somente as duas chaves do capitulo", () => {
   assert.doesNotMatch(removalBlock, /openCursor/);
 });
 
+test("renovacao offline agrupa audios e metadados em uma transacao", () => {
+  const batchBlock = audioCacheSource.match(
+    /export async function updateOfflineItemsBatch[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(batchBlock, /\[OFFLINE_ITEMS_STORE_NAME, STORE_NAME\]/);
+  assert.match(batchBlock, /"readwrite"/);
+  assert.match(batchBlock, /waitForTransaction/);
+  assert.doesNotMatch(batchBlock, /saveOfflineItem/);
+  assert.doesNotMatch(batchBlock, /cleanupExpiredAudioCache/);
+});
+
 test("cache de audio separa registros por conta", () => {
   assert.equal(
     audioCache.getAudioCacheId("user-a", "chapter-1", "offline"),

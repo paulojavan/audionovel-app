@@ -10,12 +10,10 @@ type OfflineEntitlementSyncDependencies = {
   ensureDeviceToken: () => Promise<unknown>;
   getRecoverableItems: (accountScope: string) => Promise<OfflineItem[]>;
   renewItems: (chapterIds: string[]) => Promise<RenewedOfflineItem[]>;
-  extendAudioExpiry: (
+  updateItemsBatch: (
     accountScope: string,
-    chapterId: string,
-    expiresAt: string,
-  ) => Promise<boolean>;
-  saveItem: (accountScope: string, item: OfflineItem) => Promise<void>;
+    items: OfflineItem[],
+  ) => Promise<number>;
   preparePage: (accountScope: string) => Promise<void>;
 };
 
@@ -33,23 +31,20 @@ export async function reconcileOfflineEntitlement(
   const localByChapter = new Map(
     recoverableItems.map((item) => [item.chapterId, item]),
   );
-  let renewed = 0;
+  const itemsToUpdate: OfflineItem[] = [];
   for (const item of renewedItems) {
     const localItem = localByChapter.get(item.chapterId);
     if (!localItem) continue;
-    const extended = await dependencies.extendAudioExpiry(
-      accountScope,
-      item.chapterId,
-      item.expiresAt,
-    );
-    if (!extended) continue;
-    await dependencies.saveItem(accountScope, {
+    itemsToUpdate.push({
       ...localItem,
       cacheKey: item.cacheKey,
       expiresAt: item.expiresAt,
     });
-    renewed += 1;
   }
+  const renewed = await dependencies.updateItemsBatch(
+    accountScope,
+    itemsToUpdate,
+  );
 
   if (renewed > 0) {
     await dependencies.preparePage(accountScope);

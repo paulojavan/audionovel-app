@@ -519,8 +519,6 @@ export async function removeOfflineItem(
 }
 
 export async function saveOfflineItem(accountScope: string, item: OfflineItem) {
-  await cleanupExpiredAudioCache();
-  await cleanupExpiredOfflineItems(accountScope);
   await writeOfflineItem(accountScope, item);
 }
 
@@ -560,6 +558,51 @@ export async function extendOfflineAudioExpiry(
     expiresAt: nextExpiry,
   });
   return true;
+}
+
+export async function updateOfflineItemsBatch(
+  accountScope: string,
+  items: OfflineItem[],
+) {
+  if (!items.length) return 0;
+
+  const db = await openAudioDb();
+  try {
+    const transaction = db.transaction(
+      [OFFLINE_ITEMS_STORE_NAME, STORE_NAME],
+      "readwrite",
+    );
+    const completion = waitForTransaction(transaction);
+    const audioStore = transaction.objectStore(STORE_NAME);
+    const itemStore = transaction.objectStore(OFFLINE_ITEMS_STORE_NAME);
+    let updated = 0;
+
+    for (const item of items) {
+      const expiresAt = new Date(item.expiresAt).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) continue;
+      const request = audioStore.get(
+        getAudioCacheId(accountScope, item.chapterId, "offline"),
+      );
+      request.onsuccess = () => {
+        const record = request.result as AudioRecord | undefined;
+        if (!record) return;
+        audioStore.put({ ...record, expiresAt } satisfies AudioRecord);
+        itemStore.put({
+          ...item,
+          storageId: buildAccountStorageKey(
+            accountScope,
+            `offline-item:${item.chapterId}`,
+          ),
+        } satisfies ScopedOfflineItem);
+        updated += 1;
+      };
+    }
+
+    await completion;
+    return updated;
+  } finally {
+    db.close();
+  }
 }
 
 export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string, options: AudioCacheOptions = {}) {

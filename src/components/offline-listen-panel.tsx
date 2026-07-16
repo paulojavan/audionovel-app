@@ -11,6 +11,7 @@ import {
   removeOfflineItem,
 } from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
+import { markOfflineCatalogReady } from "@/lib/offline-catalog-readiness";
 import { mergeAvailableOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
 export function OfflineListenPanel({ accountScope, items }: { accountScope: string; items: OfflineItem[] }) {
@@ -44,6 +45,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     let active = true;
 
     if (!offlineCryptoSupported) {
+      markOfflineCatalogReady(accountScope);
       return () => {
         active = false;
       };
@@ -59,7 +61,8 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
         if (!active) return;
         setAvailableItems([]);
         setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel verificar os audios offline deste dispositivo.");
-      });
+      })
+      .finally(() => markOfflineCatalogReady(accountScope));
 
     return () => {
       active = false;

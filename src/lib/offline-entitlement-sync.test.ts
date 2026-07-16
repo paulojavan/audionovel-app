@@ -25,20 +25,17 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
       calls.push(`renew:${chapterIds.join(",")}`);
       return [{ chapterId: "chapter-1", cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }];
     },
-    extendAudioExpiry: async () => {
-      calls.push("extend");
-      return true;
-    },
-    saveItem: async (_scope, item) => {
-      calls.push("save");
-      saved.push(item);
+    updateItemsBatch: async (_scope, items) => {
+      calls.push(`batch:${items.length}`);
+      saved.push(...items);
+      return items.length;
     },
     preparePage: async () => {
       calls.push("prepare");
     },
   });
 
-  assert.deepEqual(calls, ["device", "renew:chapter-1", "extend", "save", "prepare"]);
+  assert.deepEqual(calls, ["device", "renew:chapter-1", "batch:1", "prepare"]);
   assert.deepEqual(
     saved.map(({ cacheKey, expiresAt }) => ({ cacheKey, expiresAt })),
     [{ cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }],
@@ -46,9 +43,58 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
   assert.deepEqual(result, { renewed: 1 });
 });
 
+test("reconciliacao atualiza varios capitulos com uma unica chamada local", async () => {
+  const batchSizes: number[] = [];
+  const baseItem = {
+    id: "download",
+    title: "Capitulo",
+    novelTitle: "Novel",
+    volumeTitle: "Volume",
+    chapterPosition: 1,
+    cacheKey: "old",
+    expiresAt: "2026-07-11T00:00:00Z",
+  };
+
+  const result = await reconcileOfflineEntitlement("user-1", {
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => [
+      { ...baseItem, chapterId: "chapter-1" },
+      { ...baseItem, chapterId: "chapter-2" },
+    ],
+    renewItems: async () => [
+      { chapterId: "chapter-1", cacheKey: "new-1", expiresAt: "2026-08-10T00:00:00Z" },
+      { chapterId: "chapter-2", cacheKey: "new-2", expiresAt: "2026-08-10T00:00:00Z" },
+    ],
+    updateItemsBatch: async (_scope, items) => {
+      batchSizes.push(items.length);
+      return items.length;
+    },
+    preparePage: async () => undefined,
+  });
+
+  assert.deepEqual(batchSizes, [2]);
+  assert.deepEqual(result, { renewed: 2 });
+});
+
 test("layout monta sincronizacao somente para premium ativo", () => {
   const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
   assert.match(layout, /OfflineEntitlementSync/);
   assert.match(layout, /hasPremiumAccess\(activeSession\.user\)/);
   assert.match(layout, /accountScope=\{activeSession\.user\.id\}/);
+});
+
+test("coordenador aguarda catalogo no offline e limita rede e repeticoes", () => {
+  const component = readFileSync(
+    join(process.cwd(), "src", "components", "offline-entitlement-sync.tsx"),
+    "utf8",
+  );
+
+  assert.match(component, /usePathname/);
+  assert.match(component, /waitForOfflineCatalogReady/);
+  assert.match(component, /updateOfflineItemsBatch/);
+  assert.match(component, /AbortController/);
+  assert.match(component, /getOfflineSyncNextAttemptAt\("success"/);
+  assert.match(component, /getOfflineSyncNextAttemptAt\("failure"/);
+  assert.doesNotMatch(component, /extendOfflineAudioExpiry/);
+  assert.doesNotMatch(component, /saveOfflineItem/);
 });
