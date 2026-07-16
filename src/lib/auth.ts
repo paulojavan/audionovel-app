@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { logSessionDatabaseFailure } from "./auth-session-grace";
 import { refreshEstablishedSession } from "./auth-session-refresh";
+import { getDeviceIdFromToken } from "./device-identity";
 import { createDeviceSession, revokeDeviceSession, validateDeviceSession } from "./device-session";
 import { verifyPassword } from "./password";
 import { prisma } from "./prisma";
@@ -27,13 +28,13 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
-        deviceId: { label: "Dispositivo", type: "text" },
+        deviceToken: { label: "Token do dispositivo", type: "text" },
         deviceName: { label: "Nome do dispositivo", type: "text" },
       },
       async authorize(credentials, request) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password ?? "";
-        const deviceId = credentials?.deviceId?.trim();
+        const deviceId = getDeviceIdFromToken(credentials?.deviceToken);
         const deviceName = credentials?.deviceName?.trim();
 
         if (!email || !password || !deviceId) return null;

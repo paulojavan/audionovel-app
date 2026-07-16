@@ -1,4 +1,7 @@
 const DEVICE_ID_STORAGE_KEY = "audio_novel_br_device_id";
+const DEVICE_TOKEN_STORAGE_KEY = "audio_novel_br_device_token";
+
+type DeviceTokenStorage = Pick<Storage, "getItem" | "setItem">;
 
 type ClientCrypto = {
   randomUUID?: () => string;
@@ -35,4 +38,35 @@ export function getClientDeviceName() {
   const navigatorWithUserAgentData = navigator as Navigator & { userAgentData?: { platform?: string } };
   const platform = navigatorWithUserAgentData.userAgentData?.platform || navigator.platform || "Dispositivo";
   return `${platform} - ${navigator.language || "navegador"}`;
+}
+
+export async function ensureClientDeviceToken(
+  fetcher: typeof fetch = fetch,
+  storage: DeviceTokenStorage | undefined = typeof window === "undefined" ? undefined : window.localStorage,
+) {
+  let backupToken: string | null = null;
+  try {
+    backupToken = storage?.getItem(DEVICE_TOKEN_STORAGE_KEY) ?? null;
+  } catch {
+    backupToken = null;
+  }
+
+  const response = await fetcher("/api/auth/device", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ backupToken }),
+  });
+  const payload = await response.json().catch(() => ({})) as { token?: unknown };
+  if (!response.ok || typeof payload.token !== "string" || !payload.token) {
+    throw new Error("Nao foi possivel preparar este dispositivo.");
+  }
+
+  try {
+    storage?.setItem(DEVICE_TOKEN_STORAGE_KEY, payload.token);
+  } catch {
+    // O cookie assinado continua sendo a fonte primaria quando o storage falha.
+  }
+  return payload.token;
 }

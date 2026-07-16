@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useState, useTransition, type FormEvent } from "react";
-import { getClientDeviceId, getClientDeviceName } from "@/lib/client-device";
+import { ensureClientDeviceToken, getClientDeviceName } from "@/lib/client-device";
 
 export function LoginForm({
   initialError = "",
@@ -22,28 +22,30 @@ export function LoginForm({
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
 
-    startTransition(() => {
+    startTransition(async () => {
       setError("");
-      void signIn("credentials", {
-        email,
-        password,
-        deviceId: getClientDeviceId(),
-        deviceName: getClientDeviceName(),
-        redirect: false,
-      }).then((result) => {
+      try {
+        const deviceToken = await ensureClientDeviceToken();
+        const result = await signIn("credentials", {
+          email,
+          password,
+          deviceToken,
+          deviceName: getClientDeviceName(),
+          redirect: false,
+        });
         if (result?.ok) {
           window.location.href = safeCallbackUrl;
           return;
         }
 
         setError(
-          result?.error === "DEVICE_LIMIT_EXCEEDED"
-            ? "Limite de dispositivos excedido. Todas as sessoes foram encerradas; entre novamente neste dispositivo."
-            : result?.error === "RATE_LIMITED"
-              ? "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
-              : "E-mail ou senha invalidos.",
+          result?.error === "RATE_LIMITED"
+            ? "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
+            : "E-mail ou senha invalidos.",
         );
-      });
+      } catch {
+        setError("Nao foi possivel preparar este dispositivo. Verifique a conexao e tente novamente.");
+      }
     });
   }
 

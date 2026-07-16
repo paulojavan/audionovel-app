@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const authSource = readFileSync(join(process.cwd(), "src", "lib", "auth.ts"), "utf8");
+const loginFormSource = readFileSync(join(process.cwd(), "src", "components", "login-form.tsx"), "utf8");
 
 test("login limita IP e email antes de consultar senha", () => {
   const rateLimitIndex = authSource.indexOf("consumeRateLimit");
@@ -14,4 +15,11 @@ test("login limita IP e email antes de consultar senha", () => {
   assert.ok(rateLimitIndex < passwordIndex);
   assert.match(authSource, /login:ip:/);
   assert.match(authSource, /login:email:/);
+});
+
+test("login usa token assinado preparado pelo servidor em vez de id local bruto", () => {
+  assert.match(loginFormSource, /ensureClientDeviceToken/);
+  assert.match(loginFormSource, /deviceToken/);
+  assert.doesNotMatch(loginFormSource, /deviceId:\s*getClientDeviceId\(\)/);
+  assert.match(authSource, /getDeviceIdFromToken/);
 });
