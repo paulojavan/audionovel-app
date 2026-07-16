@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { OfflineLicense } from "@/lib/offline-license";
@@ -10,6 +11,8 @@ import {
 } from "@/lib/offline-access";
 
 const ACCESS_CHECK_INTERVAL_MS = 5_000;
+const ONLINE_REFRESH_TIMEOUT_MS = 15_000;
+const refreshedExpiredLicenseTokens = new Set<string>();
 
 export function OfflinePremiumGate({
   accountScope,
@@ -24,10 +27,13 @@ export function OfflinePremiumGate({
   license: OfflineLicense;
   children: ReactNode;
 }) {
+  const router = useRouter();
   const [accessState, setAccessState] = useState<OfflineAccessState | "checking">("checking");
+  const [refreshingOnlineAccess, setRefreshingOnlineAccess] = useState(false);
 
   useEffect(() => {
     let active = true;
+    let refreshTimeoutId: number | null = null;
     const storageKey = `audio-novel-offline-clock:${accountScope}`;
 
     async function checkAccess() {
@@ -53,6 +59,18 @@ export function OfflinePremiumGate({
           String(Math.max(now, lastObservedAt ?? 0)),
         );
       }
+      if (
+        result.state === "expired" &&
+        navigator.onLine &&
+        !refreshedExpiredLicenseTokens.has(license.token)
+      ) {
+        refreshedExpiredLicenseTokens.add(license.token);
+        setRefreshingOnlineAccess(true);
+        refreshTimeoutId = window.setTimeout(() => {
+          if (active) setRefreshingOnlineAccess(false);
+        }, ONLINE_REFRESH_TIMEOUT_MS);
+        router.refresh();
+      }
       setAccessState(result.state);
     }
 
@@ -65,15 +83,24 @@ export function OfflinePremiumGate({
 
     return () => {
       active = false;
+      if (refreshTimeoutId !== null) window.clearTimeout(refreshTimeoutId);
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [accountScope, deviceId, license.publicKey, license.token, sessionId]);
+  }, [accountScope, deviceId, license.publicKey, license.token, router, sessionId]);
 
   if (accessState === "checking") {
     return (
       <p className="rounded-md bg-[#06272b] p-4 text-zinc-400">
         Verificando sua licenca Premium offline...
+      </p>
+    );
+  }
+
+  if (accessState === "expired" && refreshingOnlineAccess) {
+    return (
+      <p className="rounded-md bg-[#06272b] p-4 text-zinc-400">
+        Atualizando seu acesso Premium pela internet...
       </p>
     );
   }

@@ -60,6 +60,21 @@ test("recuperacao consulta chaves sem materializar blobs expirados", () => {
   assert.doesNotMatch(recoverableBlock, /cleanupExpired/);
 });
 
+test("listagem agenda limpeza em lote somente para metadados sem audio", () => {
+  const savedItemsBlock = audioCacheSource.match(
+    /export async function getSavedOfflineItems[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+  const cleanupBlock = audioCacheSource.match(
+    /async function cleanupOrphanedOfflineItems[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(savedItemsBlock, /void cleanupOrphanedOfflineItems/);
+  assert.match(cleanupBlock, /"readwrite"/);
+  assert.match(cleanupBlock, /\.delete\(/);
+  assert.doesNotMatch(cleanupBlock, /objectStore\(STORE_NAME\)/);
+  assert.doesNotMatch(cleanupBlock, /readRecord/);
+});
+
 test("extensao de validade preserva o registro criptografado existente", () => {
   const source = readFileSync(join(process.cwd(), "src", "lib", "audio-cache.ts"), "utf8");
   const extensionBlock = source.match(
@@ -76,7 +91,9 @@ test("reproducao offline direcionada nao executa limpeza global", () => {
   )?.[0] ?? "";
 
   assert.match(playbackBlock, /getValidCachedRecord/);
-  assert.match(playbackBlock, /createObjectUrlFromRecord/);
+  assert.match(playbackBlock, /OfflineAudioInvalidError/);
+  assert.match(playbackBlock, /decryptAudioRecord/);
+  assert.match(playbackBlock, /createAudioObjectUrl/);
   assert.doesNotMatch(playbackBlock, /cleanupExpiredAudioCache/);
   assert.doesNotMatch(playbackBlock, /downloadAudioBuffer/);
 });
@@ -100,6 +117,7 @@ test("renovacao offline agrupa audios e metadados em uma transacao", () => {
   assert.match(batchBlock, /\[OFFLINE_ITEMS_STORE_NAME, STORE_NAME\]/);
   assert.match(batchBlock, /"readwrite"/);
   assert.match(batchBlock, /waitForTransaction/);
+  assert.match(batchBlock, /notifyOfflineCatalogUpdated/);
   assert.doesNotMatch(batchBlock, /saveOfflineItem/);
   assert.doesNotMatch(batchBlock, /cleanupExpiredAudioCache/);
 });

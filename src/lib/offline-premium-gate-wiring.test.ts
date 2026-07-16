@@ -28,3 +28,13 @@ test("gate local valida assinatura e acompanha vencimento enquanto a pagina esta
   assert.match(gate, /Nao foi possivel validar o acesso offline/);
   assert.match(gate, /accessState === "expired"/);
 });
+
+test("gate atualiza uma licenca vencida do shell quando a rede esta disponivel", () => {
+  const gate = readFileSync(join(process.cwd(), "src", "components", "offline-premium-gate.tsx"), "utf8");
+
+  assert.match(gate, /useRouter/);
+  assert.match(gate, /navigator\.onLine/);
+  assert.match(gate, /refreshedExpiredLicenseTokens\.has\(license\.token\)/);
+  assert.match(gate, /router\.refresh\(\)/);
+  assert.match(gate, /Atualizando seu acesso Premium/);
+});

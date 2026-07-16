@@ -6,6 +6,7 @@ import {
   selectAvailableOfflineItems,
   selectRecoverableOfflineItems,
 } from "./offline-catalog";
+import { notifyOfflineCatalogUpdated } from "./offline-catalog-events";
 
 const DB_NAME = "audio-novel-br-audio-cache";
 const STORE_NAME = "audios";
@@ -145,6 +146,13 @@ function filterScopedOfflineItems(
     });
 }
 
+export class OfflineAudioInvalidError extends Error {
+  constructor(message = "Audio offline indisponivel.", options?: ErrorOptions) {
+    super(message, options);
+    this.name = "OfflineAudioInvalidError";
+  }
+}
+
 async function readOfflineCatalogSnapshot(accountScope: string) {
   const db = await openAudioDb();
   return new Promise<OfflineCatalogSnapshot>((resolve, reject) => {
@@ -171,6 +179,32 @@ async function readOfflineCatalogSnapshot(accountScope: string) {
 async function readAllOfflineItems(accountScope: string) {
   const snapshot = await readOfflineCatalogSnapshot(accountScope);
   return snapshot.items;
+}
+
+async function cleanupOrphanedOfflineItems(
+  accountScope: string,
+  snapshot: OfflineCatalogSnapshot,
+) {
+  const audioRecordIds = new Set(snapshot.audioRecordIds.map(String));
+  const orphanedItems = snapshot.items.filter((item) => (
+    !audioRecordIds.has(getAudioCacheId(accountScope, item.chapterId, "offline"))
+  ));
+  if (!orphanedItems.length) return;
+
+  const db = await openAudioDb();
+  try {
+    const transaction = db.transaction(OFFLINE_ITEMS_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(OFFLINE_ITEMS_STORE_NAME);
+    for (const item of orphanedItems) {
+      store.delete(buildAccountStorageKey(
+        accountScope,
+        `offline-item:${item.chapterId}`,
+      ));
+    }
+    await waitForTransaction(transaction);
+  } finally {
+    db.close();
+  }
 }
 
 async function writeOfflineItem(accountScope: string, item: OfflineItem) {
@@ -475,9 +509,20 @@ async function saveRecordForMode(
   });
 }
 
-async function createObjectUrlFromRecord(record: AudioRecord, key: CryptoKey) {
-  const decrypted = await globalThis.crypto.subtle.decrypt({ name: "AES-GCM", iv: record.iv }, key, record.data);
+async function decryptAudioRecord(record: AudioRecord, key: CryptoKey) {
+  return globalThis.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: record.iv },
+    key,
+    record.data,
+  );
+}
+
+function createAudioObjectUrl(record: AudioRecord, decrypted: ArrayBuffer) {
   return URL.createObjectURL(new Blob([decrypted], { type: record.mimeType }));
+}
+
+async function createObjectUrlFromRecord(record: AudioRecord, key: CryptoKey) {
+  return createAudioObjectUrl(record, await decryptAudioRecord(record, key));
 }
 
 export async function getSavedEncryptedAudioUrl(
@@ -491,9 +536,21 @@ export async function getSavedEncryptedAudioUrl(
     chapterId,
     "offline",
   );
-  if (!record) throw new Error("Audio offline indisponivel.");
+  if (!record) throw new OfflineAudioInvalidError();
   const key = await getCryptoKey(normalizedScope);
-  return createObjectUrlFromRecord(record, key);
+  let decrypted: ArrayBuffer;
+  try {
+    decrypted = await decryptAudioRecord(record, key);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "OperationError") {
+      throw new OfflineAudioInvalidError(
+        "Audio offline corrompido.",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  return createAudioObjectUrl(record, decrypted);
 }
 
 export async function removeOfflineItem(
@@ -524,6 +581,9 @@ export async function saveOfflineItem(accountScope: string, item: OfflineItem) {
 
 export async function getSavedOfflineItems(accountScope: string) {
   const snapshot = await readOfflineCatalogSnapshot(accountScope);
+  queueMicrotask(() => {
+    void cleanupOrphanedOfflineItems(accountScope, snapshot).catch(() => undefined);
+  });
   return selectAvailableOfflineItems(
     snapshot.items,
     snapshot.audioRecordIds,
@@ -599,6 +659,7 @@ export async function updateOfflineItemsBatch(
     }
 
     await completion;
+    if (updated > 0) notifyOfflineCatalogUpdated(accountScope);
     return updated;
   } finally {
     db.close();

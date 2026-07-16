@@ -8,9 +8,11 @@ import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported"
 import {
   getSavedEncryptedAudioUrl,
   getSavedOfflineItems,
+  OfflineAudioInvalidError,
   removeOfflineItem,
 } from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
+import { subscribeOfflineCatalogUpdates } from "@/lib/offline-catalog-events";
 import { markOfflineCatalogReady } from "@/lib/offline-catalog-readiness";
 import { mergeAvailableOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
@@ -51,21 +53,28 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
       };
     }
 
-    getSavedOfflineItems(accountScope)
-      .then((localItems) => mergeAvailableOfflineItems(items, localItems))
-      .then((validItems) => {
-        if (!active) return;
-        setAvailableItems(validItems);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setAvailableItems([]);
-        setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel verificar os audios offline deste dispositivo.");
-      })
-      .finally(() => markOfflineCatalogReady(accountScope));
+    const loadSavedItems = () => (
+      getSavedOfflineItems(accountScope)
+        .then((localItems) => mergeAvailableOfflineItems(items, localItems))
+        .then((validItems) => {
+          if (!active) return;
+          setAvailableItems(validItems);
+        })
+        .catch((error) => {
+          if (!active) return;
+          setAvailableItems([]);
+          setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel verificar os audios offline deste dispositivo.");
+        })
+    );
+    const unsubscribe = subscribeOfflineCatalogUpdates(
+      accountScope,
+      () => void loadSavedItems(),
+    );
+    void loadSavedItems().finally(() => markOfflineCatalogReady(accountScope));
 
     return () => {
       active = false;
+      unsubscribe();
     };
   }, [accountScope, items, offlineCryptoSupported]);
 
@@ -115,13 +124,19 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
           }
         });
       } catch (error) {
-        if (!(error instanceof OfflineCryptoUnavailableError)) {
+        if (error instanceof OfflineAudioInvalidError) {
           await removeOfflineItem(accountScope, item.chapterId).catch(() => undefined);
           setAvailableItems((current) => (
             (current ?? []).filter((savedItem) => savedItem.id !== item.id)
           ));
         }
-        setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel abrir este audio offline. Tente salvar novamente na pagina da novel.");
+        setMessage(
+          error instanceof OfflineCryptoUnavailableError
+            ? error.message
+            : error instanceof OfflineAudioInvalidError
+              ? "Nao foi possivel abrir este audio offline. Tente salvar novamente na pagina da novel."
+              : "Nao foi possivel acessar o audio salvo. Tente novamente.",
+        );
       }
     });
   }

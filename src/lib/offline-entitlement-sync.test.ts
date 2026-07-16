@@ -76,6 +76,47 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
   assert.deepEqual(result, { renewed: 2 });
 });
 
+test("reconciliacao limita cada renovacao a cem capitulos sem deixar excedentes", async () => {
+  const baseItem = {
+    id: "download",
+    title: "Capitulo",
+    novelTitle: "Novel",
+    volumeTitle: "Volume",
+    chapterPosition: 1,
+    cacheKey: "old",
+    expiresAt: "2026-07-11T00:00:00Z",
+  };
+  const items = Array.from({ length: 101 }, (_, index) => ({
+    ...baseItem,
+    id: `download-${index}`,
+    chapterId: `chapter-${index}`,
+  }));
+  const renewalBatchSizes: number[] = [];
+  const localBatchSizes: number[] = [];
+
+  const result = await reconcileOfflineEntitlement("user-1", {
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => items,
+    renewItems: async (chapterIds) => {
+      renewalBatchSizes.push(chapterIds.length);
+      return chapterIds.map((chapterId) => ({
+        chapterId,
+        cacheKey: `new-${chapterId}`,
+        expiresAt: "2026-08-10T00:00:00Z",
+      }));
+    },
+    updateItemsBatch: async (_scope, renewedItems) => {
+      localBatchSizes.push(renewedItems.length);
+      return renewedItems.length;
+    },
+    preparePage: async () => undefined,
+  });
+
+  assert.deepEqual(renewalBatchSizes, [100, 1]);
+  assert.deepEqual(localBatchSizes, [101]);
+  assert.deepEqual(result, { renewed: 101 });
+});
+
 test("layout monta sincronizacao somente para premium ativo", () => {
   const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
   assert.match(layout, /OfflineEntitlementSync/);

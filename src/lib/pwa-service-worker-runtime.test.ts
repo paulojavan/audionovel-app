@@ -45,6 +45,7 @@ class MemoryCacheStorage {
 
 type WorkerRuntime = {
   prepareOfflinePage(scope: string): Promise<void>;
+  migratePreviousOfflineCache(): Promise<void>;
   accountScopedOfflinePage(
     request: Request,
     event?: { waitUntil(promise: Promise<unknown>): void },
@@ -183,6 +184,33 @@ test("navegacao online nao substitui shell valido com html de outra conta", asyn
 
   assert.match(await networkResponse.text(), /OLD-A/);
   assert.match(await (await pageCache.match("/offline"))!.text(), /OLD-A/);
+});
+
+test("atualizacao do worker preserva o shell offline da versao anterior", async () => {
+  const caches = new MemoryCacheStorage();
+  const created = createRuntime(async () => {
+    throw new TypeError("unused");
+  }, caches);
+  const previousAccountCache = await caches.open("audio-novel-br-pwa-account-v10");
+  await previousAccountCache.put(
+    "/__audio-novel-account-scope__",
+    new Response("account-a"),
+  );
+  const previousPageCache = await caches.open("audio-novel-br-pwa-pages-v10-account-a");
+  await previousPageCache.put(
+    "/offline",
+    responseWithUrl(offlineHtml("account-a", "OLD-A"), `${ORIGIN}/offline`, "text/html"),
+  );
+
+  await created.runtime.migratePreviousOfflineCache();
+
+  const currentAccountCache = await caches.open("audio-novel-br-pwa-account-v11");
+  assert.equal(
+    await (await currentAccountCache.match("/__audio-novel-account-scope__"))!.text(),
+    "account-a",
+  );
+  const currentPageCache = await caches.open("audio-novel-br-pwa-pages-v11-account-a");
+  assert.match(await (await currentPageCache.match("/offline"))!.text(), /OLD-A/);
 });
 
 test("pagina offline em cache abre sem aguardar uma rede lenta", async () => {

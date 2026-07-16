@@ -73,6 +73,7 @@ test("painel offline nao valida nem regrava cada capitulo durante a listagem", (
   )?.[0] ?? "";
 
   assert.match(listEffect, /mergeAvailableOfflineItems/);
+  assert.match(offlinePanel, /subscribeOfflineCatalogUpdates/);
   assert.doesNotMatch(listEffect, /hasValidEncryptedAudio/);
   assert.doesNotMatch(listEffect, /saveOfflineItem/);
 });

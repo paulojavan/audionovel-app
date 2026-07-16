@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useState, useTransition, type FormEvent } from "react";
+import { setBrowserAccountScopeConfirmed } from "@/lib/account-scope";
 import { ensureClientDeviceToken, getClientDeviceName } from "@/lib/client-device";
 
 export function LoginForm({
@@ -34,7 +35,8 @@ export function LoginForm({
           redirect: false,
         });
         if (result?.ok) {
-          window.location.href = safeCallbackUrl;
+          const accountScopeCleared = await setBrowserAccountScopeConfirmed(null);
+          window.location.href = accountScopeCleared ? safeCallbackUrl : "/perfil";
           return;
         }
 

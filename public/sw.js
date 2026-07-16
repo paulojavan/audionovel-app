@@ -4,6 +4,7 @@
 const CACHE_PREFIX = "audio-novel-br-pwa";
 const CACHE_VERSION = "v11";
 const RELEASE_REVISION = "offline-loading-performance-2026-07-16";
+const PREVIOUS_CACHE_VERSION = "v10";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -46,7 +47,9 @@ self.addEventListener("install", (event) => {
 // ─── ACTIVATE ───────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
+    migratePreviousOfflineCache()
+      .catch(() => undefined)
+      .then(() => caches
       .keys()
       .then((keys) =>
         Promise.all(
@@ -60,7 +63,7 @@ self.addEventListener("activate", (event) => {
             )
             .map((key) => caches.delete(key)),
         ),
-      )
+      ))
       .then(() => self.clients.claim()),
   );
 });
@@ -297,6 +300,29 @@ async function accountScopedOfflinePage(request, event, timeoutMs = 4_000) {
 
 function getAccountPageCacheName(scope) {
   return `${PAGE_CACHE_PREFIX}${encodeURIComponent(scope)}`;
+}
+
+async function migratePreviousOfflineCache() {
+  const previousAccountCache = await caches.open(
+    `${CACHE_PREFIX}-account-${PREVIOUS_CACHE_VERSION}`,
+  );
+  const previousScopeResponse = await previousAccountCache.match(ACCOUNT_META_URL);
+  if (!previousScopeResponse) return;
+
+  const scope = normalizeAccountScope(await previousScopeResponse.text());
+  if (scope === ANONYMOUS_ACCOUNT_SCOPE) return;
+  const previousPageCache = await caches.open(
+    `${CACHE_PREFIX}-pages-${PREVIOUS_CACHE_VERSION}-${encodeURIComponent(scope)}`,
+  );
+  const cachedPage = await previousPageCache.match("/offline");
+  if (!cachedPage) return;
+  const html = await cachedPage.clone().text();
+  if (extractOfflineAccountScope(html) !== scope) return;
+
+  const accountCache = await caches.open(ACCOUNT_META_CACHE);
+  await accountCache.put(ACCOUNT_META_URL, new Response(scope));
+  const pageCache = await caches.open(getAccountPageCacheName(scope));
+  await pageCache.put("/offline", cachedPage);
 }
 
 async function setAccountScope(value) {

@@ -1,5 +1,7 @@
 import type { OfflineItem } from "./offline-items";
 
+const MAX_RENEWAL_BATCH_SIZE = 100;
+
 export type RenewedOfflineItem = {
   chapterId: string;
   cacheKey: string;
@@ -25,9 +27,13 @@ export async function reconcileOfflineEntitlement(
   const recoverableItems = await dependencies.getRecoverableItems(accountScope);
   if (!recoverableItems.length) return { renewed: 0 };
 
-  const renewedItems = await dependencies.renewItems(
-    recoverableItems.map((item) => item.chapterId),
-  );
+  const chapterIds = recoverableItems.map((item) => item.chapterId);
+  const renewedItems: RenewedOfflineItem[] = [];
+  for (let index = 0; index < chapterIds.length; index += MAX_RENEWAL_BATCH_SIZE) {
+    renewedItems.push(...await dependencies.renewItems(
+      chapterIds.slice(index, index + MAX_RENEWAL_BATCH_SIZE),
+    ));
+  }
   const localByChapter = new Map(
     recoverableItems.map((item) => [item.chapterId, item]),
   );

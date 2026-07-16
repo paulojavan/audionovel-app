@@ -89,6 +89,7 @@ test("player offline le somente o audio selecionado e nao faz preflight duplicad
 
   assert.match(playBlock, /getSavedEncryptedAudioUrl\(accountScope, item\.chapterId\)/);
   assert.match(playBlock, /removeOfflineItem\(accountScope, item\.chapterId\)/);
+  assert.match(playBlock, /error instanceof OfflineAudioInvalidError/);
   assert.doesNotMatch(playBlock, /hasValidEncryptedAudio/);
   assert.doesNotMatch(playBlock, /getEncryptedAudioUrl/);
 });
