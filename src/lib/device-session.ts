@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { evaluateDeviceLogin, hasSuspiciousUserAgentChange } from "./device-session-policy";
+import { hasSuspiciousUserAgentChange, selectDeviceToReplace } from "./device-session-policy";
 import { prisma } from "./prisma";
 
-const MAX_ACTIVE_DEVICES = 2;
+const MAX_ACTIVE_DEVICES = 3;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LAST_SEEN_REFRESH_MS = 5 * 60 * 1000;
 
@@ -23,6 +23,7 @@ type StoredSession = {
   revokedAt: Date | string | null;
   expiresAt: Date | string;
   lastSeenAt: Date | string;
+  createdAt: Date | string;
 };
 
 export function createRandomSessionId() {
@@ -64,31 +65,50 @@ export async function createDeviceSession({ userId, deviceId, deviceName, header
   const userAgentHash = hashSessionValue(getHeaderValue(headers, "user-agent") ?? "unknown");
   const ipPrefix = getIpPrefixFromHeaders(headers);
   const ipPrefixHash = ipPrefix ? hashSessionValue(ipPrefix) : null;
-  const activeSessions = await getActiveSessionsForUser(userId, now);
-  const policy = evaluateDeviceLogin({
-    activeDeviceHashes: activeSessions.map((session) => session.deviceIdHash),
-    currentDeviceHash: deviceIdHash,
-    maxDevices: MAX_ACTIVE_DEVICES,
+  const replacedDeviceHash = await prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE
+    `;
+    const activeSessions = await transaction.$queryRaw<Array<StoredSession>>`
+      SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt", "createdAt"
+      FROM "UserSession"
+      WHERE "userId" = ${userId} AND "revokedAt" IS NULL AND "expiresAt" > ${now}
+    `;
+    const replacement = selectDeviceToReplace(
+      activeSessions,
+      deviceIdHash,
+      MAX_ACTIVE_DEVICES,
+    );
+    const currentDeviceAlreadyActive = activeSessions.some(
+      (session) => session.deviceIdHash === deviceIdHash,
+    );
+    const deviceHashToRevoke = currentDeviceAlreadyActive
+      ? deviceIdHash
+      : replacement;
+
+    if (deviceHashToRevoke) {
+      await transaction.$executeRaw`
+        UPDATE "UserSession" SET "revokedAt" = ${now}
+        WHERE "userId" = ${userId} AND "deviceIdHash" = ${deviceHashToRevoke} AND "revokedAt" IS NULL
+      `;
+    }
+
+    await transaction.$executeRaw`
+      INSERT INTO "UserSession" ("id", "userId", "deviceIdHash", "deviceName", "userAgentHash", "ipPrefixHash", "revokedAt", "expiresAt", "lastSeenAt", "createdAt")
+      VALUES (${sessionId}, ${userId}, ${deviceIdHash}, ${deviceName ?? null}, ${userAgentHash}, ${ipPrefixHash}, NULL, ${expiresAt}, ${now}, ${now})
+    `;
+
+    if (replacement) {
+      await transaction.$executeRaw`
+        INSERT INTO "SecurityEvent" ("id", "userId", "type", "severity", "message", "metadata", "readAt", "createdAt")
+        VALUES (${createRandomSessionId()}, ${userId}, 'DEVICE_REPLACED', 'MEDIUM', 'Dispositivo menos recente substituido automaticamente durante o login.', ${JSON.stringify({ replacedDeviceHash: replacement })}, NULL, ${now})
+      `;
+    }
+
+    return replacement;
   });
 
-  if (!policy.allowed) {
-    await revokeAllUserSessions(userId);
-    await createSecurityEvent({
-      userId,
-      type: "DEVICE_LIMIT_EXCEEDED",
-      message: "Limite de dispositivos ativos excedido. Todas as sessoes foram encerradas.",
-      metadata: { activeDevices: new Set(activeSessions.map((session) => session.deviceIdHash)).size + 1 },
-    });
-    return { allowed: false as const, reason: policy.reason };
-  }
-
-  await revokeActiveSessionsForDevice(userId, deviceIdHash);
-  await prisma.$executeRaw`
-    INSERT INTO "UserSession" ("id", "userId", "deviceIdHash", "deviceName", "userAgentHash", "ipPrefixHash", "revokedAt", "expiresAt", "lastSeenAt", "createdAt")
-    VALUES (${sessionId}, ${userId}, ${deviceIdHash}, ${deviceName ?? null}, ${userAgentHash}, ${ipPrefixHash}, NULL, ${expiresAt}, ${now}, ${now})
-  `;
-
-  return { allowed: true as const, sessionId, expiresAt };
+  return { allowed: true as const, sessionId, expiresAt, replacedDeviceHash };
 }
 
 export async function validateDeviceSession(sessionId: string | null | undefined, headers?: HeaderLike) {
@@ -147,29 +167,14 @@ export async function getRecentSecurityEvents(limit = 50) {
   `;
 }
 
-async function getActiveSessionsForUser(userId: string, now = new Date()) {
-  return prisma.$queryRaw<Array<StoredSession>>`
-    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt"
-    FROM "UserSession"
-    WHERE "userId" = ${userId} AND "revokedAt" IS NULL AND "expiresAt" > ${now}
-  `;
-}
-
 async function getSessionById(sessionId: string) {
   const rows = await prisma.$queryRaw<Array<StoredSession>>`
-    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt"
+    SELECT "id", "userId", "deviceIdHash", "userAgentHash", "revokedAt", "expiresAt", "lastSeenAt", "createdAt"
     FROM "UserSession"
     WHERE "id" = ${sessionId}
     LIMIT 1
   `;
   return rows[0] ?? null;
-}
-
-async function revokeActiveSessionsForDevice(userId: string, deviceIdHash: string) {
-  await prisma.$executeRaw`
-    UPDATE "UserSession" SET "revokedAt" = ${new Date()}
-    WHERE "userId" = ${userId} AND "deviceIdHash" = ${deviceIdHash} AND "revokedAt" IS NULL
-  `;
 }
 
 async function createSecurityEvent({ userId, type, message, metadata }: { userId: string; type: string; message: string; metadata: Record<string, unknown> }) {
