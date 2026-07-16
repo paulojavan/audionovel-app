@@ -82,6 +82,17 @@ test("player offline compartilha o mesmo menu de configuracoes e avanca fila sal
   assert.doesNotMatch(offlinePlayer, /setPlaybackRate/);
 });
 
+test("player offline le somente o audio selecionado e nao faz preflight duplicado", () => {
+  const playBlock = offlinePlayer.match(
+    /function playItem\(item: OfflineItem\)[\s\S]*?\r?\n  }\r?\n\r?\n  function toggle/,
+  )?.[0] ?? "";
+
+  assert.match(playBlock, /getSavedEncryptedAudioUrl\(accountScope, item\.chapterId\)/);
+  assert.match(playBlock, /removeOfflineItem\(accountScope, item\.chapterId\)/);
+  assert.doesNotMatch(playBlock, /hasValidEncryptedAudio/);
+  assert.doesNotMatch(playBlock, /getEncryptedAudioUrl/);
+});
+
 test("pagina de capitulo entrega link do proximo capitulo ao player", () => {
   assert.match(chapterPage, /nextChapterHref=\{nextChapter \? `\/chapters\/\$\{nextChapter\.id\}` : null\}/);
 });

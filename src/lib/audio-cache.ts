@@ -197,6 +197,14 @@ async function deleteOfflineItem(accountScope: string, chapterId: string) {
   }).finally(() => db.close());
 }
 
+function waitForTransaction(transaction: IDBTransaction) {
+  return new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
 export function getAudioCacheId(accountScope: string, chapterId: string, mode: AudioCacheMode) {
   return buildAccountStorageKey(accountScope, `${mode}:chapter:${chapterId}`);
 }
@@ -470,6 +478,44 @@ async function saveRecordForMode(
 async function createObjectUrlFromRecord(record: AudioRecord, key: CryptoKey) {
   const decrypted = await globalThis.crypto.subtle.decrypt({ name: "AES-GCM", iv: record.iv }, key, record.data);
   return URL.createObjectURL(new Blob([decrypted], { type: record.mimeType }));
+}
+
+export async function getSavedEncryptedAudioUrl(
+  accountScope: string,
+  chapterId: string,
+) {
+  assertOfflineCryptoSupported();
+  const normalizedScope = normalizeAccountScope(accountScope);
+  const record = await getValidCachedRecord(
+    normalizedScope,
+    chapterId,
+    "offline",
+  );
+  if (!record) throw new Error("Audio offline indisponivel.");
+  const key = await getCryptoKey(normalizedScope);
+  return createObjectUrlFromRecord(record, key);
+}
+
+export async function removeOfflineItem(
+  accountScope: string,
+  chapterId: string,
+) {
+  const db = await openAudioDb();
+  try {
+    const transaction = db.transaction(
+      [OFFLINE_ITEMS_STORE_NAME, STORE_NAME],
+      "readwrite",
+    );
+    transaction
+      .objectStore(OFFLINE_ITEMS_STORE_NAME)
+      .delete(buildAccountStorageKey(accountScope, `offline-item:${chapterId}`));
+    transaction
+      .objectStore(STORE_NAME)
+      .delete(getAudioCacheId(accountScope, chapterId, "offline"));
+    await waitForTransaction(transaction);
+  } finally {
+    db.close();
+  }
 }
 
 export async function saveOfflineItem(accountScope: string, item: OfflineItem) {

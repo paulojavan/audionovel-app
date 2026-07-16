@@ -5,6 +5,10 @@ import { test } from "node:test";
 import * as audioCache from "./audio-cache";
 
 const { getReusableAudioCacheModes } = audioCache;
+const audioCacheSource = readFileSync(
+  join(process.cwd(), "src", "lib", "audio-cache.ts"),
+  "utf8",
+);
 
 type AudioDownloadHttpErrorConstructor = new (
   status: number,
@@ -64,6 +68,28 @@ test("extensao de validade preserva o registro criptografado existente", () => {
   assert.match(extensionBlock, /readRecord/);
   assert.match(extensionBlock, /writeRecord\(\{[\s\S]*?\.\.\.record[\s\S]*?expiresAt/);
   assert.doesNotMatch(extensionBlock, /deleteRecord/);
+});
+
+test("reproducao offline direcionada nao executa limpeza global", () => {
+  const playbackBlock = audioCacheSource.match(
+    /export async function getSavedEncryptedAudioUrl[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(playbackBlock, /getValidCachedRecord/);
+  assert.match(playbackBlock, /createObjectUrlFromRecord/);
+  assert.doesNotMatch(playbackBlock, /cleanupExpiredAudioCache/);
+  assert.doesNotMatch(playbackBlock, /downloadAudioBuffer/);
+});
+
+test("remocao offline apaga somente as duas chaves do capitulo", () => {
+  const removalBlock = audioCacheSource.match(
+    /export async function removeOfflineItem[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(removalBlock, /OFFLINE_ITEMS_STORE_NAME/);
+  assert.match(removalBlock, /STORE_NAME/);
+  assert.match(removalBlock, /getAudioCacheId\(accountScope, chapterId, "offline"\)/);
+  assert.doesNotMatch(removalBlock, /openCursor/);
 });
 
 test("cache de audio separa registros por conta", () => {

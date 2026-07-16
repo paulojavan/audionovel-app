@@ -5,7 +5,11 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PlayerSettingsMenu } from "@/components/player-settings-menu";
 import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { useOfflineCryptoSupported } from "@/hooks/use-offline-crypto-supported";
-import { getEncryptedAudioUrl, getSavedOfflineItems, hasValidEncryptedAudio } from "@/lib/audio-cache";
+import {
+  getSavedEncryptedAudioUrl,
+  getSavedOfflineItems,
+  removeOfflineItem,
+} from "@/lib/audio-cache";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import { mergeAvailableOfflineItems, type OfflineItem } from "@/lib/offline-items";
 
@@ -83,22 +87,10 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
       setPlaying(false);
       setCurrentTime(0);
       setDuration(0);
-      const source = `/api/chapters/${item.chapterId}/audio?offline=${encodeURIComponent(item.cacheKey)}`;
 
       try {
         if (!offlineCryptoSupported) throw new OfflineCryptoUnavailableError();
-        const hasCache = await hasValidEncryptedAudio(accountScope, item.chapterId, "offline");
-        if (!hasCache) {
-          setAvailableItems((current) => (current ?? []).filter((savedItem) => savedItem.id !== item.id));
-          setMessage("Este audio offline expirou. Salve o capitulo novamente na pagina da novel.");
-          return;
-        }
-
-        const url = await getEncryptedAudioUrl(item.chapterId, source, {
-          accountScope,
-          mode: "offline",
-          expiresAt: item.expiresAt,
-        });
+        const url = await getSavedEncryptedAudioUrl(accountScope, item.chapterId);
         if (audioSrc.startsWith("blob:")) URL.revokeObjectURL(audioSrc);
         setAudioSrc(url);
         setActiveId(item.id);
@@ -120,6 +112,12 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
           }
         });
       } catch (error) {
+        if (!(error instanceof OfflineCryptoUnavailableError)) {
+          await removeOfflineItem(accountScope, item.chapterId).catch(() => undefined);
+          setAvailableItems((current) => (
+            (current ?? []).filter((savedItem) => savedItem.id !== item.id)
+          ));
+        }
         setMessage(error instanceof OfflineCryptoUnavailableError ? error.message : "Nao foi possivel abrir este audio offline. Tente salvar novamente na pagina da novel.");
       }
     });
