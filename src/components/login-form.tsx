@@ -119,7 +119,7 @@ export function LoginForm({
 
       <dialog
         ref={loadingDialogRef}
-        className="fixed inset-0 z-[100] grid h-screen w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-black/80 backdrop:backdrop-blur-sm"
+        className="fixed inset-0 z-[100] h-screen w-screen max-w-none place-items-center border-0 bg-transparent p-4 backdrop:bg-black/80 backdrop:backdrop-blur-sm open:grid"
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-loading-title"

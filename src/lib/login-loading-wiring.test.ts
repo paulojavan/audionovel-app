@@ -31,6 +31,13 @@ test("login mostra modal nativo bloqueante durante a autenticacao", () => {
   assert.match(loginFormSource, />Entrando\.\.\.<\/p>/);
 });
 
+test("dialog fechado permanece oculto ate ser aberto", () => {
+  const dialogOpeningTag = loginFormSource.match(/<dialog[\s\S]*?>/)?.[0] ?? "";
+
+  assert.doesNotMatch(dialogOpeningTag, /(?:^|\s)grid(?=\s|")/);
+  assert.match(dialogOpeningTag, /\bopen:grid\b/);
+});
+
 test("login libera nova tentativa somente quando a operacao falha", () => {
   assert.match(loginFormSource, /let keepPendingForNavigation = false/);
   assert.match(
