@@ -1,6 +1,7 @@
 export type OfflineItem = {
   id: string;
   chapterId: string;
+  audioRevision?: number;
   title: string;
   novelTitle: string;
   volumeTitle: string;

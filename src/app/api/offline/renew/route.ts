@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api";
+import { getChapterAudioPath } from "@/lib/audio-revision";
 import { getOfflineLicenseExpiry } from "@/lib/offline-license";
 import { normalizeRenewalChapterIds } from "@/lib/offline-renewal";
 import { prisma } from "@/lib/prisma";
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       contentType: "AUDIO",
       published: true,
     },
-    select: { id: true },
+    select: { id: true, audioRevision: true },
     take: 100,
   });
   const now = new Date();
@@ -51,14 +52,20 @@ export async function POST(request: Request) {
     auth.user.role,
   );
   const items = await Promise.all(
-    chapters.map(async ({ id: chapterId }) => {
+    chapters.map(async ({ id: chapterId, audioRevision }) => {
       const cacheKey = randomBytes(24).toString("base64url");
       await prisma.offlineDownload.upsert({
         where: { userId_chapterId: { userId: auth.user.id, chapterId } },
         create: { userId: auth.user.id, chapterId, cacheKey, expiresAt },
         update: { cacheKey, expiresAt, lastUsedAt: now },
       });
-      return { chapterId, cacheKey, expiresAt: expiresAt.toISOString() };
+      return {
+        chapterId,
+        cacheKey,
+        expiresAt: expiresAt.toISOString(),
+        audioRevision,
+        audioUrl: getChapterAudioPath(chapterId, audioRevision, cacheKey),
+      };
     }),
   );
 

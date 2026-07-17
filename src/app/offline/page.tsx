@@ -82,6 +82,7 @@ export default async function OfflinePage() {
               return {
                 id: download.id,
                 chapterId: download.chapterId,
+                audioRevision: download.chapter.audioRevision,
                 title: download.chapter.title,
                 novelTitle: download.chapter.volume.novel.title,
                 volumeTitle: download.chapter.volume.title,

@@ -9,6 +9,7 @@ import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { ReactionButtons } from "@/components/reaction-buttons";
 import { canPlayChapter } from "@/lib/api";
+import { getChapterAudioPath } from "@/lib/audio-revision";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { getPublicCommentStatusFilter } from "@/lib/comment-moderation";
@@ -126,7 +127,8 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
       ) : (
           <AudioPlayer
             chapterId={id}
-            src={`/api/chapters/${id}/audio`}
+            audioRevision={access.chapter.audioRevision}
+            src={getChapterAudioPath(id, access.chapter.audioRevision)}
             initialPosition={progress?.positionSec ?? 0}
             initialCompleted={progress?.completed ?? false}
             duration={access.chapter.durationSec}

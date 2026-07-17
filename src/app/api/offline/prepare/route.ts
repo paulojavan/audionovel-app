@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { canPlayChapter, requireUser } from "@/lib/api";
+import { getChapterAudioPath } from "@/lib/audio-revision";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { getOfflineLicenseExpiry } from "@/lib/offline-license";
@@ -45,6 +46,11 @@ export async function POST(request: Request) {
   return NextResponse.json({
     cacheKey,
     expiresAt,
-    audioUrl: `/api/chapters/${chapterId}/audio?offline=${cacheKey}`,
+    audioRevision: access.chapter.audioRevision,
+    audioUrl: getChapterAudioPath(
+      chapterId,
+      access.chapter.audioRevision,
+      cacheKey,
+    ),
   });
 }

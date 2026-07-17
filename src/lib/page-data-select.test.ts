@@ -82,6 +82,9 @@ test("pagina de capitulo restringe a novel relacionada", () => {
   assert.equal("audioUrl" in CHAPTER_PAGE_SELECT, false);
   assert.deepEqual(Object.keys(CHAPTER_MEDIA_SOURCE_SELECT).sort(), ["audioUrl", "contentType", "id"]);
   assert.equal(CHAPTER_PAGE_SELECT.transcriptJson, true);
+  assert.equal(CHAPTER_PAGE_SELECT.audioRevision, true);
+  assert.equal(PUBLIC_NOVEL_SELECT.volumes.select.chapters.select.audioRevision, true);
+  assert.equal(OFFLINE_DOWNLOAD_SELECT.chapter.select.audioRevision, true);
 });
 
 test("dashboard e moderacao nao carregam modelos relacionados completos", () => {

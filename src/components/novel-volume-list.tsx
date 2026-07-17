@@ -19,6 +19,7 @@ type NovelVolume = {
     positionEnd: number | null;
     contentType: string;
     durationSec: number;
+    audioRevision: number;
     startSec: number;
     chapterPartsJson: string;
     viewCount: number;
@@ -153,6 +154,7 @@ export function NovelVolumeList({
                       onSaved={markChapterSaved}
                       metadata={{
                         chapterId: chapter.id,
+                        audioRevision: chapter.audioRevision,
                         title: chapter.title,
                         novelTitle,
                         volumeTitle: volume.title,
@@ -227,6 +229,7 @@ export function NovelVolumeList({
                           onSaved={markChapterSaved}
                           metadata={{
                             chapterId: chapter.id,
+                            audioRevision: chapter.audioRevision,
                             title: chapter.title,
                             novelTitle,
                             volumeTitle: volume.title,
