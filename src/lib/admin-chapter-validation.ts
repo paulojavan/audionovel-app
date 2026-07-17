@@ -53,6 +53,7 @@ export const chapterSchema = z
     transcriptJson: z.string().optional().default("[]"),
     premiumOnly: z.boolean(),
     published: z.boolean(),
+    refreshAudioRevision: z.boolean().optional().default(false),
   })
   .refine(({ chapterParts }) => hasConsecutiveIntegerPositions(chapterParts), {
     message: "Capitulos agrupados devem usar posicoes inteiras consecutivas.",

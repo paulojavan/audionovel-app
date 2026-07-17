@@ -149,6 +149,7 @@ model Chapter {
   contentType      String              @default("AUDIO")
   durationSec      Int                 @default(0)
   audioUrl         String?
+  audioRevision    Int                 @default(1)
   youtubeUrl       String?
   youtubeVideoId   String?
   coverUrl         String?

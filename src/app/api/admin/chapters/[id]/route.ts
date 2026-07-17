@@ -4,6 +4,7 @@ import { chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript 
 import { requireAdmin } from "@/lib/api";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getChapterPersistenceBounds, normalizeChapterParts } from "@/lib/chapter-grouping";
+import { shouldIncrementAudioRevision } from "@/lib/audio-revision";
 import { notifyFavoriteUsersAboutPublishedChapter } from "@/lib/favorite-chapter-notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -25,6 +26,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const publicationDate = new Date();
 
     const { chapter, notificationEvent } = await prisma.$transaction(async (tx) => {
+      const currentMedia = await tx.chapter.findUnique({
+        where: { id },
+        select: { contentType: true, audioUrl: true },
+      });
+      if (!currentMedia) throw new Error("chapter");
+      const nextAudioUrl = parsed.data.contentType === "AUDIO"
+        ? parsed.data.audioUrl || null
+        : null;
+      const refreshAudioRevision = shouldIncrementAudioRevision(
+        currentMedia,
+        { contentType: parsed.data.contentType, audioUrl: nextAudioUrl },
+        parsed.data.refreshAudioRevision,
+      );
       const publicationClaim = parsed.data.published
         ? await tx.chapter.updateMany({
             where: { id, publishedAt: null },
@@ -42,7 +56,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           positionEnd: bounds.positionEnd,
           contentType: parsed.data.contentType,
           durationSec: parsed.data.durationSec,
-          audioUrl: parsed.data.contentType === "AUDIO" ? parsed.data.audioUrl : null,
+          audioUrl: nextAudioUrl,
+          ...(refreshAudioRevision ? { audioRevision: { increment: 1 } } : {}),
           youtubeUrl: parsed.data.contentType === "YOUTUBE" ? cleanedUrl : null,
           youtubeVideoId,
           coverUrl: parsed.data.coverUrl || null,

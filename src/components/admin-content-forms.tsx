@@ -147,6 +147,7 @@ export function AdminChapterEditForm({
               startSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio && firstPart ? firstPart.startSec : getNumber(data, "startSec"),
               chapterParts: isEditingGroupedAudio ? nextChapterParts : [],
               transcriptJson: getString(data, "transcriptJson"),
+              refreshAudioRevision: data.get("refreshAudioRevision") === "on",
             });
             setMessage("Capitulo atualizado com sucesso.");
             router.push(backHref);
@@ -189,6 +190,9 @@ export function AdminChapterEditForm({
       ) : (
         <>
           <input name="audioUrl" defaultValue={chapter.audioUrl ?? ""} placeholder="URL privada/proxy do audio" className="rounded-md border border-white/10 bg-black px-3 py-2" required />
+          <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <input name="refreshAudioRevision" type="checkbox" className="accent-[#18b7bd]" /> O arquivo de audio foi substituido na mesma URL
+          </label>
           <textarea
             name="transcriptJson"
             defaultValue={JSON.stringify(JSON.parse(chapter.transcriptJson || "[]"), null, 2)}
