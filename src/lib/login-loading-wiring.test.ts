@@ -18,12 +18,16 @@ test("login bloqueia envios duplicados durante toda a autenticacao", () => {
   assert.match(loginFormSource, /disabled=\{pending\}/);
 });
 
-test("login mostra overlay circular e inacessivel a novos cliques", () => {
-  assert.match(loginFormSource, /\{pending \? \([\s\S]*?fixed inset-0 z-\[100\]/);
-  assert.match(loginFormSource, /role="dialog"/);
+test("login mostra modal nativo bloqueante durante a autenticacao", () => {
+  assert.match(loginFormSource, /const loadingDialogRef = useRef<HTMLDialogElement>\(null\)/);
+  assert.match(loginFormSource, /useEffect\(\(\) => \{[\s\S]*?dialog\.showModal\(\)/);
+  assert.match(loginFormSource, /<dialog[\s\S]*?ref=\{loadingDialogRef\}/);
+  assert.match(loginFormSource, /onCancel=\{\(event\) => event\.preventDefault\(\)\}/);
+  assert.match(loginFormSource, /fixed inset-0 z-\[100\]/);
   assert.match(loginFormSource, /aria-modal="true"/);
   assert.match(loginFormSource, /role="status"/);
   assert.match(loginFormSource, /animate-spin/);
+  assert.match(loginFormSource, /motion-reduce:animate-none/);
   assert.match(loginFormSource, />Entrando\.\.\.<\/p>/);
 });
 
