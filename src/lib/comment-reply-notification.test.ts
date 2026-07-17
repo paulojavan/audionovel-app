@@ -72,3 +72,7 @@ test("administrative approval never duplicates the reply notification", () => {
   assert.doesNotMatch(moderationRouteSource, /notification\.create/);
   assert.doesNotMatch(moderationRouteSource, /COMMENT_REPLY/);
 });
+
+test("nova resposta invalida o contador de notificacoes depois do commit", () => {
+  assert.match(createRouteSource, /revalidateTag\(CACHE_TAGS\.notifications, "max"\)/);
+});

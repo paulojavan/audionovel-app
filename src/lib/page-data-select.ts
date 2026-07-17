@@ -256,6 +256,12 @@ export const CHAPTER_MEDIA_SOURCE_SELECT = {
   audioUrl: true,
 } as const satisfies Prisma.ChapterSelect;
 
+export const CHAPTER_AUDIO_REVISION_SELECT = {
+  contentType: true,
+  audioRevision: true,
+  premiumOnly: true,
+} as const satisfies Prisma.ChapterSelect;
+
 export const ADMIN_CONTENT_NOVEL_SELECT = {
   id: true,
   title: true,

@@ -17,28 +17,62 @@ import {
 import {
   getOfflineSyncNextAttemptAt,
   shouldStartOfflineSync,
+  type OfflineSyncOutcome,
 } from "@/lib/offline-sync-policy";
 import { prepareOfflinePage } from "@/lib/pwa-offline";
 
 const RENEW_TIMEOUT_MS = 15_000;
-const inFlightSyncs = new Map<string, Promise<unknown>>();
+const inFlightSyncs = new Map<string, Promise<void>>();
 
 export function OfflineEntitlementSync({ accountScope }: { accountScope: string }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!navigator.onLine) return;
     const storageKey = `audio-novel-offline-sync:${accountScope}`;
     const renewalCursorKey = `audio-novel-offline-renew-cursor:${accountScope}`;
-    try {
-      if (!shouldStartOfflineSync(sessionStorage.getItem(storageKey))) return;
-    } catch {
-      // A sincronizacao continua mesmo sem sessionStorage.
-    }
+    let disposed = false;
+    let retryTimer: number | null = null;
 
-    const existing = inFlightSyncs.get(accountScope);
-    if (existing) return;
-    const sync = (async () => {
+    const clearRetryTimer = () => {
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      retryTimer = null;
+    };
+
+    const scheduleAt = (nextAttemptAt: number) => {
+      if (disposed) return;
+      clearRetryTimer();
+      retryTimer = window.setTimeout(
+        () => void startSync(),
+        Math.max(0, nextAttemptAt - Date.now()),
+      );
+    };
+
+    const recordOutcome = (outcome: OfflineSyncOutcome) => {
+      const nextAttemptAt = getOfflineSyncNextAttemptAt(outcome);
+      try {
+        sessionStorage.setItem(storageKey, String(nextAttemptAt));
+      } catch {
+        // O timer em memoria ainda limita repeticoes nesta montagem.
+      }
+      scheduleAt(nextAttemptAt);
+    };
+
+    const scheduleStoredAttempt = () => {
+      if (disposed || !navigator.onLine) return;
+      try {
+        const storedValue = sessionStorage.getItem(storageKey);
+        const nextAttemptAt = Number(storedValue);
+        if (Number.isFinite(nextAttemptAt) && nextAttemptAt > Date.now()) {
+          scheduleAt(nextAttemptAt);
+          return;
+        }
+      } catch {
+        // Sem storage, uma nova tentativa imediata continua segura.
+      }
+      void startSync();
+    };
+
+    async function reconcile() {
       if (pathname === "/offline") {
         await waitForOfflineCatalogReady(accountScope);
       }
@@ -48,6 +82,7 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
       } catch {
         // A ordenacao deterministica ainda permite renovar o primeiro lote.
       }
+
       return reconcileOfflineEntitlement(accountScope, {
         ensureDeviceToken: ensureClientDeviceToken,
         getRecoverableItems: getRecoverableOfflineItems,
@@ -93,37 +128,64 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
         updateItemsBatch: updateOfflineItemsBatch,
         preparePage: prepareOfflinePage,
       }, renewalCursor);
-    })()
-      .then((result) => {
-        if (result.failed > 0) {
-          throw new Error("Nao foi possivel atualizar todos os audios offline.");
+    }
+
+    function startSync(force = false) {
+      if (disposed || !navigator.onLine) return;
+      clearRetryTimer();
+      try {
+        const storedValue = sessionStorage.getItem(storageKey);
+        if (!force && !shouldStartOfflineSync(storedValue)) {
+          const nextAttemptAt = Number(storedValue);
+          if (Number.isFinite(nextAttemptAt)) scheduleAt(nextAttemptAt);
+          return;
         }
-        try {
-          sessionStorage.setItem(
-            storageKey,
-            String(getOfflineSyncNextAttemptAt("success")),
-          );
-          if (result.nextCursor) {
-            localStorage.setItem(renewalCursorKey, result.nextCursor);
-          } else {
-            localStorage.removeItem(renewalCursorKey);
+      } catch {
+        // A sincronizacao continua mesmo sem sessionStorage.
+      }
+
+      const existing = inFlightSyncs.get(accountScope);
+      if (existing) {
+        void existing.finally(scheduleStoredAttempt);
+        return;
+      }
+
+      const sync = reconcile()
+        .then((result) => {
+          if (result.failed > 0) {
+            throw new Error("Nao foi possivel atualizar todos os audios offline.");
           }
-        } catch {
-          // O resultado continua valido sem o marcador de intervalo.
-        }
-      })
-      .catch(() => {
-        try {
-          sessionStorage.setItem(
-            storageKey,
-            String(getOfflineSyncNextAttemptAt("failure")),
-          );
-        } catch {
-          // Uma falha de storage nao deve repetir a sincronizacao atual.
-        }
-      })
-      .finally(() => inFlightSyncs.delete(accountScope));
-    inFlightSyncs.set(accountScope, sync);
+          try {
+            if (result.nextCursor) {
+              localStorage.setItem(renewalCursorKey, result.nextCursor);
+            } else {
+              localStorage.removeItem(renewalCursorKey);
+            }
+          } catch {
+            // A renovacao continua valida sem o cursor persistido.
+          }
+          recordOutcome("success");
+        })
+        .catch(() => {
+          recordOutcome("failure");
+        })
+        .finally(() => {
+          if (inFlightSyncs.get(accountScope) === sync) {
+            inFlightSyncs.delete(accountScope);
+          }
+        });
+      inFlightSyncs.set(accountScope, sync);
+    }
+
+    const handleOnline = () => startSync(true);
+    window.addEventListener("online", handleOnline);
+    scheduleStoredAttempt();
+
+    return () => {
+      disposed = true;
+      clearRetryTimer();
+      window.removeEventListener("online", handleOnline);
+    };
   }, [accountScope, pathname]);
 
   return null;

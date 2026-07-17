@@ -17,6 +17,13 @@ export type OfflineItem = {
   expiresAt: string;
 };
 
+export function isOfflineItemRevisionCurrent(
+  savedRevision: number | undefined,
+  currentRevision: number,
+) {
+  return savedRevision === currentRevision;
+}
+
 export function mergeOfflineItems(serverItems: OfflineItem[], localItems: OfflineItem[]) {
   const byChapter = new Map<string, OfflineItem>();
 

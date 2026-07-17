@@ -167,7 +167,7 @@ test("play online reutiliza cache temporario por dois dias", () => {
 
 test("player online baixa o audio inteiro no cache criptografado apenas depois do play", () => {
   const playerSource = readFileSync(join(process.cwd(), "src", "components", "audio-player.tsx"), "utf8");
-  assert.match(playerSource, /getEncryptedAudioUrl\(chapterId, src,/);
+  assert.match(playerSource, /getEncryptedAudioUrl\(chapterId, identity\.src,/);
   assert.match(playerSource, /mode:\s*"temporary"/);
   assert.match(playerSource, /accountScope/);
   assert.match(playerSource, /src=\{activeAudioSource \|\| undefined\}/);

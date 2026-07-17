@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getChapterPartsForDisplay, type ChapterPart } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { getSavedOfflineItems } from "@/lib/audio-cache";
+import { isOfflineItemRevisionCurrent } from "@/lib/offline-items";
 import { OfflineChapterButton } from "./offline-chapter-button";
 
 type NovelVolume = {
@@ -51,7 +52,7 @@ export function NovelVolumeList({
   accountScope: string;
 }) {
   const scrollContainers = useRef<Array<HTMLDivElement | null>>([]);
-  const [savedOfflineChapterIds, setSavedOfflineChapterIds] = useState<Set<string> | null>(null);
+  const [savedOfflineRevisions, setSavedOfflineRevisions] = useState<Map<string, number | undefined> | null>(null);
   const hasLastListenedChapter = useMemo(() => volumes.some((volume) => volume.chapters.some((chapter) => chapter.lastListened)), [volumes]);
 
   useEffect(() => {
@@ -76,10 +77,12 @@ export function NovelVolumeList({
     getSavedOfflineItems(accountScope)
       .then((items) => {
         if (!active) return;
-        setSavedOfflineChapterIds(new Set(items.map((item) => item.chapterId)));
+        setSavedOfflineRevisions(new Map(
+          items.map((item) => [item.chapterId, item.audioRevision]),
+        ));
       })
       .catch(() => {
-        if (active) setSavedOfflineChapterIds(new Set());
+        if (active) setSavedOfflineRevisions(new Map());
       });
 
     return () => {
@@ -87,10 +90,10 @@ export function NovelVolumeList({
     };
   }, [accountScope, canUseOffline]);
 
-  function markChapterSaved(chapterId: string) {
-    setSavedOfflineChapterIds((current) => {
-      const next = new Set(current ?? []);
-      next.add(chapterId);
+  function markChapterSaved(chapterId: string, audioRevision: number) {
+    setSavedOfflineRevisions((current) => {
+      const next = new Map(current ?? []);
+      next.set(chapterId, audioRevision);
       return next;
     });
   }
@@ -149,8 +152,11 @@ export function NovelVolumeList({
                       chapterId={chapter.id}
                       contentType={chapter.contentType}
                       canUseOffline={canUseOffline}
-                      initialSaved={canUseOffline && Boolean(savedOfflineChapterIds?.has(chapter.id))}
-                      checkingInitialSaved={canUseOffline && savedOfflineChapterIds === null}
+                      initialSaved={canUseOffline && isOfflineItemRevisionCurrent(
+                        savedOfflineRevisions?.get(chapter.id),
+                        chapter.audioRevision,
+                      )}
+                      checkingInitialSaved={canUseOffline && savedOfflineRevisions === null}
                       onSaved={markChapterSaved}
                       metadata={{
                         chapterId: chapter.id,
@@ -224,8 +230,11 @@ export function NovelVolumeList({
                           chapterId={chapter.id}
                           contentType={chapter.contentType}
                           canUseOffline={canUseOffline}
-                          initialSaved={canUseOffline && Boolean(savedOfflineChapterIds?.has(chapter.id))}
-                          checkingInitialSaved={canUseOffline && savedOfflineChapterIds === null}
+                          initialSaved={canUseOffline && isOfflineItemRevisionCurrent(
+                            savedOfflineRevisions?.get(chapter.id),
+                            chapter.audioRevision,
+                          )}
+                          checkingInitialSaved={canUseOffline && savedOfflineRevisions === null}
                           onSaved={markChapterSaved}
                           metadata={{
                             chapterId: chapter.id,

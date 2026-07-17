@@ -1,5 +1,7 @@
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { buildCommentReplyNotification } from "@/lib/comment-reply-notification";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
   if (parsed.data.novelId && !novel) return NextResponse.json({ error: "Novel nao encontrada." }, { status: 404 });
   if (parsed.data.chapterId && !chapter) return NextResponse.json({ error: "Capitulo nao encontrado." }, { status: 404 });
 
-  const comment = await prisma.$transaction(async (tx) => {
+  const { comment, createdNotification } = await prisma.$transaction(async (tx) => {
     const comment = await tx.comment.create({
       data: {
         body: parsed.data.body,
@@ -92,8 +94,12 @@ export async function POST(request: Request) {
       await tx.notification.create({ data: notification });
     }
 
-    return comment;
+    return { comment, createdNotification: Boolean(notification) };
   });
+
+  if (createdNotification) {
+    revalidateTag(CACHE_TAGS.notifications, "max");
+  }
 
   return NextResponse.json(comment, { status: 201 });
 }

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "./auth";
-import { CHAPTER_PAGE_SELECT, REQUIRE_USER_SELECT } from "./page-data-select";
+import { CHAPTER_AUDIO_REVISION_SELECT, CHAPTER_PAGE_SELECT, REQUIRE_USER_SELECT } from "./page-data-select";
 import { prisma } from "./prisma";
 import { hasActiveSessionUser } from "./session-state";
 import { hasPremiumAccess } from "./subscription";
@@ -60,6 +60,30 @@ export async function canPlayChapter(chapterId: string, userId?: string) {
 
   if (!hasPremiumAccess(user)) {
     return { allowed: false, status: 402 as const, chapter, reason: "Capítulo disponível apenas para premium." };
+  }
+
+  return { allowed: true, status: 200 as const, chapter, reason: null };
+}
+
+export async function canPlayChapterAudioRevision(chapterId: string, userId?: string) {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId, published: true },
+    select: CHAPTER_AUDIO_REVISION_SELECT,
+  });
+
+  if (!chapter) return { allowed: false, status: 404 as const, chapter: null, reason: "Capitulo nao encontrado." };
+  if (!chapter.premiumOnly) return { allowed: true, status: 200 as const, chapter, reason: null };
+  if (!userId) return { allowed: false, status: 401 as const, chapter, reason: "Faca login para ouvir este capitulo." };
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, subscriptionStatus: true, premiumUntil: true, isBlocked: true },
+  });
+  if (user?.isBlocked) {
+    return { allowed: false, status: 403 as const, chapter, reason: "Usuario bloqueado. Entre em contato com o administrador via Discord." };
+  }
+  if (!hasPremiumAccess(user)) {
+    return { allowed: false, status: 402 as const, chapter, reason: "Capitulo disponivel apenas para premium." };
   }
 
   return { allowed: true, status: 200 as const, chapter, reason: null };

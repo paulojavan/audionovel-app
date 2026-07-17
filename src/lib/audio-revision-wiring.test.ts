@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   CHAPTER_PAGE_SELECT,
+  CHAPTER_AUDIO_REVISION_SELECT,
   OFFLINE_DOWNLOAD_SELECT,
   PUBLIC_NOVEL_SELECT,
 } from "./page-data-select";
@@ -20,6 +21,7 @@ const offlinePage = source("src", "app", "offline", "page.tsx");
 const offlineItems = source("src", "lib", "offline-items.ts");
 const audioPlayer = source("src", "components", "audio-player.tsx");
 const offlineButton = source("src", "components", "offline-chapter-button.tsx");
+const revisionRoute = source("src", "app", "api", "chapters", "[id]", "audio-revision", "route.ts");
 
 test("page and offline selects expose the current audio revision", () => {
   assert.equal(CHAPTER_PAGE_SELECT.audioRevision, true);
@@ -28,6 +30,11 @@ test("page and offline selects expose the current audio revision", () => {
     true,
   );
   assert.equal(OFFLINE_DOWNLOAD_SELECT.chapter.select.audioRevision, true);
+  assert.deepEqual(CHAPTER_AUDIO_REVISION_SELECT, {
+    contentType: true,
+    audioRevision: true,
+    premiumOnly: true,
+  });
 });
 
 test("chapter playback uses a revisioned logical source", () => {
@@ -60,4 +67,12 @@ test("player and offline download pass the expected revision into IndexedDB", ()
   assert.match(audioPlayer, /getEncryptedAudioUrl[\s\S]*audioRevision/);
   assert.match(offlineButton, /hasValidEncryptedAudio[\s\S]*audioRevision/);
   assert.match(offlineButton, /getEncryptedAudioUrl[\s\S]*audioRevision/);
+});
+
+test("an already-mounted player checks the current revision before playback", () => {
+  assert.match(audioPlayer, /getCurrentChapterAudioIdentity/);
+  assert.match(revisionRoute, /getChapterAudioPath/);
+  assert.match(revisionRoute, /Cache-Control.*private, no-store/);
+  assert.match(revisionRoute, /enforceRateLimit/);
+  assert.match(revisionRoute, /canPlayChapterAudioRevision/);
 });

@@ -60,13 +60,13 @@ test("player online usa streaming direto somente quando o cache permite fallback
   );
   assert.match(
     player,
-    /getEncryptedAudioUrl\(chapterId, src,[\s\S]*?catch \(error\)[\s\S]*?resolveOnlineAudioFailure\(error\)/,
+    /getEncryptedAudioUrl\(chapterId, identity\.src,[\s\S]*?catch \(error\)[\s\S]*?resolveOnlineAudioFailure\(error\)/,
   );
   assert.match(
     player,
     /if \(failure\.kind === "error"\) \{[\s\S]*?setPlaybackError\(failure\.message\);[\s\S]*?return;/,
   );
-  assert.match(player, /playbackSource = src/);
+  assert.match(player, /playbackSource = currentIdentity\.src/);
   assert.match(
     player,
     /activeAudio\.getAttribute\("src"\) !== playbackSource/,
@@ -74,7 +74,7 @@ test("player online usa streaming direto somente quando o cache permite fallback
   assert.match(player, /activeAudio\.src = playbackSource/);
   assert.doesNotMatch(
     offlinePlayer,
-    /resolveOnlineAudioFailure|playbackSource = src/,
+    /resolveOnlineAudioFailure|playbackSource = currentIdentity\.src/,
   );
 });
 
@@ -91,8 +91,12 @@ test("download mostra modal circular bloqueante sem fechamento manual", () => {
 
 test("player descarta downloads antigos quando a origem muda", () => {
   assert.match(player, /URL\.revokeObjectURL\(downloadedAudio\.objectUrl\)/);
-  assert.match(player, /audioSource\?\.source === src \? audioSource\.objectUrl : ""/);
-  assert.match(player, /}, \[src\]\)/);
+  assert.match(player, /audioGenerationRef\.current \+= 1/);
+  assert.match(player, /generation !== audioGenerationRef\.current/);
+  assert.match(player, /instanceof StaleAudioPlaybackError/);
+  assert.match(player, /audioSource\?\.chapterId === chapterId/);
+  assert.match(player, /audioSource\.audioRevision === resolvedIdentity\.audioRevision/);
+  assert.match(player, /}, \[audioRevision, chapterId, src\]\)/);
   assert.doesNotMatch(player, /sourceProp/);
 });
 
@@ -103,7 +107,9 @@ test("player registra intencao antes de play e nao a apaga em pause induzido por
 });
 
 test("play manual baixa uma unica vez e bloqueia interacoes durante o download", () => {
-  assert.match(player, /if \(downloadPromiseRef\.current\) return downloadPromiseRef\.current/);
+  assert.match(player, /audioRevision:\s*number;\s*source:\s*string;\s*promise:\s*Promise<string>;\s*stale:\s*boolean/);
+  assert.match(player, /pendingDownload\.audioRevision === identity\.audioRevision/);
+  assert.match(player, /pendingDownload\.stale = true/);
   assert.match(audioCache, /credentials:\s*"include"/);
   assert.match(player, /if \(!audio \|\| downloadingAudio\) return/);
   assert.match(player, /disabled=\{downloadingAudio\}/);

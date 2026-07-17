@@ -259,9 +259,13 @@ test("coordenador aguarda catalogo no offline e limita rede e repeticoes", () =>
   assert.match(component, /waitForOfflineCatalogReady/);
   assert.match(component, /updateOfflineItemsBatch/);
   assert.match(component, /AbortController/);
-  assert.match(component, /getOfflineSyncNextAttemptAt\("success"/);
-  assert.match(component, /getOfflineSyncNextAttemptAt\("failure"/);
+  assert.match(component, /recordOutcome\("success"\)/);
+  assert.match(component, /recordOutcome\("failure"\)/);
   assert.match(component, /offline-renew-cursor/);
+  assert.match(component, /addEventListener\("online"/);
+  assert.match(component, /removeEventListener\("online"/);
+  assert.match(component, /handleOnline\s*=\s*\(\)\s*=>\s*startSync\(true\)/);
+  assert.match(component, /setTimeout/);
   assert.doesNotMatch(component, /extendOfflineAudioExpiry/);
   assert.doesNotMatch(component, /saveOfflineItem/);
 });

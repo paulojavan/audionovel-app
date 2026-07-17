@@ -16,13 +16,13 @@ test("botao prepara a pagina somente depois de salvar os metadados locais", () =
   assert.match(source, /enqueueOfflineDownload/);
   assert.match(
     source,
-    /await saveOfflineItem\(accountScope,[\s\S]*?markAudioSaved\(\)[\s\S]*?await prepareSavedPage\(\)/,
+    /await saveOfflineItem\(accountScope,[\s\S]*?markAudioSaved\(payload\.audioRevision\)[\s\S]*?await prepareSavedPage\(payload\.audioRevision\)/,
   );
 });
 
 test("botao permite tentar preparar a pagina novamente sem baixar o audio", () => {
   const audioSavedBlock = source.match(/if \(audioSaved\) \{[\s\S]*?return;\r?\n    \}/)?.[0] ?? "";
-  assert.match(audioSavedBlock, /void prepareSavedPage\(\)/);
+  assert.match(audioSavedBlock, /void prepareSavedPage\(audioSavedState\.audioRevision\)/);
   assert.doesNotMatch(audioSavedBlock, /enqueueOfflineDownload/);
   assert.match(
     source,
@@ -39,16 +39,16 @@ test("botao mostra salvo desabilitado quando o capitulo ja esta offline", () => 
 
 test("lista da novel propaga capitulos offline salvos para os botoes", () => {
   assert.match(volumeList, /getSavedOfflineItems\(accountScope\)/);
-  assert.match(volumeList, /savedOfflineChapterIds/);
-  assert.match(volumeList, /new Set\(items\.map\(\(item\) => item\.chapterId\)\)/);
-  assert.match(volumeList, /initialSaved=\{canUseOffline && Boolean\(savedOfflineChapterIds\?\.has\(chapter\.id\)\)\}/);
+  assert.match(volumeList, /savedOfflineRevisions/);
+  assert.match(volumeList, /new Map/);
+  assert.match(volumeList, /isOfflineItemRevisionCurrent/);
 });
 
 test("lista aguarda uma verificacao centralizada antes de mostrar ouvir offline", () => {
-  assert.match(volumeList, /useState<Set<string> \| null>\(null\)/);
+  assert.match(volumeList, /useState<Map<string, number \| undefined> \| null>\(null\)/);
   assert.match(
     volumeList,
-    /checkingInitialSaved=\{canUseOffline && savedOfflineChapterIds === null\}/g,
+    /checkingInitialSaved=\{canUseOffline && savedOfflineRevisions === null\}/g,
   );
   assert.match(source, /checkingInitialSaved\?: boolean/);
   assert.match(source, /checkingInitialSaved \? "Verificando\.\.\."/);
@@ -79,9 +79,9 @@ test("painel offline nao valida nem regrava cada capitulo durante a listagem", (
 });
 
 test("download concluido sincroniza o estado salvo entre os layouts da lista", () => {
-  assert.match(source, /onSaved\?: \(chapterId: string\) => void/);
-  assert.match(source, /onSaved\?\.\(chapterId\)/);
-  assert.match(volumeList, /function markChapterSaved\(chapterId: string\)/);
+  assert.match(source, /onSaved\?: \(chapterId: string, audioRevision: number\) => void/);
+  assert.match(source, /onSaved\?\.\(chapterId, audioRevision\)/);
+  assert.match(volumeList, /function markChapterSaved\(chapterId: string, audioRevision: number\)/);
   assert.match(volumeList, /onSaved=\{markChapterSaved\}/g);
 });
 
@@ -91,7 +91,7 @@ test("botao reutiliza audio offline valido antes de enfileirar novo download", (
   const queueIndex = source.indexOf("await enqueueOfflineDownload", cacheCheckIndex);
   assert.ok(cacheCheckIndex >= 0);
   assert.ok(queueIndex > cacheCheckIndex);
-  assert.match(source, /if \(hasOfflineAudio\) \{[\s\S]*?await savePreparedOfflineMetadata\(payload\)[\s\S]*?await prepareSavedPage\(\)/);
+  assert.match(source, /if \(hasOfflineAudio\) \{[\s\S]*?await savePreparedOfflineMetadata\(payload\)[\s\S]*?await prepareSavedPage\(payload\.audioRevision\)/);
 });
 
 test("botao coloca downloads simultaneos em fila visual", () => {

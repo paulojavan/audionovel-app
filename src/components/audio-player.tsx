@@ -8,6 +8,7 @@ import { PlayerSettingsMenu } from "@/components/player-settings-menu";
 import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { getEncryptedAudioUrl } from "@/lib/audio-cache";
 import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
+import { getCurrentChapterAudioIdentity } from "@/lib/current-audio-revision";
 import {
   getActiveChapterPartIndex,
   getAdjacentChapterPart,
@@ -26,6 +27,8 @@ type Cue = {
 const PLAYBACK_CONNECTION_ERROR =
   "Nao foi possivel iniciar o audio neste dispositivo. Verifique a conexao e toque em play novamente.";
 const NEXT_CHAPTER_AUTOPLAY_KEY = "audio-novel-next-chapter-autoplay-v1";
+
+class StaleAudioPlaybackError extends Error {}
 
 export function AudioPlayer({
   chapterId,
@@ -68,9 +71,27 @@ export function AudioPlayer({
   const playbackStartedRef = useRef(false);
   const playbackActiveRef = useRef(false);
   const desiredPlaybackRef = useRef(false);
-  const downloadedAudioRef = useRef<{ source: string; objectUrl: string } | null>(null);
-  const downloadPromiseRef = useRef<Promise<string> | null>(null);
-  const [audioSource, setAudioSource] = useState<{ source: string; objectUrl: string } | null>(null);
+  const audioGenerationRef = useRef(0);
+  const downloadedAudioRef = useRef<{ chapterId: string; audioRevision: number; source: string; objectUrl: string } | null>(null);
+  const downloadPromiseRef = useRef<{
+    chapterId: string;
+    audioRevision: number;
+    source: string;
+    promise: Promise<string>;
+    stale: boolean;
+  } | null>(null);
+  const [resolvedIdentityState, setResolvedIdentityState] = useState({
+    chapterId,
+    pageAudioRevision: audioRevision,
+    audioRevision,
+    src,
+  });
+  const resolvedIdentity = resolvedIdentityState.chapterId === chapterId &&
+    resolvedIdentityState.pageAudioRevision === audioRevision
+    ? resolvedIdentityState
+    : { chapterId, pageAudioRevision: audioRevision, audioRevision, src };
+  const currentAudioIdentityRef = useRef(resolvedIdentity);
+  const [audioSource, setAudioSource] = useState<{ chapterId: string; audioRevision: number; source: string; objectUrl: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [karaokeMode, setKaraokeMode] = useState(false);
   const initialResumePosition = initialCompleted || isPlaybackComplete(initialPosition, duration) ? 0 : initialPosition;
@@ -80,7 +101,7 @@ export function AudioPlayer({
   const [karaokeFontLevel, setKaraokeFontLevel] = useState(1);
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
-  const [audioDownload, setAudioDownload] = useState<{ source: string; active: boolean; percent: number | null } | null>(null);
+  const [audioDownload, setAudioDownload] = useState<{ chapterId: string; audioRevision: number; source: string; active: boolean; percent: number | null } | null>(null);
   const { settings, updateSettings } = useAudioPlayerSettings();
   const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, playMode } = settings;
 
@@ -100,9 +121,17 @@ export function AudioPlayer({
   const nextCue = activeIndex >= 0 && activeIndex < transcript.length - 1 ? transcript[activeIndex + 1] : null;
   const progressDuration = resolvedDuration || duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (current / progressDuration) * 100));
-  const activeAudioSource = audioSource?.source === src ? audioSource.objectUrl : "";
-  const downloadingAudio = audioDownload?.source === src && audioDownload.active;
-  const downloadPercent = audioDownload?.source === src ? audioDownload.percent : null;
+  const activeAudioSource = audioSource?.chapterId === chapterId &&
+    audioSource.audioRevision === resolvedIdentity.audioRevision
+    ? audioSource.objectUrl
+    : "";
+  const downloadingAudio = audioDownload?.chapterId === chapterId &&
+    audioDownload.audioRevision === resolvedIdentity.audioRevision &&
+    audioDownload.active;
+  const downloadPercent = audioDownload?.chapterId === chapterId &&
+    audioDownload.audioRevision === resolvedIdentity.audioRevision
+    ? audioDownload.percent
+    : null;
   const groupedChapterParts = chapterParts.length > 1 ? chapterParts : [];
   const absoluteCurrent = startOffset + current;
   const activeChapterPartIndex = getActiveChapterPartIndex(groupedChapterParts, absoluteCurrent);
@@ -136,6 +165,15 @@ export function AudioPlayer({
   ][karaokeFontLevel];
 
   useEffect(() => {
+    audioGenerationRef.current += 1;
+    const generation = audioGenerationRef.current;
+    currentAudioIdentityRef.current = {
+      chapterId,
+      pageAudioRevision: audioRevision,
+      audioRevision,
+      src,
+    };
+    if (downloadPromiseRef.current) downloadPromiseRef.current.stale = true;
     downloadPromiseRef.current = null;
     const downloadedAudio = downloadedAudioRef.current;
     if (downloadedAudio) URL.revokeObjectURL(downloadedAudio.objectUrl);
@@ -144,12 +182,16 @@ export function AudioPlayer({
     desiredPlaybackRef.current = false;
 
     return () => {
+      if (audioGenerationRef.current === generation) {
+        audioGenerationRef.current += 1;
+      }
+      if (downloadPromiseRef.current) downloadPromiseRef.current.stale = true;
       downloadPromiseRef.current = null;
       const activeDownload = downloadedAudioRef.current;
       if (activeDownload) URL.revokeObjectURL(activeDownload.objectUrl);
       downloadedAudioRef.current = null;
     };
-  }, [src]);
+  }, [audioRevision, chapterId, src]);
 
   const saveProgress = useCallback(async ({
     completed = false,
@@ -193,39 +235,101 @@ export function AudioPlayer({
   }, [chapterId, duration, resolvedDuration, startOffset]);
 
   const getDownloadedAudioUrl = useCallback(async () => {
-    const downloadedAudio = downloadedAudioRef.current;
-    if (downloadedAudio?.source === src) return downloadedAudio.objectUrl;
-    if (downloadPromiseRef.current) return downloadPromiseRef.current;
+    const generation = audioGenerationRef.current;
+    const assertCurrentGeneration = () => {
+      if (generation !== audioGenerationRef.current) {
+        throw new StaleAudioPlaybackError();
+      }
+    };
+    const fallbackIdentity = currentAudioIdentityRef.current.chapterId === chapterId &&
+      currentAudioIdentityRef.current.pageAudioRevision === audioRevision
+      ? currentAudioIdentityRef.current
+      : { chapterId, pageAudioRevision: audioRevision, audioRevision, src };
+    const identity = await getCurrentChapterAudioIdentity(
+      chapterId,
+      fallbackIdentity,
+      { online: navigator.onLine },
+    );
+    assertCurrentGeneration();
+    const nextIdentity = {
+      chapterId,
+      pageAudioRevision: audioRevision,
+      ...identity,
+    };
+    currentAudioIdentityRef.current = nextIdentity;
+    setResolvedIdentityState(nextIdentity);
 
-    setAudioDownload({ source: src, active: true, percent: 0 });
+    const downloadedAudio = downloadedAudioRef.current;
+    if (
+      downloadedAudio?.chapterId === chapterId &&
+      downloadedAudio.audioRevision === identity.audioRevision &&
+      downloadedAudio.source === identity.src
+    ) return downloadedAudio.objectUrl;
+    while (downloadPromiseRef.current) {
+      const pendingDownload = downloadPromiseRef.current;
+      if (
+        pendingDownload.chapterId === chapterId &&
+        pendingDownload.audioRevision === identity.audioRevision &&
+        pendingDownload.source === identity.src
+      ) return pendingDownload.promise;
+
+      pendingDownload.stale = true;
+      await pendingDownload.promise.catch(() => undefined);
+      assertCurrentGeneration();
+    }
+
+    setAudioDownload({ chapterId, audioRevision: identity.audioRevision, source: identity.src, active: true, percent: 0 });
     setPlaybackError("");
 
-    const downloadPromise = getEncryptedAudioUrl(chapterId, src, {
+    const downloadPromise = getEncryptedAudioUrl(chapterId, identity.src, {
       accountScope,
       mode: "temporary",
-      audioRevision,
+      audioRevision: identity.audioRevision,
       onProgress({ percent }) {
-        setAudioDownload({ source: src, active: true, percent });
+        setAudioDownload({ chapterId, audioRevision: identity.audioRevision, source: identity.src, active: true, percent });
       },
     })
       .then((objectUrl) => {
+        if (pendingEntry.stale || generation !== audioGenerationRef.current) {
+          URL.revokeObjectURL(objectUrl);
+          throw new StaleAudioPlaybackError();
+        }
         const currentDownload = downloadedAudioRef.current;
         if (currentDownload) URL.revokeObjectURL(currentDownload.objectUrl);
-        downloadedAudioRef.current = { source: src, objectUrl };
-        setAudioSource({ source: src, objectUrl });
-        setAudioDownload({ source: src, active: false, percent: 100 });
+        downloadedAudioRef.current = { chapterId, audioRevision: identity.audioRevision, source: identity.src, objectUrl };
+        setAudioSource({ chapterId, audioRevision: identity.audioRevision, source: identity.src, objectUrl });
+        setAudioDownload({ chapterId, audioRevision: identity.audioRevision, source: identity.src, active: false, percent: 100 });
         return objectUrl;
       })
       .catch((error) => {
-        setAudioDownload({ source: src, active: false, percent: null });
+        if (!pendingEntry.stale && generation === audioGenerationRef.current) {
+          setAudioDownload({
+            chapterId,
+            audioRevision: identity.audioRevision,
+            source: identity.src,
+            active: false,
+            percent: null,
+          });
+        }
         throw error;
       })
       .finally(() => {
-        downloadPromiseRef.current = null;
-        setAudioDownload((current) => current?.source === src ? { ...current, active: false } : current);
+        if (downloadPromiseRef.current === pendingEntry) {
+          downloadPromiseRef.current = null;
+        }
+        if (!pendingEntry.stale && generation === audioGenerationRef.current) {
+          setAudioDownload((current) => current?.source === identity.src ? { ...current, active: false } : current);
+        }
       });
 
-    downloadPromiseRef.current = downloadPromise;
+    const pendingEntry = {
+      chapterId,
+      audioRevision: identity.audioRevision,
+      source: identity.src,
+      promise: downloadPromise,
+      stale: false,
+    };
+    downloadPromiseRef.current = pendingEntry;
     return downloadPromise;
   }, [accountScope, audioRevision, chapterId, src]);
 
@@ -254,12 +358,18 @@ export function AudioPlayer({
   const playDownloadedAudio = useCallback(async (position?: number) => {
     const audio = audioRef.current;
     if (!audio) return;
+    const generation = audioGenerationRef.current;
 
     try {
       let playbackSource: string;
       try {
         playbackSource = await getDownloadedAudioUrl();
+        if (generation !== audioGenerationRef.current) return;
       } catch (error) {
+        if (
+          generation !== audioGenerationRef.current ||
+          error instanceof StaleAudioPlaybackError
+        ) return;
         const failure = resolveOnlineAudioFailure(error);
         if (failure.kind === "error") {
           desiredPlaybackRef.current = false;
@@ -270,8 +380,14 @@ export function AudioPlayer({
           return;
         }
 
-        playbackSource = src;
-        setAudioSource({ source: src, objectUrl: src });
+        const currentIdentity = currentAudioIdentityRef.current;
+        playbackSource = currentIdentity.src;
+        setAudioSource({
+          chapterId,
+          audioRevision: currentIdentity.audioRevision,
+          source: currentIdentity.src,
+          objectUrl: currentIdentity.src,
+        });
       }
 
       if (!audioRef.current) return;
@@ -281,6 +397,7 @@ export function AudioPlayer({
         activeAudio.load();
       }
       await waitForMetadata(activeAudio);
+      if (generation !== audioGenerationRef.current) return;
       const currentRelativePosition = Math.max(0, activeAudio.currentTime - startOffset);
       const shouldReplayFromBeginning = activeAudio.ended || isPlaybackComplete(currentRelativePosition, progressDuration);
       const nextPosition =
@@ -298,15 +415,20 @@ export function AudioPlayer({
       activeAudio.muted = muted;
       desiredPlaybackRef.current = true;
       await activeAudio.play();
+      if (generation !== audioGenerationRef.current) return;
       setPlaying(true);
-    } catch {
+    } catch (error) {
+      if (
+        generation !== audioGenerationRef.current ||
+        error instanceof StaleAudioPlaybackError
+      ) return;
       desiredPlaybackRef.current = false;
       playbackActiveRef.current = false;
       setPlaying(false);
       setKaraokeMode(false);
       setPlaybackError((currentError) => currentError || PLAYBACK_CONNECTION_ERROR);
     }
-  }, [getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, src, startOffset, volume, waitForMetadata]);
+  }, [chapterId, getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, startOffset, volume, waitForMetadata]);
 
   function toggle() {
     const audio = audioRef.current;

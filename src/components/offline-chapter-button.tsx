@@ -16,8 +16,10 @@ type OfflineChapterButtonProps = {
   canUseOffline: boolean;
   initialSaved?: boolean;
   checkingInitialSaved?: boolean;
-  onSaved?: (chapterId: string) => void;
-  metadata: Omit<OfflineItem, "id" | "cacheKey" | "expiresAt">;
+  onSaved?: (chapterId: string, audioRevision: number) => void;
+  metadata: Omit<OfflineItem, "id" | "audioRevision" | "cacheKey" | "expiresAt"> & {
+    audioRevision: number;
+  };
 };
 
 type OfflinePreparePayload = {
@@ -29,9 +31,9 @@ type OfflinePreparePayload = {
 
 export function OfflineChapterButton({ accountScope, chapterId, contentType, canUseOffline, initialSaved = false, checkingInitialSaved = false, onSaved, metadata }: OfflineChapterButtonProps) {
   const [message, setMessage] = useState("");
-  const savedStateKey = `${accountScope}:${chapterId}`;
+  const savedStateKey = `${accountScope}:${chapterId}:${metadata.audioRevision}`;
   const [readyState, setReadyState] = useState({ key: savedStateKey, saved: false });
-  const [audioSavedState, setAudioSavedState] = useState({ key: savedStateKey, saved: false });
+  const [audioSavedState, setAudioSavedState] = useState({ key: savedStateKey, saved: false, audioRevision: metadata.audioRevision });
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [pending, setPending] = useState(false);
   const [queueStatus, setQueueStatus] = useState<OfflineDownloadQueueStatus | null>(null);
@@ -39,13 +41,13 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
   const ready = initialSaved || (readyState.key === savedStateKey && readyState.saved);
   const audioSaved = audioSavedState.key === savedStateKey && audioSavedState.saved;
 
-  function markReady() {
+  function markReady(audioRevision: number) {
     setReadyState({ key: savedStateKey, saved: true });
-    onSaved?.(chapterId);
+    onSaved?.(chapterId, audioRevision);
   }
 
-  function markAudioSaved() {
-    setAudioSavedState({ key: savedStateKey, saved: true });
+  function markAudioSaved(audioRevision: number) {
+    setAudioSavedState({ key: savedStateKey, saved: true, audioRevision });
   }
 
   if (contentType === "YOUTUBE") {
@@ -93,9 +95,9 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
   function prepareOffline() {
     if (pending || ready) return;
 
-    const prepareSavedPage = async () => {
+    const prepareSavedPage = async (audioRevision: number) => {
       await prepareOfflinePage(accountScope);
-      markReady();
+      markReady(audioRevision);
       setDownloadProgress(100);
       setMessage("Offline salvo.");
     };
@@ -130,7 +132,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
         cacheKey: payload.cacheKey,
         expiresAt: payload.expiresAt,
       });
-      markAudioSaved();
+      markAudioSaved(payload.audioRevision);
       setDownloadProgress(100);
     };
 
@@ -138,7 +140,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
       setPending(true);
       setMessage("");
       setDownloadProgress(null);
-      void prepareSavedPage()
+      void prepareSavedPage(audioSavedState.audioRevision)
         .catch(showShellPreparationError)
         .finally(() => setPending(false));
       return;
@@ -162,7 +164,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
 
           await savePreparedOfflineMetadata(payload);
           try {
-            await prepareSavedPage();
+            await prepareSavedPage(payload.audioRevision);
           } catch {
             showShellPreparationError();
           }
@@ -183,7 +185,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
           await savePreparedOfflineMetadata(payload);
 
           try {
-            await prepareSavedPage();
+            await prepareSavedPage(payload.audioRevision);
           } catch {
             showShellPreparationError();
           }
