@@ -22,6 +22,7 @@ type OfflineChapterButtonProps = {
 
 type OfflinePreparePayload = {
   audioUrl: string;
+  audioRevision: number;
   cacheKey: string;
   expiresAt: string;
 };
@@ -107,23 +108,25 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chapterId }),
       });
-      const payload = (await response.json().catch(() => ({}))) as { audioUrl?: string; cacheKey?: string; expiresAt?: string; error?: string };
+      const payload = (await response.json().catch(() => ({}))) as { audioUrl?: string; audioRevision?: number; cacheKey?: string; expiresAt?: string; error?: string };
 
-      if (!response.ok || !payload.audioUrl || !payload.cacheKey || !payload.expiresAt) {
+      if (!response.ok || !payload.audioUrl || !Number.isInteger(payload.audioRevision) || !payload.cacheKey || !payload.expiresAt) {
         setMessage(payload.error ?? "Nao foi possivel salvar offline.");
         return null;
       }
 
       return {
         audioUrl: payload.audioUrl,
+        audioRevision: payload.audioRevision as number,
         cacheKey: payload.cacheKey,
         expiresAt: payload.expiresAt,
       };
     };
-    const savePreparedOfflineMetadata = async (payload: { cacheKey: string; expiresAt: string }) => {
+    const savePreparedOfflineMetadata = async (payload: OfflinePreparePayload) => {
       await saveOfflineItem(accountScope, {
         ...metadata,
         id: chapterId,
+        audioRevision: payload.audioRevision,
         cacheKey: payload.cacheKey,
         expiresAt: payload.expiresAt,
       });
@@ -146,7 +149,12 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
     setMessage("");
     setDownloadProgress(null);
 
-    void hasValidEncryptedAudio(accountScope, chapterId, "offline")
+    void hasValidEncryptedAudio(
+      accountScope,
+      chapterId,
+      "offline",
+      metadata.audioRevision,
+    )
       .then(async (hasOfflineAudio) => {
         if (hasOfflineAudio) {
           const payload = await prepareOfflineMetadata();
@@ -168,6 +176,7 @@ export function OfflineChapterButton({ accountScope, chapterId, contentType, can
           await getEncryptedAudioUrl(chapterId, payload.audioUrl, {
             accountScope,
             mode: "offline",
+            audioRevision: payload.audioRevision,
             expiresAt: payload.expiresAt,
             onProgress: (progress) => setDownloadProgress(progress.percent),
           });

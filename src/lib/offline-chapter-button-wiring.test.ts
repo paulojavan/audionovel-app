@@ -86,8 +86,8 @@ test("download concluido sincroniza o estado salvo entre os layouts da lista", (
 });
 
 test("botao reutiliza audio offline valido antes de enfileirar novo download", () => {
-  assert.match(source, /hasValidEncryptedAudio\(accountScope, chapterId, "offline"\)/);
-  const cacheCheckIndex = source.indexOf('hasValidEncryptedAudio(accountScope, chapterId, "offline")');
+  assert.match(source, /hasValidEncryptedAudio\([\s\S]*?accountScope,[\s\S]*?chapterId,[\s\S]*?"offline",[\s\S]*?metadata\.audioRevision/);
+  const cacheCheckIndex = source.indexOf("void hasValidEncryptedAudio(");
   const queueIndex = source.indexOf("await enqueueOfflineDownload", cacheCheckIndex);
   assert.ok(cacheCheckIndex >= 0);
   assert.ok(queueIndex > cacheCheckIndex);

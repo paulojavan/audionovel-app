@@ -18,6 +18,8 @@ const prepareRoute = source("src", "app", "api", "offline", "prepare", "route.ts
 const renewRoute = source("src", "app", "api", "offline", "renew", "route.ts");
 const offlinePage = source("src", "app", "offline", "page.tsx");
 const offlineItems = source("src", "lib", "offline-items.ts");
+const audioPlayer = source("src", "components", "audio-player.tsx");
+const offlineButton = source("src", "components", "offline-chapter-button.tsx");
 
 test("page and offline selects expose the current audio revision", () => {
   assert.equal(CHAPTER_PAGE_SELECT.audioRevision, true);
@@ -51,4 +53,11 @@ test("offline metadata carries the revision from catalog to device", () => {
   assert.match(novelVolumeList, /audioRevision:\s*number/);
   assert.match(novelVolumeList, /audioRevision:\s*chapter\.audioRevision/);
   assert.match(offlinePage, /audioRevision:\s*download\.chapter\.audioRevision/);
+});
+
+test("player and offline download pass the expected revision into IndexedDB", () => {
+  assert.match(audioPlayer, /audioRevision:\s*number/);
+  assert.match(audioPlayer, /getEncryptedAudioUrl[\s\S]*audioRevision/);
+  assert.match(offlineButton, /hasValidEncryptedAudio[\s\S]*audioRevision/);
+  assert.match(offlineButton, /getEncryptedAudioUrl[\s\S]*audioRevision/);
 });

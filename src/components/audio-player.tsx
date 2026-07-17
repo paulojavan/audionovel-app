@@ -29,6 +29,7 @@ const NEXT_CHAPTER_AUTOPLAY_KEY = "audio-novel-next-chapter-autoplay-v1";
 
 export function AudioPlayer({
   chapterId,
+  audioRevision,
   src,
   initialPosition,
   initialCompleted = false,
@@ -43,6 +44,7 @@ export function AudioPlayer({
   nextChapterHref = null,
 }: {
   chapterId: string;
+  audioRevision: number;
   src: string;
   initialPosition: number;
   initialCompleted?: boolean;
@@ -201,6 +203,7 @@ export function AudioPlayer({
     const downloadPromise = getEncryptedAudioUrl(chapterId, src, {
       accountScope,
       mode: "temporary",
+      audioRevision,
       onProgress({ percent }) {
         setAudioDownload({ source: src, active: true, percent });
       },
@@ -224,7 +227,7 @@ export function AudioPlayer({
 
     downloadPromiseRef.current = downloadPromise;
     return downloadPromise;
-  }, [accountScope, chapterId, src]);
+  }, [accountScope, audioRevision, chapterId, src]);
 
   const waitForMetadata = useCallback((audio: HTMLAudioElement) => {
     if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();

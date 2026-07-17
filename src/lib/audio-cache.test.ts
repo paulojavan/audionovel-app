@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import * as audioCache from "./audio-cache";
 
-const { getReusableAudioCacheModes } = audioCache;
+const { getReusableAudioCacheModes, isAudioRevisionReusable } = audioCache;
 const audioCacheSource = readFileSync(
   join(process.cwd(), "src", "lib", "audio-cache.ts"),
   "utf8",
@@ -131,6 +131,30 @@ test("cache de audio separa registros por conta", () => {
     audioCache.getAudioCacheId("user-a", "chapter-1", "offline"),
     audioCache.getAudioCacheId("user-b", "chapter-1", "offline"),
   );
+});
+
+test("cache reutiliza somente a revisao de audio solicitada", () => {
+  assert.equal(isAudioRevisionReusable(3, 3), true);
+  assert.equal(isAudioRevisionReusable(2, 3), false);
+  assert.equal(isAudioRevisionReusable(undefined, 3), false);
+  assert.equal(isAudioRevisionReusable(3, undefined), true);
+});
+
+test("revisao divergente vira cache miss sem apagar a copia anterior", () => {
+  const validRecordBlock = audioCacheSource.match(
+    /async function getValidCachedRecord[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+  const encryptedAudioBlock = audioCacheSource.match(
+    /export async function getEncryptedAudioUrl[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(validRecordBlock, /isAudioRevisionReusable/);
+  assert.match(validRecordBlock, /return null/);
+  assert.doesNotMatch(
+    validRecordBlock,
+    /isAudioRevisionReusable[\s\S]*?deleteRecord[\s\S]*?return null/,
+  );
+  assert.match(encryptedAudioBlock, /audioRevision:\s*options\.audioRevision/);
 });
 
 test("salvar offline reutiliza cache offline ou temporario da mesma conta", () => {

@@ -33,6 +33,7 @@ export type AudioCacheMode = "temporary" | "offline";
 type AudioCacheOptions = {
   accountScope?: string;
   mode?: AudioCacheMode;
+  audioRevision?: number;
   expiresAt?: string | number;
   onProgress?: (progress: { loadedBytes: number; totalBytes: number | null; percent: number | null }) => void;
 };
@@ -45,6 +46,7 @@ type DownloadAudioBufferOptions = Pick<AudioCacheOptions, "onProgress"> & {
 
 type AudioRecord = {
   id: string;
+  audioRevision?: number;
   data: ArrayBuffer;
   iv: ArrayBuffer;
   mimeType: string;
@@ -245,6 +247,13 @@ export function getAudioCacheId(accountScope: string, chapterId: string, mode: A
 
 export function getReusableAudioCacheModes(mode: AudioCacheMode): AudioCacheMode[] {
   return mode === "offline" ? ["offline", "temporary"] : ["temporary"];
+}
+
+export function isAudioRevisionReusable(
+  cachedRevision: number | undefined,
+  expectedRevision: number | undefined,
+) {
+  return expectedRevision === undefined || cachedRevision === expectedRevision;
 }
 
 function getCacheTtl(mode: AudioCacheMode) {
@@ -461,27 +470,44 @@ export async function cleanupExpiredOfflineItems(accountScope: string) {
   );
 }
 
-export async function hasValidEncryptedAudio(accountScope: string, chapterId: string, mode: AudioCacheMode = "offline") {
+export async function hasValidEncryptedAudio(
+  accountScope: string,
+  chapterId: string,
+  mode: AudioCacheMode = "offline",
+  audioRevision?: number,
+) {
   await cleanupExpiredAudioCache();
   const cacheId = getAudioCacheId(accountScope, chapterId, mode);
   const cached = await readRecord(cacheId);
 
   if (!cached) return false;
-  if (cached.expiresAt > Date.now()) return true;
+  if (cached.expiresAt > Date.now()) {
+    return isAudioRevisionReusable(cached.audioRevision, audioRevision);
+  }
 
   await deleteRecord(cacheId);
   return false;
 }
 
-async function getValidCachedRecord(accountScope: string, chapterId: string, mode: AudioCacheMode) {
+async function getValidCachedRecord(
+  accountScope: string,
+  chapterId: string,
+  mode: AudioCacheMode,
+  audioRevision?: number,
+) {
   const cacheId = getAudioCacheId(accountScope, chapterId, mode);
   const cached = await readRecord(cacheId);
 
   if (!cached) return null;
-  if (cached.expiresAt > Date.now()) return cached;
+  if (cached.expiresAt <= Date.now()) {
+    await deleteRecord(cacheId);
+    return null;
+  }
+  if (!isAudioRevisionReusable(cached.audioRevision, audioRevision)) {
+    return null;
+  }
 
-  await deleteRecord(cacheId);
-  return null;
+  return cached;
 }
 
 async function saveRecordForMode(
@@ -675,7 +701,12 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
   const key = await getCryptoKey(accountScope);
 
   for (const cachedMode of getReusableAudioCacheModes(mode)) {
-    const cached = await getValidCachedRecord(accountScope, chapterId, cachedMode);
+    const cached = await getValidCachedRecord(
+      accountScope,
+      chapterId,
+      cachedMode,
+      options.audioRevision,
+    );
     if (!cached) continue;
 
     if (cachedMode !== mode) {
@@ -697,6 +728,7 @@ export async function getEncryptedAudioUrl(chapterId: string, sourceUrl: string,
 
   await writeRecord({
     id: getAudioCacheId(accountScope, chapterId, mode),
+    audioRevision: options.audioRevision,
     data: encrypted,
     iv: iv.buffer,
     mimeType,
