@@ -11,6 +11,7 @@ import { ReactionButtons } from "@/components/reaction-buttons";
 import { canPlayChapter } from "@/lib/api";
 import { getChapterPartsForDisplay } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
+import { getPublicCommentStatusFilter } from "@/lib/comment-moderation";
 import { CHAPTER_PROGRESS_SELECT, COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -40,7 +41,7 @@ export default async function ChapterPage({ params }: { params: Promise<{ id: st
         })
       : Promise.resolve(null),
     prisma.comment.findMany({
-      where: { chapterId: id, parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
+      where: { chapterId: id, parentId: null, status: getPublicCommentStatusFilter() },
       take: 20,
       orderBy: { createdAt: "desc" },
       select: COMMENT_THREAD_SELECT,

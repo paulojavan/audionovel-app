@@ -17,18 +17,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const comment = await prisma.comment.findUnique({
     where: { id },
-    include: {
-      user: { select: { name: true } },
-      parent: { select: { id: true, userId: true } },
-      novel: { select: { title: true, slug: true } },
-      chapter: {
-        select: {
-          id: true,
-          title: true,
-          volume: { select: { novel: { select: { title: true, slug: true } } } },
-        },
-      },
-    },
+    select: { id: true },
   });
 
   if (!comment) return NextResponse.json({ error: "Comentario nao encontrado." }, { status: 404 });
@@ -54,28 +43,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       moderatedByAdminId: auth.user.id,
     },
   });
-
-  if (comment.parent && comment.parent.userId !== comment.userId) {
-    const targetTitle = comment.novel?.title ?? comment.chapter?.volume.novel.title ?? "comentario";
-    const href = comment.novel ? `/novels/${comment.novel.slug}#comment-${comment.id}` : `/chapters/${comment.chapter?.id}#comment-${comment.id}`;
-
-    const existingNotification = await prisma.notification.findFirst({
-      where: { userId: comment.parent.userId, commentId: comment.id, type: "COMMENT_REPLY" },
-      select: { id: true },
-    });
-
-    if (!existingNotification) {
-      await prisma.notification.create({
-        data: {
-          userId: comment.parent.userId,
-          commentId: comment.id,
-          title: "Seu comentario recebeu uma resposta",
-          message: `${comment.user.name} respondeu seu comentario em ${targetTitle}.`,
-          href,
-        },
-      });
-    }
-  }
 
   return NextResponse.json({ ok: true });
 }

@@ -41,7 +41,7 @@ export function CommentActions({ target, targetId, commentId, body, isLoggedIn, 
       }
 
       setEditOpen(false);
-      setMessage("Comentario editado e enviado para moderacao.");
+      setMessage("Comentario editado e publicado.");
       router.refresh();
     });
   }

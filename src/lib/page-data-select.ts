@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { getPublicCommentStatusFilter } from "./comment-moderation";
 
 export const REQUIRE_USER_SELECT = {
   id: true,
@@ -19,7 +20,7 @@ export const COMMENT_THREAD_SELECT = {
   userId: true,
   user: { select: { name: true } },
   replies: {
-    where: { status: { in: ["APPROVED", "REMOVED"] } },
+    where: { status: getPublicCommentStatusFilter() },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,

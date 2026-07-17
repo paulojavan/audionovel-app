@@ -6,6 +6,7 @@ import { CommentThread } from "@/components/comment-thread";
 import { FavoriteNovelButton } from "@/components/favorite-novel-button";
 import { NovelVolumeList } from "@/components/novel-volume-list";
 import { StarRating } from "@/components/star-rating";
+import { getPublicCommentStatusFilter } from "@/lib/comment-moderation";
 import { getNovelStatusLabel } from "@/lib/novel-status";
 import { COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
@@ -43,7 +44,7 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
         })
       : Promise.resolve(null),
     prisma.comment.findMany({
-      where: { novelId: novel.id, parentId: null, status: { in: ["APPROVED", "REMOVED"] } },
+      where: { novelId: novel.id, parentId: null, status: getPublicCommentStatusFilter() },
       take: 20,
       orderBy: { createdAt: "desc" },
       select: COMMENT_THREAD_SELECT,

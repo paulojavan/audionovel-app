@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api";
+import { buildCommentReplyNotification } from "@/lib/comment-reply-notification";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { commentSchema } from "@/lib/validators";
@@ -61,16 +62,37 @@ export async function POST(request: Request) {
   if (parsed.data.novelId && !novel) return NextResponse.json({ error: "Novel nao encontrada." }, { status: 404 });
   if (parsed.data.chapterId && !chapter) return NextResponse.json({ error: "Capitulo nao encontrado." }, { status: 404 });
 
-  const comment = await prisma.comment.create({
-    data: {
-      body: parsed.data.body,
-      status: "PENDING",
-      userId: auth.user.id,
-      novelId: parsed.data.novelId,
-      chapterId: parsed.data.chapterId,
-      parentId: parent?.id,
-    },
-    include: { user: { select: { name: true } } },
+  const comment = await prisma.$transaction(async (tx) => {
+    const comment = await tx.comment.create({
+      data: {
+        body: parsed.data.body,
+        status: "PENDING",
+        userId: auth.user.id,
+        novelId: parsed.data.novelId,
+        chapterId: parsed.data.chapterId,
+        parentId: parent?.id,
+      },
+      include: { user: { select: { name: true } } },
+    });
+
+    const targetTitle = novel?.title ?? chapter?.volume.novel.title ?? "comentario";
+    const href = novel
+      ? `/novels/${novel.slug}#comment-${comment.id}`
+      : `/chapters/${chapter?.id}#comment-${comment.id}`;
+    const notification = buildCommentReplyNotification({
+      commentId: comment.id,
+      authorId: auth.user.id,
+      authorName: comment.user.name,
+      parentAuthorId: parent?.userId ?? null,
+      targetTitle,
+      href,
+    });
+
+    if (notification) {
+      await tx.notification.create({ data: notification });
+    }
+
+    return comment;
   });
 
   return NextResponse.json(comment, { status: 201 });

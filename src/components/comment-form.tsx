@@ -43,7 +43,7 @@ export function CommentForm({ target, targetId, isLoggedIn, parentId, compact = 
       }
 
       setBody("");
-      setMessage(parentId ? "Resposta enviada para moderacao." : "Comentario enviado para moderacao.");
+      setMessage(parentId ? "Resposta publicada." : "Comentario publicado.");
       router.refresh();
     });
   }
@@ -77,7 +77,7 @@ export function CommentForm({ target, targetId, isLoggedIn, parentId, compact = 
       />
       <CommentSpoilerHint />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={`text-sm ${message.includes("moderacao") ? "text-[#18b7bd]" : "text-red-300"}`}>{message}</p>
+        <p className={`text-sm ${message.includes("publicad") ? "text-[#18b7bd]" : "text-red-300"}`}>{message}</p>
         <button type="submit" disabled={pending || body.trim().length < 2} className="rounded-full bg-[#18b7bd] px-5 py-2 font-black text-[#021114] disabled:opacity-50">
           {pending ? "Publicando..." : parentId ? "Responder" : "Publicar"}
         </button>

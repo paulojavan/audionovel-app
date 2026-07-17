@@ -26,7 +26,7 @@ export default async function AdminModerationPage({ searchParams }: AdminModerat
         <div>
           <h2 className="text-2xl font-bold">Moderacao de comentarios</h2>
           <p className="mt-1 text-sm text-zinc-400">
-            {removedTab ? "Comentarios removidos permanecem visiveis para auditoria." : "Comentarios novos e editados aguardam aprovacao."}
+            {removedTab ? "Comentarios removidos permanecem visiveis para auditoria." : "Comentarios publicados aguardam revisao administrativa."}
           </p>
         </div>
         <div className="flex rounded-full bg-[#06272b] p-1">
