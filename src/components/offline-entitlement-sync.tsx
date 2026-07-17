@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
+  getEncryptedAudioUrl,
   getRecoverableOfflineItems,
   updateOfflineItemsBatch,
 } from "@/lib/audio-cache";
 import { ensureClientDeviceToken } from "@/lib/client-device";
 import { waitForOfflineCatalogReady } from "@/lib/offline-catalog-readiness";
+import { enqueueOfflineDownload } from "@/lib/offline-download-queue";
 import {
   reconcileOfflineEntitlement,
   type RenewedOfflineItem,
@@ -75,11 +77,27 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
             window.clearTimeout(timeoutId);
           }
         },
+        refreshAudio: (scope, item) => enqueueOfflineDownload(async () => {
+          const objectUrl = await getEncryptedAudioUrl(
+            item.chapterId,
+            item.audioUrl,
+            {
+              accountScope: scope,
+              mode: "offline",
+              expiresAt: item.expiresAt,
+              audioRevision: item.audioRevision,
+            },
+          );
+          URL.revokeObjectURL(objectUrl);
+        }),
         updateItemsBatch: updateOfflineItemsBatch,
         preparePage: prepareOfflinePage,
       }, renewalCursor);
     })()
       .then((result) => {
+        if (result.failed > 0) {
+          throw new Error("Nao foi possivel atualizar todos os audios offline.");
+        }
         try {
           sessionStorage.setItem(
             storageKey,

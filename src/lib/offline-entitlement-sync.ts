@@ -23,6 +23,8 @@ function selectRenewalBatch(
 
 export type RenewedOfflineItem = {
   chapterId: string;
+  audioRevision: number;
+  audioUrl: string;
   cacheKey: string;
   expiresAt: string;
 };
@@ -31,6 +33,10 @@ type OfflineEntitlementSyncDependencies = {
   ensureDeviceToken: () => Promise<unknown>;
   getRecoverableItems: (accountScope: string) => Promise<OfflineItem[]>;
   renewItems: (chapterIds: string[]) => Promise<RenewedOfflineItem[]>;
+  refreshAudio: (
+    accountScope: string,
+    item: RenewedOfflineItem,
+  ) => Promise<void>;
   updateItemsBatch: (
     accountScope: string,
     items: OfflineItem[],
@@ -42,10 +48,10 @@ export async function reconcileOfflineEntitlement(
   accountScope: string,
   dependencies: OfflineEntitlementSyncDependencies,
   renewalCursor?: string | null,
-): Promise<{ renewed: number; nextCursor?: string }> {
+): Promise<{ renewed: number; failed: number; nextCursor?: string }> {
   await dependencies.ensureDeviceToken();
   const recoverableItems = await dependencies.getRecoverableItems(accountScope);
-  if (!recoverableItems.length) return { renewed: 0 };
+  if (!recoverableItems.length) return { renewed: 0, failed: 0 };
 
   const renewalBatch = selectRenewalBatch(recoverableItems, renewalCursor);
   const renewedItems = await dependencies.renewItems(
@@ -55,11 +61,21 @@ export async function reconcileOfflineEntitlement(
     recoverableItems.map((item) => [item.chapterId, item]),
   );
   const itemsToUpdate: OfflineItem[] = [];
+  let failed = 0;
   for (const item of renewedItems) {
     const localItem = localByChapter.get(item.chapterId);
     if (!localItem) continue;
+    if (localItem.audioRevision !== item.audioRevision) {
+      try {
+        await dependencies.refreshAudio(accountScope, item);
+      } catch {
+        failed += 1;
+        continue;
+      }
+    }
     itemsToUpdate.push({
       ...localItem,
+      audioRevision: item.audioRevision,
       cacheKey: item.cacheKey,
       expiresAt: item.expiresAt,
     });
@@ -72,7 +88,10 @@ export async function reconcileOfflineEntitlement(
   if (renewed > 0) {
     await dependencies.preparePage(accountScope);
   }
-  const result: { renewed: number; nextCursor?: string } = { renewed };
+  const result: { renewed: number; failed: number; nextCursor?: string } = {
+    renewed,
+    failed,
+  };
   if (recoverableItems.length > renewalBatch.length) {
     result.nextCursor = renewalBatch.at(-1)?.chapterId;
   }

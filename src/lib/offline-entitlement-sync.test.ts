@@ -23,8 +23,9 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
     }],
     renewItems: async (chapterIds) => {
       calls.push(`renew:${chapterIds.join(",")}`);
-      return [{ chapterId: "chapter-1", cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }];
+      return [{ chapterId: "chapter-1", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }];
     },
+    refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, items) => {
       calls.push(`batch:${items.length}`);
       saved.push(...items);
@@ -40,7 +41,7 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
     saved.map(({ cacheKey, expiresAt }) => ({ cacheKey, expiresAt })),
     [{ cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }],
   );
-  assert.deepEqual(result, { renewed: 1 });
+  assert.deepEqual(result, { renewed: 1, failed: 0 });
 });
 
 test("reconciliacao atualiza varios capitulos com uma unica chamada local", async () => {
@@ -51,6 +52,7 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
     novelTitle: "Novel",
     volumeTitle: "Volume",
     chapterPosition: 1,
+    audioRevision: 1,
     cacheKey: "old",
     expiresAt: "2026-07-11T00:00:00Z",
   };
@@ -62,9 +64,10 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
       { ...baseItem, chapterId: "chapter-2" },
     ],
     renewItems: async () => [
-      { chapterId: "chapter-1", cacheKey: "new-1", expiresAt: "2026-08-10T00:00:00Z" },
-      { chapterId: "chapter-2", cacheKey: "new-2", expiresAt: "2026-08-10T00:00:00Z" },
+      { chapterId: "chapter-1", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-1", expiresAt: "2026-08-10T00:00:00Z" },
+      { chapterId: "chapter-2", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-2", expiresAt: "2026-08-10T00:00:00Z" },
     ],
+    refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, items) => {
       batchSizes.push(items.length);
       return items.length;
@@ -73,7 +76,7 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
   });
 
   assert.deepEqual(batchSizes, [2]);
-  assert.deepEqual(result, { renewed: 2 });
+  assert.deepEqual(result, { renewed: 2, failed: 0 });
 });
 
 test("reconciliacao renova um lote justo de cem capitulos por execucao", async () => {
@@ -83,6 +86,7 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
     novelTitle: "Novel",
     volumeTitle: "Volume",
     chapterPosition: 1,
+    audioRevision: 1,
     cacheKey: "old",
     expiresAt: "2026-07-11T00:00:00Z",
   };
@@ -102,16 +106,19 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
       renewedChapterBatches.push(chapterIds);
       return chapterIds.map((chapterId) => ({
         chapterId,
+        audioRevision: 1,
+        audioUrl: "/api/audio?revision=1",
         cacheKey: `new-${chapterId}`,
         expiresAt: "2026-08-10T00:00:00Z",
       }));
     },
+    refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, renewedItems) => {
       localBatchSizes.push(renewedItems.length);
       return renewedItems.length;
     },
     preparePage: async () => undefined,
-  };
+  } satisfies Parameters<typeof reconcileOfflineEntitlement>[1];
 
   const firstResult = await reconcileOfflineEntitlement(
     "user-1",
@@ -128,6 +135,111 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
   assert.equal(firstResult.nextCursor, "chapter-099");
   assert.equal(renewedChapterBatches[1][0], "chapter-100");
   assert.equal(secondResult.renewed, 100);
+});
+
+test("reconciliacao substitui audio desatualizado antes dos metadados", async () => {
+  const calls: string[] = [];
+  const result = await reconcileOfflineEntitlement("user-1", {
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => [{
+      id: "download-1",
+      chapterId: "chapter-1",
+      audioRevision: 1,
+      title: "Capitulo",
+      novelTitle: "Novel",
+      volumeTitle: "Volume",
+      chapterPosition: 1,
+      cacheKey: "old-key",
+      expiresAt: "2026-07-11T00:00:00Z",
+    }],
+    renewItems: async () => [{
+      chapterId: "chapter-1",
+      audioRevision: 2,
+      audioUrl: "/api/audio?revision=2",
+      cacheKey: "new-key",
+      expiresAt: "2026-08-10T00:00:00Z",
+    }],
+    refreshAudio: async () => {
+      calls.push("audio");
+    },
+    updateItemsBatch: async (_scope, items) => {
+      calls.push(`batch:${items[0].audioRevision}`);
+      return items.length;
+    },
+    preparePage: async () => {
+      calls.push("prepare");
+    },
+  });
+
+  assert.deepEqual(calls, ["audio", "batch:2", "prepare"]);
+  assert.deepEqual(result, { renewed: 1, failed: 0 });
+});
+
+test("reconciliacao de revisao igual renova sem baixar novamente", async () => {
+  let refreshCalls = 0;
+  await reconcileOfflineEntitlement("user-1", {
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => [{
+      id: "download-1",
+      chapterId: "chapter-1",
+      audioRevision: 2,
+      title: "Capitulo",
+      novelTitle: "Novel",
+      volumeTitle: "Volume",
+      chapterPosition: 1,
+      cacheKey: "old-key",
+      expiresAt: "2026-07-11T00:00:00Z",
+    }],
+    renewItems: async () => [{
+      chapterId: "chapter-1",
+      audioRevision: 2,
+      audioUrl: "/api/audio?revision=2",
+      cacheKey: "new-key",
+      expiresAt: "2026-08-10T00:00:00Z",
+    }],
+    refreshAudio: async () => {
+      refreshCalls += 1;
+    },
+    updateItemsBatch: async (_scope, items) => items.length,
+    preparePage: async () => undefined,
+  });
+
+  assert.equal(refreshCalls, 0);
+});
+
+test("falha ao substituir preserva metadados antigos e registra nova tentativa", async () => {
+  const batches: number[] = [];
+  const result = await reconcileOfflineEntitlement("user-1", {
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => [{
+      id: "download-1",
+      chapterId: "chapter-1",
+      title: "Capitulo legado",
+      novelTitle: "Novel",
+      volumeTitle: "Volume",
+      chapterPosition: 1,
+      cacheKey: "old-key",
+      expiresAt: "2026-07-11T00:00:00Z",
+    }],
+    renewItems: async () => [{
+      chapterId: "chapter-1",
+      audioRevision: 2,
+      audioUrl: "/api/audio?revision=2",
+      cacheKey: "new-key",
+      expiresAt: "2026-08-10T00:00:00Z",
+    }],
+    refreshAudio: async () => {
+      throw new Error("network");
+    },
+    updateItemsBatch: async (_scope, items) => {
+      batches.push(items.length);
+      return items.length;
+    },
+    preparePage: async () => undefined,
+  });
+
+  assert.deepEqual(batches, [0]);
+  assert.deepEqual(result, { renewed: 0, failed: 1 });
 });
 
 test("layout monta sincronizacao somente para premium ativo", () => {
