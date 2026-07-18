@@ -45,6 +45,35 @@ test("delegates established-session refresh with both safe database failure oper
   assert.match(refreshSource, /operation:\s*"user_state_refresh"/);
 });
 
+test("coalesces simultaneous established-session database lookups", () => {
+  assert.match(
+    authSource,
+    /import\s*\{\s*createAsyncTtlCache\s*\}\s*from "\.\/async-ttl-cache";/,
+  );
+  assert.match(
+    authSource,
+    /const deviceSessionRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*0,[\s\S]*?maxEntries:\s*1_024/,
+  );
+  assert.match(
+    authSource,
+    /const userStateRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*0,[\s\S]*?maxEntries:\s*1_024/,
+  );
+
+  const establishedSessionRefresh = sourceBetween(
+    authSource,
+    "await refreshEstablishedSession({",
+    "return token;",
+  );
+  assert.match(
+    establishedSessionRefresh,
+    /validateDeviceSession:\s*\(sessionId\)\s*=>\s*deviceSessionRefreshCache\.get\(/,
+  );
+  assert.match(
+    establishedSessionRefresh,
+    /findUserState:\s*\(userId\)\s*=>\s*userStateRefreshCache\.get\(/,
+  );
+});
+
 test("keeps new-login hydration fail-closed without invoking database grace", () => {
   const newLoginBranch = sourceBetween(
     authSource,

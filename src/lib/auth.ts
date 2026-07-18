@@ -1,7 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { createAsyncTtlCache } from "./async-ttl-cache";
 import { logSessionDatabaseFailure } from "./auth-session-grace";
 import { refreshEstablishedSession } from "./auth-session-refresh";
+import type { RefreshedUserState } from "./auth-session-refresh";
 import { getDeviceIdFromToken } from "./device-identity";
 import { createDeviceSession, revokeDeviceSession, validateDeviceSession } from "./device-session";
 import { verifyPassword } from "./password";
@@ -9,6 +11,22 @@ import { prisma } from "./prisma";
 import { consumeRateLimit, getRequestIdentifierFromHeaders } from "./rate-limit";
 
 const SESSION_VALIDATION_INTERVAL_MS = 30_000;
+
+const deviceSessionRefreshCache = createAsyncTtlCache<
+  string,
+  Awaited<ReturnType<typeof validateDeviceSession>>
+>({
+  ttlMs: 0,
+  maxEntries: 1_024,
+});
+
+const userStateRefreshCache = createAsyncTtlCache<
+  string,
+  RefreshedUserState | null
+>({
+  ttlMs: 0,
+  maxEntries: 1_024,
+});
 
 type AuthRequestLike = {
   headers?: Record<string, string | string[] | undefined>;
@@ -118,20 +136,25 @@ export const authOptions: NextAuthOptions = {
         token,
         validationIntervalMs: SESSION_VALIDATION_INTERVAL_MS,
         now: Date.now,
-        validateDeviceSession,
+        validateDeviceSession: (sessionId) =>
+          deviceSessionRefreshCache.get(sessionId, () =>
+            validateDeviceSession(sessionId),
+          ),
         findUserState: (userId) =>
-          prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              email: true,
-              isBlocked: true,
-              name: true,
-              plan: true,
-              role: true,
-              subscriptionStatus: true,
-              premiumUntil: true,
-            },
-          }),
+          userStateRefreshCache.get(userId, () =>
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: {
+                email: true,
+                isBlocked: true,
+                name: true,
+                plan: true,
+                role: true,
+                subscriptionStatus: true,
+                premiumUntil: true,
+              },
+            }),
+          ),
         logDatabaseFailure: logSessionDatabaseFailure,
       });
 
