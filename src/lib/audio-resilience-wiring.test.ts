@@ -41,6 +41,67 @@ test("player integra controles nativos quando Media Session esta disponivel", ()
   assert.match(player, /new MediaMetadata/);
 });
 
+test("player reinicia o progresso ao trocar de capitulo e salva a posicao ao sair", () => {
+  assert.match(player, /playbackStartedRef\.current = false/);
+  assert.match(player, /completionSentRef\.current = false;/);
+  assert.match(player, /pendingStartRef\.current = null;/);
+  assert.match(player, /resumePositionRef\.current = resumePosition/);
+  assert.match(player, /setCurrent\(resumePosition\)/);
+  assert.match(player, /setResolvedDuration\(durationPropRef\.current\)/);
+  assert.match(
+    player,
+    /if \(playbackStartedRef\.current\) void saveProgress\(chapterId, \{ force: true, keepalive: true \}\)/,
+  );
+});
+
+test("player enfileira salvamentos que falham e retoma do progresso em fila", () => {
+  assert.match(player, /queueProgress\(accountScopeRef\.current, \{/);
+  assert.match(player, /removeQueuedProgress\(accountScopeRef\.current, targetChapterId, capturedAt\)/);
+  assert.match(player, /getQueuedProgress\(accountScopeRef\.current, chapterId\)/);
+  assert.match(
+    player,
+    /getInitialResumePosition\(\s*queuedProgress\.positionSec,\s*queuedProgress\.durationSec \|\| durationPropRef\.current,\s*queuedProgress\.completed,\s*\)/,
+  );
+});
+
+test("player cancela checkpoints antigos para impedir gravacoes fora de ordem", () => {
+  assert.match(player, /inFlightSaveRef\.current\?\.chapterId === targetChapterId/);
+  assert.match(player, /inFlightSaveRef\.current\.controller\.abort\(\)/);
+  assert.match(player, /signal: controller\.signal/);
+  assert.match(player, /if \(controller\.signal\.aborted\) return;/);
+});
+
+test("player salva ao pausar pela media session e consome seeks pendentes uma unica vez", () => {
+  assert.match(player, /\["pause", \(\) => \{[\s\S]*?void saveProgress\(chapterId, \{ force: true \}\)/);
+  const metadataHandler = player.match(/onLoadedMetadata=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+  assert.match(metadataHandler, /pendingStartRef\.current = null/);
+});
+
+test("reouvir um capitulo concluido registra o novo tempo em vez de travar a conclusao", () => {
+  assert.match(player, /const finalCompleted = completed \|\| isPlaybackComplete\(positionSec, durationSec\)/);
+  assert.doesNotMatch(player, /mergeCompletion/);
+});
+
+test("capitulo e marcado como concluido antes de avancar automaticamente para o proximo", () => {
+  const endedHandler = player.match(/onEnded=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+  assert.match(endedHandler, /saveProgress\(chapterId, \{ completed: true, force: true, keepalive: true \}\)/);
+  assert.match(endedHandler, /progressSave\.finally\(\(\) => \{/);
+  assert.ok(
+    endedHandler.indexOf("saveProgress(chapterId, { completed: true") <
+      endedHandler.indexOf("window.location.href = nextChapterHref"),
+  );
+  assert.match(player, /if \(!completionSentRef\.current\) \{\s*void saveProgress\(chapterId, \{ completed: true, force: true, keepalive: true \}\)/);
+});
+
+test("player offline grava a posicao no dispositivo e retoma de onde parou", () => {
+  assert.match(offlinePlayer, /getQueuedProgress\(accountScope, item\.chapterId\)/);
+  assert.match(offlinePlayer, /queueProgress\(accountScope, \{/);
+  assert.match(offlinePlayer, /shouldSaveCheckpoint/);
+  assert.match(offlinePlayer, /isPlaybackComplete\(positionSec, durationSec\)/);
+  assert.match(offlinePlayer, /pagehide/);
+  assert.match(offlinePlayer, /getInitialResumePosition\(queuedProgress\.positionSec, queuedProgress\.durationSec, queuedProgress\.completed\)/);
+});
+
 test("player baixa o audio completo no cache criptografado antes de entregar o blob ao elemento audio", () => {
   assert.match(player, /getEncryptedAudioUrl/);
   assert.match(player, /mode:\s*"temporary"/);
@@ -129,11 +190,11 @@ test("toggle baixa antes de reproduzir quando o audio esta pausado", () => {
 
 test("capitulo ja concluido pode ser reproduzido novamente do inicio", () => {
   assert.match(chapterPage, /initialCompleted=\{progress\?\.completed \?\? false\}/);
-  assert.match(player, /initialCompleted \|\| isPlaybackComplete\(initialPosition, duration\) \? 0 : initialPosition/);
+  assert.match(player, /getInitialResumePosition\(initialPosition, duration, initialCompleted\)/);
   assert.match(player, /useState\(initialResumePosition\)/);
   assert.match(player, /activeAudio\.ended \|\| isPlaybackComplete\(currentRelativePosition, progressDuration\)/);
   assert.match(player, /shouldReplayFromBeginning[\s\S]*\? startOffset/);
-  assert.match(player, /startOffset \+ initialResumePosition/);
+  assert.match(player, /startOffset \+ resumePositionRef\.current/);
   assert.doesNotMatch(player, /startOffset \+ initialPosition/);
 });
 
@@ -143,8 +204,9 @@ test("erro do elemento local nao tenta reiniciar streaming", () => {
   assert.match(errorHandler, /setPlaybackError\(PLAYBACK_CONNECTION_ERROR\)/);
 });
 
-test("servidor preserva conclusao e nao aborta streaming depois dos cabecalhos", () => {
-  assert.match(progressRoute, /completed:\s*parsed\.data\.completed \? true : undefined/);
+test("servidor grava a conclusao mais recente e nao aborta streaming depois dos cabecalhos", () => {
+  assert.match(progressRoute, /completed:\s*parsed\.data\.completed,/);
+  assert.doesNotMatch(progressRoute, /\? true : undefined/);
   assert.match(audioUpstream, /new AbortController/);
   assert.match(audioUpstream, /clearTimeout/);
   assert.doesNotMatch(audioUpstream, /AbortSignal\.timeout/);

@@ -7,7 +7,8 @@ import { KaraokeVolumeMenu } from "@/components/karaoke-volume-menu";
 import { PlayerSettingsMenu } from "@/components/player-settings-menu";
 import { useAudioPlayerSettings } from "@/hooks/use-audio-player-settings";
 import { getEncryptedAudioUrl } from "@/lib/audio-cache";
-import { isPlaybackComplete, mergeCompletion, shouldSaveCheckpoint } from "@/lib/audio-progress";
+import { getInitialResumePosition, isPlaybackComplete, shouldSaveCheckpoint } from "@/lib/audio-progress";
+import { getQueuedProgress, queueProgress, removeQueuedProgress } from "@/lib/progress-outbox";
 import { getCurrentChapterAudioIdentity } from "@/lib/current-audio-revision";
 import {
   getActiveChapterPartIndex,
@@ -68,6 +69,7 @@ export function AudioPlayer({
   const lastCheckpointAtRef = useRef(0);
   const lastProgressPayloadRef = useRef("");
   const completionSentRef = useRef(false);
+  const inFlightSaveRef = useRef<{ chapterId: string; controller: AbortController } | null>(null);
   const playbackStartedRef = useRef(false);
   const playbackActiveRef = useRef(false);
   const desiredPlaybackRef = useRef(false);
@@ -94,7 +96,7 @@ export function AudioPlayer({
   const [audioSource, setAudioSource] = useState<{ chapterId: string; audioRevision: number; source: string; objectUrl: string } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [karaokeMode, setKaraokeMode] = useState(false);
-  const initialResumePosition = initialCompleted || isPlaybackComplete(initialPosition, duration) ? 0 : initialPosition;
+  const initialResumePosition = getInitialResumePosition(initialPosition, duration, initialCompleted);
   const [current, setCurrent] = useState(initialResumePosition);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
@@ -104,6 +106,22 @@ export function AudioPlayer({
   const [audioDownload, setAudioDownload] = useState<{ chapterId: string; audioRevision: number; source: string; active: boolean; percent: number | null } | null>(null);
   const { settings, updateSettings } = useAudioPlayerSettings();
   const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, playMode } = settings;
+  const positionSecRef = useRef(current);
+  const durationSecRef = useRef(resolvedDuration || duration);
+  const initialResumePositionRef = useRef(initialResumePosition);
+  const durationPropRef = useRef(duration);
+  const accountScopeRef = useRef(accountScope);
+  const resumePositionRef = useRef(initialResumePosition);
+
+  // Espelhos declarados antes do efeito de troca de capitulo para que resets e
+  // salvamentos sempre leiam os valores do capitulo correto.
+  useEffect(() => {
+    positionSecRef.current = current;
+    durationSecRef.current = resolvedDuration || duration;
+    initialResumePositionRef.current = initialResumePosition;
+    durationPropRef.current = duration;
+    accountScopeRef.current = accountScope;
+  });
 
   const activeIndex = useMemo(() => {
     if (!transcript.length) return -1;
@@ -180,6 +198,27 @@ export function AudioPlayer({
     downloadedAudioRef.current = null;
     playbackActiveRef.current = false;
     desiredPlaybackRef.current = false;
+    // A navegacao SPA preserva este componente entre capitulos: sem o reset, o
+    // estado do capitulo anterior corromperia o progresso do capitulo novo
+    // (ex.: conclusao alavancada ou salvamentos com a posicao zerada).
+    playbackStartedRef.current = false;
+    // Um salvamento ainda nao confirmado pelo servidor (fila offline) e mais
+    // recente que a posicao embutida no HTML e prevalece sobre ela.
+    const queuedProgress = getQueuedProgress(accountScopeRef.current, chapterId);
+    const resumePosition = queuedProgress
+      ? getInitialResumePosition(
+          queuedProgress.positionSec,
+          queuedProgress.durationSec || durationPropRef.current,
+          queuedProgress.completed,
+        )
+      : initialResumePositionRef.current;
+    completionSentRef.current = false;
+    pendingStartRef.current = null;
+    lastCheckpointAtRef.current = 0;
+    lastProgressPayloadRef.current = "";
+    resumePositionRef.current = resumePosition;
+    setCurrent(resumePosition);
+    setResolvedDuration(durationPropRef.current);
 
     return () => {
       if (audioGenerationRef.current === generation) {
@@ -193,7 +232,7 @@ export function AudioPlayer({
     };
   }, [audioRevision, chapterId, src]);
 
-  const saveProgress = useCallback(async ({
+  const saveProgress = useCallback(async (targetChapterId: string, {
     completed = false,
     force = false,
     keepalive = false,
@@ -202,23 +241,27 @@ export function AudioPlayer({
     force?: boolean;
     keepalive?: boolean;
   } = {}) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const positionSec = Math.floor(Math.max(0, audio.currentTime - startOffset));
-    const durationSec = Math.floor(
-      resolvedDuration || Math.max(0, audio.duration - startOffset) || duration,
-    );
-    const finalCompleted = mergeCompletion(
-      completionSentRef.current,
-      completed || isPlaybackComplete(positionSec, durationSec),
-    );
-    const payload = JSON.stringify({ chapterId, positionSec, durationSec, completed: finalCompleted });
+    const positionSec = Math.floor(Math.max(0, positionSecRef.current));
+    const durationSec = Math.floor(durationSecRef.current);
+    // Sem trava de conclusao: ao reouvir um capitulo concluido, os novos
+    // checkpoints registram o novo tempo ate o capitulo ser concluido de novo.
+    const finalCompleted = completed || isPlaybackComplete(positionSec, durationSec);
+    const payload = JSON.stringify({ chapterId: targetChapterId, positionSec, durationSec, completed: finalCompleted });
     if (!force && payload === lastProgressPayloadRef.current) return;
 
+    const capturedAt = Date.now();
     lastProgressPayloadRef.current = payload;
-    lastCheckpointAtRef.current = Date.now();
+    lastCheckpointAtRef.current = capturedAt;
     completionSentRef.current = finalCompleted;
+
+    // Cancela o envio anterior do mesmo capitulo: apenas o checkpoint mais
+    // recente pode chegar por ultimo, impedindo que respostas fora de ordem
+    // regredam a posicao salva no servidor.
+    if (inFlightSaveRef.current?.chapterId === targetChapterId) {
+      inFlightSaveRef.current.controller.abort();
+    }
+    const controller = new AbortController();
+    inFlightSaveRef.current = { chapterId: targetChapterId, controller };
 
     try {
       const response = await fetch("/api/progress", {
@@ -226,13 +269,39 @@ export function AudioPlayer({
         headers: { "Content-Type": "application/json" },
         body: payload,
         keepalive,
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Nao foi possivel salvar o progresso.");
+      // O servidor confirmou uma posicao mais nova: a versao enfileirada e lixo.
+      if (accountScopeRef.current !== "anonymous") {
+        removeQueuedProgress(accountScopeRef.current, targetChapterId, capturedAt);
+      }
     } catch {
+      if (controller.signal.aborted) return;
       if (lastProgressPayloadRef.current === payload) lastProgressPayloadRef.current = "";
       if (finalCompleted) completionSentRef.current = false;
+      // Offline ou falha temporaria: enfileira para reenviar ao reconectar.
+      if (accountScopeRef.current !== "anonymous") {
+        queueProgress(accountScopeRef.current, {
+          chapterId: targetChapterId,
+          positionSec,
+          durationSec,
+          completed: finalCompleted,
+          updatedAt: capturedAt,
+        });
+      }
+    } finally {
+      if (inFlightSaveRef.current?.controller === controller) inFlightSaveRef.current = null;
     }
-  }, [chapterId, duration, resolvedDuration, startOffset]);
+  }, []);
+
+  // A navegacao SPA nao dispara pagehide: salva a posicao do capitulo que esta
+  // sendo deixado (troca de rota ou desmontagem do player).
+  useEffect(() => {
+    return () => {
+      if (playbackStartedRef.current) void saveProgress(chapterId, { force: true, keepalive: true });
+    };
+  }, [chapterId, saveProgress]);
 
   const getDownloadedAudioUrl = useCallback(async () => {
     const generation = audioGenerationRef.current;
@@ -392,7 +461,8 @@ export function AudioPlayer({
 
       if (!audioRef.current) return;
       const activeAudio = audioRef.current;
-      if (activeAudio.getAttribute("src") !== playbackSource) {
+      const justLoadedSource = activeAudio.getAttribute("src") !== playbackSource;
+      if (justLoadedSource) {
         activeAudio.src = playbackSource;
         activeAudio.load();
       }
@@ -404,8 +474,11 @@ export function AudioPlayer({
         position ??
         (shouldReplayFromBeginning
           ? startOffset
-          : activeAudio.currentTime < startOffset || (activeAudio.currentTime === 0 && (initialResumePosition > 0 || startOffset > 0))
-            ? startOffset + initialResumePosition
+          : activeAudio.currentTime < startOffset ||
+              // So retoma a posicao inicial quando a fonte acabou de carregar:
+              // um currentTime 0 com a mesma fonte e uma pausa legitima no inicio.
+              (justLoadedSource && activeAudio.currentTime === 0 && (resumePositionRef.current > 0 || startOffset > 0))
+            ? startOffset + resumePositionRef.current
             : activeAudio.currentTime);
       activeAudio.currentTime = nextPosition;
       setKaraokeMode(playMode === "karaoke");
@@ -428,7 +501,7 @@ export function AudioPlayer({
       setKaraokeMode(false);
       setPlaybackError((currentError) => currentError || PLAYBACK_CONNECTION_ERROR);
     }
-  }, [chapterId, getDownloadedAudioUrl, initialResumePosition, muted, playbackRate, playMode, progressDuration, startOffset, volume, waitForMetadata]);
+  }, [chapterId, getDownloadedAudioUrl, muted, playbackRate, playMode, progressDuration, startOffset, volume, waitForMetadata]);
 
   function toggle() {
     const audio = audioRef.current;
@@ -440,7 +513,7 @@ export function AudioPlayer({
       desiredPlaybackRef.current = false;
       audio.pause();
       setPlaying(false);
-      void saveProgress({ force: true });
+      void saveProgress(chapterId, { force: true });
     }
   }
 
@@ -561,18 +634,18 @@ export function AudioPlayer({
     setPlaying(false);
     setKaraokeMode(false);
     setCurrent(Math.max(0, activePart.endSec - startOffset));
-    void saveProgress({ force: true });
+    void saveProgress(chapterId, { force: true });
   }
 
   useEffect(() => {
     function saveBeforePageSuspends() {
       if (!playbackStartedRef.current) return;
-      void saveProgress({ force: true, keepalive: true });
+      void saveProgress(chapterId, { force: true, keepalive: true });
     }
 
     function saveOnVisibilityChange() {
       if (!playbackStartedRef.current) return;
-      void saveProgress({ force: true, keepalive: document.visibilityState === "hidden" });
+      void saveProgress(chapterId, { force: true, keepalive: document.visibilityState === "hidden" });
     }
 
     window.addEventListener("pagehide", saveBeforePageSuspends);
@@ -581,7 +654,7 @@ export function AudioPlayer({
       window.removeEventListener("pagehide", saveBeforePageSuspends);
       document.removeEventListener("visibilitychange", saveOnVisibilityChange);
     };
-  }, [saveProgress]);
+  }, [chapterId, saveProgress]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -603,6 +676,7 @@ export function AudioPlayer({
       ["pause", () => {
         desiredPlaybackRef.current = false;
         audioRef.current?.pause();
+        void saveProgress(chapterId, { force: true });
       }],
       ["seekbackward", (details) => seekBy(-(details.seekOffset ?? 10))],
       ["seekforward", (details) => seekBy(details.seekOffset ?? 10)],
@@ -626,7 +700,7 @@ export function AudioPlayer({
       }
       mediaSession.metadata = null;
     };
-  }, [chapterTitle, coverUrl, novelTitle, playDownloadedAudio, seekBy]);
+  }, [chapterId, chapterTitle, coverUrl, novelTitle, playDownloadedAudio, saveProgress, seekBy]);
 
   return (
     <>
@@ -637,8 +711,12 @@ export function AudioPlayer({
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
             setResolvedDuration(duration || audioDuration);
-            if (pendingStartRef.current !== null) event.currentTarget.currentTime = pendingStartRef.current;
-            else if (initialResumePosition > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + initialResumePosition;
+            if (pendingStartRef.current !== null) {
+              event.currentTarget.currentTime = pendingStartRef.current;
+              // Consome o seek pendente: um loadedmetadata posterior (ex.: troca
+              // de fonte) nao pode reaplicar uma posicao antiga.
+              pendingStartRef.current = null;
+            } else if (resumePositionRef.current > 0 || startOffset > 0) event.currentTarget.currentTime = startOffset + resumePositionRef.current;
             event.currentTarget.volume = volume;
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
@@ -652,10 +730,10 @@ export function AudioPlayer({
             pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
             if (isPlaybackComplete(relativePosition, logicalDuration)) {
               if (!completionSentRef.current) {
-                void saveProgress({ completed: true, force: true, keepalive: true });
+                void saveProgress(chapterId, { completed: true, force: true, keepalive: true });
               }
             } else if (shouldSaveCheckpoint(lastCheckpointAtRef.current, Date.now())) {
-              void saveProgress();
+              void saveProgress(chapterId);
             }
           }}
           onPlay={() => {
@@ -676,7 +754,7 @@ export function AudioPlayer({
             setPlaying(false);
             setKaraokeMode(false);
             setCurrent(progressDuration);
-            const progressSave = saveProgress({ completed: true, force: true, keepalive: true });
+            const progressSave = saveProgress(chapterId, { completed: true, force: true, keepalive: true });
             if (autoPlayNextChapter && nextChapterHref) {
               try {
                 window.sessionStorage.setItem(NEXT_CHAPTER_AUTOPLAY_KEY, nextChapterHref);

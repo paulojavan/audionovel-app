@@ -20,9 +20,11 @@ export async function POST(request: Request) {
     where: { userId_chapterId: { userId: auth.user.id, chapterId: parsed.data.chapterId } },
     create: { userId: auth.user.id, ...parsed.data },
     update: {
+      // O player e a fonte da verdade: ao reouvir um capitulo concluido, os
+      // novos checkpoints trazem completed=false e o novo tempo passa a valer.
       positionSec: parsed.data.positionSec,
       durationSec: parsed.data.durationSec,
-      completed: parsed.data.completed ? true : undefined,
+      completed: parsed.data.completed,
     },
   });
 

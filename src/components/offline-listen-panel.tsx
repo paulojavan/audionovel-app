@@ -11,6 +11,8 @@ import {
   OfflineAudioInvalidError,
   removeOfflineItem,
 } from "@/lib/audio-cache";
+import { getInitialResumePosition, isPlaybackComplete, shouldSaveCheckpoint } from "@/lib/audio-progress";
+import { getQueuedProgress, queueProgress } from "@/lib/progress-outbox";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
 import { subscribeOfflineCatalogUpdates } from "@/lib/offline-catalog-events";
 import { markOfflineCatalogReady } from "@/lib/offline-catalog-readiness";
@@ -36,6 +38,45 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
   const activeChapterParts = activeItem?.chapterParts && activeItem.chapterParts.length > 1 ? activeItem.chapterParts : [];
   const playbackQueue = useMemo(() => sortOfflineItems(checkedItems), [checkedItems]);
   const groupedItems = groupByNovel(checkedItems);
+  const playbackStartedRef = useRef(false);
+  const lastProgressCheckpointAtRef = useRef(0);
+  const activeItemRef = useRef<OfflineItem | null>(null);
+  const positionRef = useRef(0);
+  const saveOfflineProgressRef = useRef<((item: OfflineItem, options?: { force?: boolean }) => void) | null>(null);
+
+  useEffect(() => {
+    activeItemRef.current = activeItem ?? null;
+  }, [activeItem]);
+
+  useEffect(() => {
+    positionRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    saveOfflineProgressRef.current = saveOfflineProgress;
+  });
+
+  // O progresso offline fica gravado no dispositivo (fila local por conta) e e
+  // reenviado ao servidor quando a conexao voltar.
+  useEffect(() => {
+    function saveOnLeave() {
+      const item = activeItemRef.current;
+      if (!item || !playbackStartedRef.current) return;
+      saveOfflineProgressRef.current?.(item, { force: true });
+    }
+
+    function saveWhenHidden() {
+      if (document.visibilityState === "hidden") saveOnLeave();
+    }
+
+    window.addEventListener("pagehide", saveOnLeave);
+    document.addEventListener("visibilitychange", saveWhenHidden);
+    return () => {
+      saveOnLeave();
+      window.removeEventListener("pagehide", saveOnLeave);
+      document.removeEventListener("visibilitychange", saveWhenHidden);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -93,7 +134,29 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     if (audioRef.current) audioRef.current.playbackRate = nextRate;
   }
 
+  function saveOfflineProgress(item: OfflineItem, { force = false }: { force?: boolean } = {}) {
+    const now = Date.now();
+    if (!force && !shouldSaveCheckpoint(lastProgressCheckpointAtRef.current, now)) return;
+    lastProgressCheckpointAtRef.current = now;
+    const absolutePosition = audioRef.current?.currentTime ?? positionRef.current;
+    const positionSec = Math.floor(Math.max(0, absolutePosition - getPlaybackStart(item)));
+    const durationSec = Math.floor(getChapterDurationSec(item, audioRef.current?.duration || 0));
+    queueProgress(accountScope, {
+      chapterId: item.chapterId,
+      positionSec,
+      durationSec,
+      completed: isPlaybackComplete(positionSec, durationSec),
+      updatedAt: now,
+    });
+  }
+
   function playItem(item: OfflineItem) {
+    const previousItem = activeItemRef.current;
+    if (previousItem && previousItem.id !== item.id && playbackStartedRef.current) {
+      saveOfflineProgress(previousItem, { force: true });
+    }
+    playbackStartedRef.current = false;
+    lastProgressCheckpointAtRef.current = 0;
     startTransition(async () => {
       setMessage("");
       setPlaying(false);
@@ -106,7 +169,11 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
         if (audioSrc.startsWith("blob:")) URL.revokeObjectURL(audioSrc);
         setAudioSrc(url);
         setActiveId(item.id);
-        const playbackStart = getPlaybackStart(item);
+        // Retoma de onde parou neste dispositivo; capitulo concluido recomeça.
+        const queuedProgress = getQueuedProgress(accountScope, item.chapterId);
+        const playbackStart = getPlaybackStart(item) + (queuedProgress
+          ? getInitialResumePosition(queuedProgress.positionSec, queuedProgress.durationSec, queuedProgress.completed)
+          : 0);
         setCurrentTime(playbackStart);
         requestAnimationFrame(() => {
           if (audioRef.current) {
@@ -152,6 +219,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     } else {
       audio.pause();
       setPlaying(false);
+      if (activeItem) saveOfflineProgress(activeItem, { force: true });
     }
   }
 
@@ -183,6 +251,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
     audio.currentTime = activePart.endSec;
     setCurrentTime(activePart.endSec);
     setPlaying(false);
+    if (activeItem) saveOfflineProgress(activeItem, { force: true });
   }
 
   function playNextOfflineItem() {
@@ -204,15 +273,20 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
         <audio
           ref={audioRef}
           src={audioSrc || undefined}
-          onPlay={() => setPlaying(true)}
+          onPlay={() => {
+            playbackStartedRef.current = true;
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
           onEnded={() => {
             setPlaying(false);
+            if (activeItem) saveOfflineProgress(activeItem, { force: true });
             playNextOfflineItem();
           }}
           onTimeUpdate={(event) => {
             setCurrentTime(event.currentTarget.currentTime);
             pauseIfNeededAtGroupedChapterEnd(event.currentTarget);
+            if (activeItem) saveOfflineProgress(activeItem);
           }}
           onLoadedMetadata={(event) => {
             const nextDuration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
@@ -332,6 +406,13 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
 
 function getPlaybackStart(item: OfflineItem) {
   return item.chapterParts?.[0]?.startSec ?? 0;
+}
+
+function getChapterDurationSec(item: OfflineItem, audioDuration: number) {
+  const partsEnd = item.chapterParts?.length
+    ? Math.max(...item.chapterParts.map((part) => part.endSec))
+    : 0;
+  return Math.max(0, Math.max(partsEnd, audioDuration) - getPlaybackStart(item));
 }
 
 function formatTime(value: number) {

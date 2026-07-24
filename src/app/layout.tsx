@@ -12,6 +12,7 @@ import {
 import { BlockedSessionLogout } from "@/components/blocked-session-logout";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { OfflineEntitlementSync } from "@/components/offline-entitlement-sync";
+import { ProgressOutboxSync } from "@/components/progress-outbox-sync";
 import { PwaLifecycle } from "@/components/pwa-lifecycle";
 import { PwaInstallMenuItem } from "@/components/pwa-install-menu-item";
 import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
@@ -109,6 +110,7 @@ export default async function RootLayout({
         <PwaLifecycle />
         <BlockedSessionLogout blocked={session?.user?.isBlocked} />
         {activeSession ? <SessionHeartbeat /> : null}
+        {activeSession ? <ProgressOutboxSync accountScope={activeSession.user.id} /> : null}
         {activeSession && hasPremiumAccess(activeSession.user) ? (
           <OfflineEntitlementSync accountScope={activeSession.user.id} />
         ) : null}
