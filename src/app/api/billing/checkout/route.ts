@@ -70,12 +70,6 @@ export async function POST(request: Request) {
       plan,
     });
 
-    console.info("Mercado Pago checkout origin", {
-      origin,
-      notificationUrl: preferencePayload.notification_url,
-      backUrls: preferencePayload.back_urls,
-    });
-
     const preference = await createMercadoPagoPreference(preferencePayload, {
       idempotencyKey: `checkout-${auth.user.id}-${plan.id}-${Date.now()}`,
     });

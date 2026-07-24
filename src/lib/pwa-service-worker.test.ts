@@ -12,8 +12,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v11"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "offline-loading-performance-2026-07-16"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v12"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "ios-navigation-reliability-2026-07-24"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
@@ -38,6 +38,29 @@ test("service worker limita cache de navegacao as rotas aprovadas e separa por c
     /networkFirstWithPageCache\(request, event\)/,
   );
   assert.doesNotMatch(serviceWorkerSource, /getAccountOfflineRedirect/);
+});
+
+test("paginas de capitulo so recorrem ao cache quando a rede realmente falha", () => {
+  assert.match(
+    serviceWorkerSource,
+    /url\.pathname\.startsWith\("\/chapters\/"\)\s*\?\s*networkFirstChapterPage\(request, event\)/,
+  );
+  assert.match(serviceWorkerSource, /async function networkFirstChapterPage/);
+  const chapterBlock = serviceWorkerSource.match(
+    /async function networkFirstChapterPage[\s\S]*?\n\}/,
+  )?.[0] ?? "";
+  assert.doesNotMatch(chapterBlock, /setTimeout/);
+});
+
+test("navegacoes visitadas e shell offline nao usam timeout artificial", () => {
+  for (const functionName of ["networkFirstWithPageCache", "accountScopedOfflinePage"]) {
+    const block = serviceWorkerSource.match(
+      new RegExp(`async function ${functionName}[\\s\\S]*?\\n\\}`),
+    )?.[0] ?? "";
+    assert.ok(block, `funcao ${functionName} encontrada`);
+    assert.doesNotMatch(block, /setTimeout/);
+    assert.doesNotMatch(block, /Promise\.race/);
+  }
 });
 
 test("service worker prepara html e chunks offline antes da primeira visita", () => {

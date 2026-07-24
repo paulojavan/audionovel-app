@@ -1,10 +1,10 @@
-// Audio Novel BR - Service Worker v11
+// Audio Novel BR - Service Worker v12
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v11";
-const RELEASE_REVISION = "offline-loading-performance-2026-07-16";
-const PREVIOUS_CACHE_VERSION = "v10";
+const CACHE_VERSION = "v12";
+const RELEASE_REVISION = "ios-navigation-reliability-2026-07-24";
+const PREVIOUS_CACHE_VERSION = "v11";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -138,9 +138,11 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       url.pathname === "/offline"
         ? accountScopedOfflinePage(request, event)
-        : isCacheableNavigationPath(url.pathname)
-          ? networkFirstWithPageCache(request, event)
-          : networkOnlyWithOfflineFallback(request),
+        : url.pathname.startsWith("/chapters/")
+          ? networkFirstChapterPage(request, event)
+          : isCacheableNavigationPath(url.pathname)
+            ? networkFirstWithPageCache(request, event)
+            : networkOnlyWithOfflineFallback(request),
     );
     return;
   }
@@ -201,11 +203,13 @@ function getNavigationCacheKey(request) {
   return url.href;
 }
 
+// Paginas visitadas seguem a mesma regra das paginas de capitulo: o cache local
+// so e usado quando a rede realmente falha (offline). Um timeout artificial
+// entregava HTML antigo (com chunks de builds anteriores) ou o fallback de
+// offline para usuarios online sempre que o servidor ficava lento, o que no
+// iOS derrubava a navegacao e reiniciava o PWA na tela inicial.
 async function networkFirstWithPageCache(request, event) {
   const scope = await getAccountScope();
-  const cache = await caches.open(getAccountPageCacheName(scope));
-  const cacheKey = getNavigationCacheKey(request);
-  const cached = await cache.match(cacheKey);
   const networkTask = fetch(request).then(async (response) => {
     try {
       await publishNavigationPage(response.clone(), request, scope);
@@ -217,20 +221,37 @@ async function networkFirstWithPageCache(request, event) {
 
   event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
 
-  let timeoutId;
-  const timeoutTask = new Promise((resolve) => {
-    timeoutId = setTimeout(
-      () => resolve(cached ?? getOfflineFallback()),
-      4_000,
-    );
+  try {
+    return await networkTask;
+  } catch {
+    const cache = await caches.open(getAccountPageCacheName(scope));
+    const cached = await cache.match(getNavigationCacheKey(request));
+    return cached ?? getOfflineFallback();
+  }
+}
+
+// Paginas de capitulo trazem a posicao de escuta embutida no HTML. Servir um
+// HTML cacheado so porque a rede esta lenta faria o player retomar de uma
+// posicao antiga e regravar essa regressao no servidor. Por isso o cache local
+// so e usado quando a rede realmente falha (offline), sem timeout artificial.
+async function networkFirstChapterPage(request, event) {
+  const scope = await getAccountScope();
+  const networkTask = fetch(request).then(async (response) => {
+    try {
+      await publishNavigationPage(response.clone(), request, scope);
+    } catch {
+      // Uma resposta valida continua utilizavel mesmo se nao puder ser persistida.
+    }
+    return response;
   });
 
+  event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
+
   try {
-    const response = await Promise.race([networkTask, timeoutTask]);
-    clearTimeout(timeoutId);
-    return await response;
+    return await networkTask;
   } catch {
-    clearTimeout(timeoutId);
+    const cache = await caches.open(getAccountPageCacheName(scope));
+    const cached = await cache.match(getNavigationCacheKey(request));
     return cached ?? getOfflineFallback();
   }
 }
@@ -257,7 +278,11 @@ async function publishNavigationPage(response, request, scope) {
   await cache.put(getNavigationCacheKey(request), response);
 }
 
-async function accountScopedOfflinePage(request, event, timeoutMs = 4_000) {
+// O shell offline em cache abre na hora e continua sendo atualizado em segundo
+// plano. Sem shell, a navegacao aguarda a rede de verdade: devolver o fallback
+// depois de um timeout artificial fazia um usuario online cair na pagina de
+// "voce esta offline" sempre que o servidor demorava.
+async function accountScopedOfflinePage(request, event) {
   const scope = await getAccountScope();
   if (scope === ANONYMOUS_ACCOUNT_SCOPE) {
     return networkOnlyWithOfflineFallback(request);
@@ -280,20 +305,9 @@ async function accountScopedOfflinePage(request, event, timeoutMs = 4_000) {
   event?.waitUntil?.(refreshTask);
   if (cached) return cached;
 
-  let timeoutId;
-  const timeoutTask = new Promise((resolve) => {
-    timeoutId = setTimeout(
-      () => resolve(getOfflineFallback()),
-      timeoutMs,
-    );
-  });
-
   try {
-    const response = await Promise.race([networkTask, timeoutTask]);
-    clearTimeout(timeoutId);
-    return await response;
+    return await networkTask;
   } catch {
-    clearTimeout(timeoutId);
     return getOfflineFallback();
   }
 }
