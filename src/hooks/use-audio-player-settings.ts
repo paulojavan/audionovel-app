@@ -11,6 +11,7 @@ export type AudioPlayerSettings = {
   pauseAtChapterEnd: boolean;
   autoPlayNextChapter: boolean;
   playMode: AudioPlayerMode;
+  volume: number;
 };
 
 export const DEFAULT_AUDIO_PLAYER_SETTINGS: AudioPlayerSettings = {
@@ -18,6 +19,7 @@ export const DEFAULT_AUDIO_PLAYER_SETTINGS: AudioPlayerSettings = {
   pauseAtChapterEnd: false,
   autoPlayNextChapter: false,
   playMode: "karaoke",
+  volume: 1,
 };
 
 const STORAGE_KEY = "audio-novel-player-settings-v1";
@@ -31,12 +33,20 @@ function normalizePlayMode(value: unknown): AudioPlayerMode {
   return value === "page" || value === "karaoke" ? value : DEFAULT_AUDIO_PLAYER_SETTINGS.playMode;
 }
 
+function normalizeVolume(value: unknown) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue)
+    ? Math.min(1, Math.max(0, numericValue))
+    : DEFAULT_AUDIO_PLAYER_SETTINGS.volume;
+}
+
 function normalizeSettings(value: Partial<AudioPlayerSettings> | null | undefined): AudioPlayerSettings {
   return {
     playbackRate: normalizePlaybackRate(value?.playbackRate),
     pauseAtChapterEnd: value?.pauseAtChapterEnd === true,
     autoPlayNextChapter: value?.autoPlayNextChapter === true,
     playMode: normalizePlayMode(value?.playMode),
+    volume: normalizeVolume(value?.volume),
   };
 }
 

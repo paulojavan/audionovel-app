@@ -23,14 +23,13 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
   const [activeId, setActiveId] = useState("");
   const [audioSrc, setAudioSrc] = useState("");
   const [playing, setPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.85);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [message, setMessage] = useState("");
   const [availableItems, setAvailableItems] = useState<OfflineItem[] | null>(null);
   const [pending, startTransition] = useTransition();
   const { settings, updateSettings } = useAudioPlayerSettings();
-  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter } = settings;
+  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, volume } = settings;
   const offlineCryptoSupported = useOfflineCryptoSupported();
   const checkedItems = useMemo(() => availableItems ?? [], [availableItems]);
   const checkingCache = offlineCryptoSupported && availableItems === null;
@@ -132,6 +131,10 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
   function updatePlaybackRate(nextRate: number) {
     updateSettings({ playbackRate: nextRate });
     if (audioRef.current) audioRef.current.playbackRate = nextRate;
+  }
+
+  function updateVolume(nextVolume: number) {
+    updateSettings({ volume: nextVolume });
   }
 
   function saveOfflineProgress(item: OfflineItem, { force = false }: { force?: boolean } = {}) {
@@ -337,7 +340,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
                   max="1"
                   step="0.05"
                   value={volume}
-                  onChange={(event) => setVolume(Number(event.target.value))}
+                  onChange={(event) => updateVolume(Number(event.target.value))}
                   className="h-1 min-w-0 flex-1 accent-[#18b7bd] sm:w-24 sm:flex-none"
                   aria-label="Volume"
                 />

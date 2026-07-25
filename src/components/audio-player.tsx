@@ -98,14 +98,13 @@ export function AudioPlayer({
   const [karaokeMode, setKaraokeMode] = useState(false);
   const initialResumePosition = getInitialResumePosition(initialPosition, duration, initialCompleted);
   const [current, setCurrent] = useState(initialResumePosition);
-  const [volume, setVolume] = useState(1);
-  const [muted, setMuted] = useState(false);
   const [karaokeFontLevel, setKaraokeFontLevel] = useState(1);
   const [resolvedDuration, setResolvedDuration] = useState(duration);
   const [playbackError, setPlaybackError] = useState("");
   const [audioDownload, setAudioDownload] = useState<{ chapterId: string; audioRevision: number; source: string; active: boolean; percent: number | null } | null>(null);
   const { settings, updateSettings } = useAudioPlayerSettings();
-  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, playMode } = settings;
+  const { playbackRate, pauseAtChapterEnd, autoPlayNextChapter, playMode, volume } = settings;
+  const muted = volume === 0;
   const positionSecRef = useRef(current);
   const durationSecRef = useRef(resolvedDuration || duration);
   const initialResumePositionRef = useRef(initialResumePosition);
@@ -605,8 +604,7 @@ export function AudioPlayer({
   function updateVolume(nextVolume: number) {
     const normalized = Math.min(1, Math.max(0, nextVolume));
     const audio = audioRef.current;
-    setVolume(normalized);
-    setMuted(normalized === 0);
+    updateSettings({ volume: normalized });
     if (audio) {
       audio.volume = normalized;
       audio.muted = normalized === 0;
