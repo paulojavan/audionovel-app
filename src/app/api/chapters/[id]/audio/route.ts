@@ -15,6 +15,10 @@ type Context = {
   params: Promise<{ id: string }>;
 };
 
+// O player abre varios range requests por reproducao; lastUsedAt so precisa
+// granularidade suficiente para ordenar a lista de "recentes" da area offline.
+const LAST_USED_WRITE_THROTTLE_MS = 5 * 60_000;
+
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
   const session = await getActiveServerSession();
@@ -58,17 +62,22 @@ export async function GET(request: Request, context: Context) {
         userId: session.user.id,
         expiresAt: { gt: new Date() },
       },
-      select: { id: true },
+      select: { id: true, lastUsedAt: true },
     });
 
     if (!offlineDownload) {
       return NextResponse.json({ error: "Audio offline expirado ou invalido." }, { status: 403 });
     }
 
-    await prisma.offlineDownload.update({
-      where: { id: offlineDownload.id },
-      data: { lastUsedAt: new Date() },
-    });
+    // Gravar lastUsedAt em todo range request gerava uma escrita por chunk de
+    // streaming. Uma escrita por janela mantem a ordenacao de recentes sem
+    // pressionar o pool de conexoes.
+    if (Date.now() - offlineDownload.lastUsedAt.getTime() > LAST_USED_WRITE_THROTTLE_MS) {
+      await prisma.offlineDownload.update({
+        where: { id: offlineDownload.id },
+        data: { lastUsedAt: new Date() },
+      });
+    }
   }
 
   const range = request.headers.get("range");
