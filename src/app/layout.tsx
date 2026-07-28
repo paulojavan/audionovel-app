@@ -19,6 +19,7 @@ import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { SessionHeartbeat } from "@/components/session-heartbeat";
 import { UserMenu } from "@/components/user-menu";
+import { getVersionedPwaAsset } from "@/lib/pwa-assets";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,31 +37,31 @@ export const metadata: Metadata = {
     siteName: "Audio Novel BR",
     title: "Audio Novel BR",
     description: "Ouça novels com áudio, texto sincronizado e modo offline.",
-    images: [{ url: "/icons/icon-512x512.png", width: 512, height: 512, alt: "Audio Novel BR" }],
+    images: [{ url: getVersionedPwaAsset("/icons/icon-512x512.png"), width: 512, height: 512, alt: "Audio Novel BR" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Audio Novel BR",
     description: "Ouça novels com áudio, texto sincronizado e modo offline.",
-    images: ["/icons/icon-512x512.png"],
+    images: [getVersionedPwaAsset("/icons/icon-512x512.png")],
   },
   robots: { index: true, follow: true },
-  manifest: "/manifest.webmanifest",
+  manifest: getVersionedPwaAsset("/manifest.webmanifest"),
   keywords: ["audio novel", "audiolivro", "web novel", "novels brasileiras", "ouvir novel"],
   icons: {
     icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-96x96.png", sizes: "96x96", type: "image/png" },
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: getVersionedPwaAsset("/favicon-16x16.png"), sizes: "16x16", type: "image/png" },
+      { url: getVersionedPwaAsset("/favicon-32x32.png"), sizes: "32x32", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-96x96.png"), sizes: "96x96", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-192x192.png"), sizes: "192x192", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-512x512.png"), sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/favicon-32x32.png",
+    shortcut: getVersionedPwaAsset("/favicon-32x32.png"),
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-      { url: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
-      { url: "/icons/icon-144x144.png", sizes: "144x144", type: "image/png" },
-      { url: "/icons/icon-128x128.png", sizes: "128x128", type: "image/png" },
+      { url: getVersionedPwaAsset("/apple-touch-icon.png"), sizes: "180x180", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-152x152.png"), sizes: "152x152", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-144x144.png"), sizes: "144x144", type: "image/png" },
+      { url: getVersionedPwaAsset("/icons/icon-128x128.png"), sizes: "128x128", type: "image/png" },
     ],
   },
   appleWebApp: {
@@ -69,7 +70,7 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     startupImage: [
       {
-        url: "/icons/icon-512x512.png",
+        url: getVersionedPwaAsset("/icons/icon-512x512.png"),
         media: "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)",
       },
     ],
@@ -80,7 +81,7 @@ export const metadata: Metadata = {
   other: {
     "mobile-web-app-capable": "yes",
     "msapplication-TileColor": "#03191c",
-    "msapplication-TileImage": "/icons/icon-144x144.png",
+    "msapplication-TileImage": getVersionedPwaAsset("/icons/icon-144x144.png"),
     "msapplication-config": "none",
   },
 };

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { CheckCircle, Download, RefreshCw, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getVersionedPwaAsset } from "@/lib/pwa-assets";
 import { getPwaInstallPromptState, isIosUserAgent, isMobileUserAgent } from "@/lib/pwa-install";
 
 type BeforeInstallPromptEvent = Event & {
@@ -269,7 +270,7 @@ function PwaNotice({
           style={{ outline: `1px solid ${accentColor}50` }}
         >
           <Image
-            src="/icons/icon-192x192.png"
+            src={getVersionedPwaAsset("/icons/icon-192x192.png")}
             alt="Audio Novel BR"
             width={56}
             height={56}
@@ -395,7 +396,7 @@ function IosInstallGuide({ onDismiss }: { onDismiss: () => void }) {
         <div className="mb-3 flex items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl">
             <Image
-              src="/icons/icon-192x192.png"
+              src={getVersionedPwaAsset("/icons/icon-192x192.png")}
               alt="Audio Novel BR"
               width={40}
               height={40}

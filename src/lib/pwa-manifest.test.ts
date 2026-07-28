@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { PWA_ICON_REVISION } from "./pwa-assets";
 
 function readPublicManifest() {
   const manifestPath = join(process.cwd(), "public", "manifest.webmanifest");
@@ -36,7 +37,11 @@ test("manifest permite instalacao como aplicativo standalone", () => {
   assert.equal(appManifest.theme_color, "#18b7bd");
   assert.equal(appManifest.background_color, "#03191c");
 
-  assert.ok(icons.some((icon) => icon.src === "/icons/icon-192x192.png" && icon.sizes === "192x192"));
-  assert.ok(icons.some((icon) => icon.src === "/icons/icon-512x512.png" && icon.sizes === "512x512"));
-  assert.ok(icons.some((icon) => icon.src === "/icons/maskable-512x512.png" && icon.purpose === "maskable"));
+  assert.ok(icons.some((icon) => icon.src === `/icons/icon-192x192.png?v=${PWA_ICON_REVISION}` && icon.sizes === "192x192"));
+  assert.ok(icons.some((icon) => icon.src === `/icons/icon-512x512.png?v=${PWA_ICON_REVISION}` && icon.sizes === "512x512"));
+  assert.ok(icons.some((icon) => icon.src === `/icons/maskable-512x512.png?v=${PWA_ICON_REVISION}` && icon.purpose === "maskable"));
+  assert.ok(
+    icons.every((icon) => icon.src?.endsWith(`?v=${PWA_ICON_REVISION}`)),
+    "todos os icones instalaveis devem mudar de URL quando a arte for atualizada",
+  );
 });

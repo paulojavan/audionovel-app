@@ -1,10 +1,10 @@
-// Audio Novel BR - Service Worker v12
+// Audio Novel BR - Service Worker v13
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v12";
-const RELEASE_REVISION = "ios-navigation-reliability-2026-07-24";
-const PREVIOUS_CACHE_VERSION = "v11";
+const CACHE_VERSION = "v13";
+const RELEASE_REVISION = "pwa-icon-refresh-2026-07-28";
+const PREVIOUS_CACHE_VERSION = "v12";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -13,20 +13,20 @@ const ANONYMOUS_ACCOUNT_SCOPE = "anonymous";
 
 // Assets críticos para funcionamento offline
 const STATIC_ASSETS = [
-  "/favicon-32x32.png",
-  "/favicon-16x16.png",
-  "/apple-touch-icon.png",
-  "/icon.png",
-  "/icons/icon-72x72.png",
-  "/icons/icon-96x96.png",
-  "/icons/icon-128x128.png",
-  "/icons/icon-144x144.png",
-  "/icons/icon-152x152.png",
-  "/icons/icon-180x180.png",
-  "/icons/icon-192x192.png",
-  "/icons/icon-384x384.png",
-  "/icons/icon-512x512.png",
-  "/icons/maskable-512x512.png",
+  "/favicon-32x32.png?v=20260728-2",
+  "/favicon-16x16.png?v=20260728-2",
+  "/apple-touch-icon.png?v=20260728-2",
+  "/icon.png?v=20260728-2",
+  "/icons/icon-72x72.png?v=20260728-2",
+  "/icons/icon-96x96.png?v=20260728-2",
+  "/icons/icon-128x128.png?v=20260728-2",
+  "/icons/icon-144x144.png?v=20260728-2",
+  "/icons/icon-152x152.png?v=20260728-2",
+  "/icons/icon-180x180.png?v=20260728-2",
+  "/icons/icon-192x192.png?v=20260728-2",
+  "/icons/icon-384x384.png?v=20260728-2",
+  "/icons/icon-512x512.png?v=20260728-2",
+  "/icons/maskable-512x512.png?v=20260728-2",
   "/offline-fallback.html",
 ];
 

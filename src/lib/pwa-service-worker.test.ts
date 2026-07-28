@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { PWA_ICON_REVISION } from "./pwa-assets";
 
 const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 const staticAssetsBlock = serviceWorkerSource.match(/const STATIC_ASSETS = \[[\s\S]*?\];/)?.[0] ?? "";
@@ -12,8 +13,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v12"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "ios-navigation-reliability-2026-07-24"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v13"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "pwa-icon-refresh-2026-07-28"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
@@ -26,6 +27,12 @@ test("service worker usa cache-first para chunks versionados do Next", () => {
     serviceWorkerSource.indexOf('url.pathname.startsWith("/_next/static/")') <
       serviceWorkerSource.indexOf('url.pathname.startsWith("/_next/")'),
   );
+});
+
+test("service worker pre-cacheia a revisao atual dos icones", () => {
+  assert.ok(staticAssetsBlock.includes(`/icon-192x192.png?v=${PWA_ICON_REVISION}`));
+  assert.ok(staticAssetsBlock.includes(`/icon-512x512.png?v=${PWA_ICON_REVISION}`));
+  assert.ok(staticAssetsBlock.includes(`/maskable-512x512.png?v=${PWA_ICON_REVISION}`));
 });
 
 test("service worker limita cache de navegacao as rotas aprovadas e separa por conta", () => {
