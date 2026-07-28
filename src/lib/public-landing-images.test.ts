@@ -36,3 +36,20 @@ test("imagens da landing possuem dimensoes intrinsecas e nao dependem de fill", 
     assert.ok(matchingImages.every((block) => !/\sfill(?:\s|=|\/>)/.test(block)));
   }
 });
+
+test("hero preserva a arte completa no mobile e usa recorte apenas no desktop", () => {
+  const imageBlocks = landingSource.match(/<Image\b[\s\S]*?\/>/g) ?? [];
+  const heroImage = imageBlocks.find((block) =>
+    block.includes('src="/hero-audio-novel-br.png"'),
+  );
+
+  assert.ok(heroImage);
+  assert.match(heroImage, /className="[^"]*\bh-auto\b[^"]*\bw-full\b/);
+  assert.match(heroImage, /className="[^"]*\blg:absolute\b[^"]*\blg:object-cover\b/);
+  assert.match(heroImage, /\bpreload\b/);
+  assert.doesNotMatch(heroImage, /\bpriority\b/);
+  assert.match(
+    landingSource,
+    /pt-24 sm:pt-28 lg:min-h-\[72svh\] lg:flex-1 lg:pt-0/,
+  );
+});

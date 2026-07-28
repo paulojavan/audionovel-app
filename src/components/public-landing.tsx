@@ -39,7 +39,7 @@ const benefits = [
 export function PublicLandingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#02090b] text-white">
-      <section className="relative flex min-h-svh flex-col border-b border-white/8">
+      <section className="relative flex flex-col border-b border-white/8 lg:min-h-svh">
         <header className="absolute inset-x-0 top-0 z-30 px-4 pt-4 sm:px-6 sm:pt-6 lg:px-10">
           <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-[#020b0d]/72 px-3 py-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:px-4">
             <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Áudio Novel BR — início">
@@ -76,15 +76,15 @@ export function PublicLandingPage() {
           </nav>
         </header>
 
-        <div className="relative min-h-[68svh] flex-1 overflow-hidden bg-[#01070a] sm:min-h-[72svh]">
+        <div className="relative overflow-hidden bg-[#01070a] pt-24 sm:pt-28 lg:min-h-[72svh] lg:flex-1 lg:pt-0">
           <Image
             src="/hero-audio-novel-br.png"
             alt="Áudio Novel BR — livro aberto iluminado e microfone com ondas sonoras"
             width={1731}
             height={909}
-            className="absolute inset-0 h-full w-full object-cover object-center"
+            className="relative block h-auto w-full lg:absolute lg:inset-0 lg:h-full lg:object-cover lg:object-center"
             sizes="100vw"
-            priority
+            preload
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#02090b]/35 via-transparent to-[#02090b]/75 sm:from-[#02090b]/20 sm:to-[#02090b]/45" />
           <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#02090b] to-transparent" />
