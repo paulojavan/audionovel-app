@@ -23,6 +23,16 @@ test("item do menu solicita o fluxo de instalacao ja existente", () => {
   assert.match(lifecycle, /setManualInstallRequested\(true\)/);
 });
 
+test("avisos PWA carregam o icone versionado sem passar pelo otimizador do Next", () => {
+  assert.equal(
+    lifecycle.match(
+      /src=\{getVersionedPwaAsset\("\/icons\/icon-192x192\.png"\)\}/g,
+    )?.length,
+    2,
+  );
+  assert.equal(lifecycle.match(/\bunoptimized\b/g)?.length, 2);
+});
+
 test("menu desktop e menu inferior mobile oferecem instalacao", () => {
   assert.match(layout, /<PwaInstallMenuItem variant="sidebar"/);
   assert.match(mobileNav, /<PwaInstallMenuItem variant="mobile"/);

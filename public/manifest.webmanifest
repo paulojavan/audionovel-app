@@ -15,61 +15,61 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-72x72.png?v=20260728-2",
+      "src": "/icons/icon-72x72.png?v=20260728-3",
       "sizes": "72x72",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-96x96.png?v=20260728-2",
+      "src": "/icons/icon-96x96.png?v=20260728-3",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-128x128.png?v=20260728-2",
+      "src": "/icons/icon-128x128.png?v=20260728-3",
       "sizes": "128x128",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-144x144.png?v=20260728-2",
+      "src": "/icons/icon-144x144.png?v=20260728-3",
       "sizes": "144x144",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-152x152.png?v=20260728-2",
+      "src": "/icons/icon-152x152.png?v=20260728-3",
       "sizes": "152x152",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-180x180.png?v=20260728-2",
+      "src": "/icons/icon-180x180.png?v=20260728-3",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.png?v=20260728-2",
+      "src": "/icons/icon-192x192.png?v=20260728-3",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-384x384.png?v=20260728-2",
+      "src": "/icons/icon-384x384.png?v=20260728-3",
       "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png?v=20260728-2",
+      "src": "/icons/icon-512x512.png?v=20260728-3",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/maskable-512x512.png?v=20260728-2",
+      "src": "/icons/maskable-512x512.png?v=20260728-3",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -77,7 +77,7 @@
   ],
   "screenshots": [
     {
-      "src": "/icons/icon-512x512.png?v=20260728-2",
+      "src": "/icons/icon-512x512.png?v=20260728-3",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
@@ -92,7 +92,7 @@
       "url": "/novels",
       "icons": [
         {
-          "src": "/icons/icon-96x96.png?v=20260728-2",
+          "src": "/icons/icon-96x96.png?v=20260728-3",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -105,7 +105,7 @@
       "url": "/biblioteca",
       "icons": [
         {
-          "src": "/icons/icon-96x96.png?v=20260728-2",
+          "src": "/icons/icon-96x96.png?v=20260728-3",
           "sizes": "96x96",
           "type": "image/png"
         }
@@ -118,7 +118,7 @@
       "url": "/offline",
       "icons": [
         {
-          "src": "/icons/icon-96x96.png?v=20260728-2",
+          "src": "/icons/icon-96x96.png?v=20260728-3",
           "sizes": "96x96",
           "type": "image/png"
         }

@@ -274,6 +274,7 @@ function PwaNotice({
             alt="Audio Novel BR"
             width={56}
             height={56}
+            unoptimized
             className="h-full w-full object-cover"
           />
           {/* Colored badge icon overlay */}
@@ -400,6 +401,7 @@ function IosInstallGuide({ onDismiss }: { onDismiss: () => void }) {
               alt="Audio Novel BR"
               width={40}
               height={40}
+              unoptimized
               className="h-full w-full object-cover"
             />
           </div>
