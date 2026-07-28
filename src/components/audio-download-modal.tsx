@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 export function AudioDownloadModal({
@@ -10,11 +10,14 @@ export function AudioDownloadModal({
   open: boolean;
   percent: number | null;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
     return () => {
       document.body.style.overflow = previousOverflow;
     };
@@ -29,11 +32,13 @@ export function AudioDownloadModal({
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="audio-download-title"
       aria-describedby="audio-download-description"
+      tabIndex={-1}
     >
       <div className="grid w-full max-w-xs justify-items-center gap-5 rounded-2xl border border-white/10 bg-[#031316] p-7 text-center shadow-2xl shadow-black/60">
         <div className="relative grid h-28 w-28 place-items-center" aria-hidden="true">

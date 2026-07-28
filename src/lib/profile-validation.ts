@@ -3,11 +3,20 @@ import { z } from "zod";
 const profileUpdateSchema = z
   .object({
     name: z.string().trim().min(2, "Informe um nome com pelo menos 2 caracteres.").max(80, "Nome muito longo."),
+    currentPassword: z.string().max(128, "Senha atual muito longa.").optional().default(""),
     password: z.string().max(128, "Senha muito longa.").optional().default(""),
     confirmPassword: z.string().optional().default(""),
   })
   .superRefine((data, context) => {
     if (!data.password) return;
+
+    if (!data.currentPassword) {
+      context.addIssue({
+        code: "custom",
+        message: "Informe a senha atual para definir uma nova senha.",
+        path: ["currentPassword"],
+      });
+    }
 
     if (data.password.length < 8) {
       context.addIssue({
@@ -28,7 +37,7 @@ const profileUpdateSchema = z
   })
   .transform((data) => ({
     name: data.name,
-    ...(data.password ? { password: data.password } : {}),
+    ...(data.password ? { currentPassword: data.currentPassword, password: data.password } : {}),
   }));
 
 export function parseProfileUpdatePayload(payload: unknown) {

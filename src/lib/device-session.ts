@@ -1,6 +1,7 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { hasSuspiciousUserAgentChange, selectDeviceToReplace } from "./device-session-policy";
 import { prisma } from "./prisma";
+import { hashSessionValue } from "./session-fingerprint";
 
 const MAX_ACTIVE_DEVICES = 3;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -28,10 +29,6 @@ type StoredSession = {
 
 export function createRandomSessionId() {
   return randomBytes(32).toString("base64url");
-}
-
-export function hashSessionValue(value: string) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 export function getHeaderValue(headers: HeaderLike | undefined, name: string) {
@@ -108,7 +105,7 @@ export async function createDeviceSession({ userId, deviceId, deviceName, header
     return replacement;
   });
 
-  return { allowed: true as const, sessionId, expiresAt, replacedDeviceHash };
+  return { allowed: true as const, sessionId, expiresAt, replacedDeviceHash, userAgentHash };
 }
 
 export async function validateDeviceSession(sessionId: string | null | undefined, headers?: HeaderLike) {

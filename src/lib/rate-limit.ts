@@ -132,6 +132,15 @@ export function getRequestIdentifier(request: Request, userId?: string) {
 }
 
 export function getRequestIdentifierFromHeaders(headers: HeaderSource) {
+  const trustedHeader = process.env.TRUSTED_PROXY_IP_HEADER?.trim().toLowerCase();
+  if (trustedHeader && ["x-real-ip", "cf-connecting-ip", "x-forwarded-for"].includes(trustedHeader)) {
+    const trustedValue = getHeader(headers, trustedHeader);
+    const ip = trustedHeader === "x-forwarded-for" ? trustedValue?.split(",")[0]?.trim() : trustedValue;
+    return `ip:${ip || "unknown"}`;
+  }
+
+  if (process.env.NODE_ENV === "production") return "ip:unknown";
+
   const realIp = getHeader(headers, "x-real-ip");
   const cloudflareIp = getHeader(headers, "cf-connecting-ip");
   const forwardedFor = getHeader(headers, "x-forwarded-for")?.split(",")[0]?.trim();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AdminCommentModerationActions } from "@/components/admin-comment-moderation-actions";
+import { formatAppDateTime } from "@/lib/app-time";
 import { ADMIN_MODERATION_COMMENT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
@@ -65,9 +66,9 @@ export default async function AdminModerationPage({ searchParams }: AdminModerat
                 <p className="mt-3 whitespace-pre-wrap text-zinc-300">{comment.body}</p>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
                   <p className="text-xs text-zinc-500">
-                    Enviado em {comment.createdAt.toLocaleString("pt-BR")}
-                    {comment.editedAt ? ` - editado em ${comment.editedAt.toLocaleString("pt-BR")}` : ""}
-                    {comment.removedAt ? ` - removido em ${comment.removedAt.toLocaleString("pt-BR")}` : ""}
+                    Enviado em {formatAppDateTime(comment.createdAt)}
+                    {comment.editedAt ? ` - editado em ${formatAppDateTime(comment.editedAt)}` : ""}
+                    {comment.removedAt ? ` - removido em ${formatAppDateTime(comment.removedAt)}` : ""}
                   </p>
                   <AdminCommentModerationActions commentId={comment.id} showRemove={!removedTab} />
                 </div>

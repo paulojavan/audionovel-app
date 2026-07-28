@@ -61,19 +61,20 @@ test("valida valor moeda validade uso e usuario da intencao", () => {
   const intent = {
     userId: "user-1",
     planId: "plan-1",
+    planName: "Premium",
+    amountCents: 1990,
+    currency: "brl",
     premiumDays: 30,
     usedAt: null,
     expiresAt: new Date("2026-07-01T13:00:00.000Z"),
   };
-  const plan = { amountCents: 1990, currency: "brl" };
-
-  assert.equal(validateCheckoutPayment(payment, intent, plan, now, "user-1"), true);
-  assert.equal(validateCheckoutPayment({ ...payment, transaction_amount: 1 }, intent, plan, now), false);
-  assert.equal(validateCheckoutPayment({ ...payment, currency_id: "USD" }, intent, plan, now), false);
-  assert.equal(validateCheckoutPayment(payment, { ...intent, usedAt: now }, plan, now), false);
+  assert.equal(validateCheckoutPayment(payment, intent, now, "user-1"), true);
+  assert.equal(validateCheckoutPayment({ ...payment, transaction_amount: 1 }, intent, now), false);
+  assert.equal(validateCheckoutPayment({ ...payment, currency_id: "USD" }, intent, now), false);
+  assert.equal(validateCheckoutPayment(payment, { ...intent, usedAt: now }, now), false);
   assert.equal(
-    validateCheckoutPayment(payment, { ...intent, expiresAt: new Date("2026-07-01T11:00:00.000Z") }, plan, now),
+    validateCheckoutPayment(payment, { ...intent, expiresAt: new Date("2026-07-01T11:00:00.000Z") }, now),
     false,
   );
-  assert.equal(validateCheckoutPayment(payment, intent, plan, now, "user-2"), false);
+  assert.equal(validateCheckoutPayment(payment, intent, now, "user-2"), false);
 });

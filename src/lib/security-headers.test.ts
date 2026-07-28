@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const config = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
+const proxy = readFileSync(join(process.cwd(), "src", "proxy.ts"), "utf8");
 
 test("configuracao de imagens nao aceita host global", () => {
   assert.doesNotMatch(config, /hostname:\s*"\*\*"/);
@@ -14,8 +15,10 @@ test("configuracao de imagens nao aceita host global", () => {
 });
 
 test("respostas incluem CSP HSTS e politica de permissoes", () => {
-  assert.match(config, /Content-Security-Policy/);
+  assert.match(proxy, /Content-Security-Policy/);
+  assert.match(proxy, /'nonce-\$\{nonce\}' 'strict-dynamic'/);
+  assert.doesNotMatch(proxy, /script-src[^;\n]*'unsafe-inline'/);
   assert.match(config, /Strict-Transport-Security/);
   assert.match(config, /Permissions-Policy/);
-  assert.match(config, /frame-src 'self' https:\/\/www\.youtube-nocookie\.com/);
+  assert.match(proxy, /frame-src 'self' https:\/\/www\.youtube-nocookie\.com/);
 });

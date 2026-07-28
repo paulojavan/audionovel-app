@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { formatLaunchAge, groupLatestChapters } from "./latest-chapters";
 
-const novelA = { id: "a", title: "Novel A", slug: "novel-a", coverUrl: "https://example.com/a.jpg" };
-const novelB = { id: "b", title: "Novel B", slug: "novel-b", coverUrl: "https://example.com/b.jpg" };
+const novelA = { id: "a", title: "Novel A", slug: "novel-a", coverUrl: "https://example.com/a.jpg", status: "ONGOING" };
+const novelB = { id: "b", title: "Novel B", slug: "novel-b", coverUrl: "https://example.com/b.jpg", status: "ONGOING" };
 
 test("groupLatestChapters agrupa por novel sem perder a ordem global", () => {
   const groups = groupLatestChapters([

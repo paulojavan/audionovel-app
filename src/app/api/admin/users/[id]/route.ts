@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/api";
+import { parseAppDateEndOfDay } from "@/lib/app-time";
 import { prisma } from "@/lib/prisma";
 
 const userAdminUpdateSchema = z.object({
@@ -14,7 +15,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const parsed = userAdminUpdateSchema.safeParse(await request.json());
+  const parsed = userAdminUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
 
   const data: {
@@ -49,8 +50,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       data.premiumUntil = null;
       manualPremiumUntil = null;
     } else {
-      const date = new Date(`${parsed.data.premiumUntil}T23:59:59.999`);
-      if (Number.isNaN(date.getTime())) return NextResponse.json({ error: "Data premium invalida." }, { status: 400 });
+      const date = parseAppDateEndOfDay(parsed.data.premiumUntil);
+      if (!date) return NextResponse.json({ error: "Data premium invalida." }, { status: 400 });
 
       data.plan = "PREMIUM";
       data.subscriptionStatus = "ACTIVE";
@@ -63,6 +64,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id }, data });
+
+    if (parsed.data.isBlocked === true) {
+      const now = new Date();
+      await tx.userSession.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      await tx.securityEvent.create({
+        data: {
+          userId: id,
+          type: "ACCOUNT_BLOCKED",
+          severity: "HIGH",
+          message: "Conta bloqueada manualmente por um administrador.",
+          metadata: JSON.stringify({ adminUserId: auth.user.id }),
+          createdAt: now,
+        },
+      });
+    }
 
     if (manualPremiumUntil) {
       await tx.manualSubscription.create({

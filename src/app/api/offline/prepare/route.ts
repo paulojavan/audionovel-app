@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit({ key: `offline:${auth.user.id}`, limit: 30, windowMs: 60 * 60_000 });
   if (limited) return limited;
 
-  const { chapterId } = (await request.json()) as { chapterId?: string };
+  const { chapterId } = (await request.json().catch(() => ({}))) as { chapterId?: string };
   if (!chapterId) return NextResponse.json({ error: "Capítulo obrigatório." }, { status: 400 });
 
   if (!hasPremiumAccess(auth.user)) {

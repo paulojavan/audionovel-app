@@ -30,6 +30,7 @@ export function PlayerSettingsMenu({
   placement = "bottom",
 }: PlayerSettingsMenuProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState<CSSProperties | null>(null);
 
@@ -60,11 +61,22 @@ export function PlayerSettingsMenu({
     if (!open) return;
 
     updatePanelPosition();
+    const focusFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLElement>("select, button:not([disabled])")?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
     window.addEventListener("resize", updatePanelPosition);
     window.addEventListener("scroll", updatePanelPosition, true);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener("resize", updatePanelPosition);
       window.removeEventListener("scroll", updatePanelPosition, true);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open, updatePanelPosition]);
 
@@ -76,6 +88,10 @@ export function PlayerSettingsMenu({
   const menuPanel = open && panelPosition && typeof document !== "undefined"
     ? createPortal(
         <div
+          ref={panelRef}
+          id="player-settings-panel"
+          role="dialog"
+          aria-label="Configuracoes do player"
           className="z-[80] grid gap-4 rounded-md border border-white/10 bg-[#031316] p-4 text-left shadow-2xl shadow-black/40"
           style={panelPosition}
         >
@@ -122,6 +138,8 @@ export function PlayerSettingsMenu({
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         aria-label="Configuracoes do player"
         aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls="player-settings-panel"
       >
         <Settings size={20} />
       </button>

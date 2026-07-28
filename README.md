@@ -25,14 +25,18 @@ Segredos devem existir apenas nas variáveis do servidor. Nunca use prefixo `NEX
 Variáveis obrigatórias ou recomendadas em produção:
 
 - `DATABASE_URL`: conexão PostgreSQL usada pelo Prisma.
+- `PRISMA_CONNECTION_LIMIT`: tamanho máximo do pool por processo do Next.js. O padrão é `3`; use `2` ou `3` em planos pequenos do Aiven.
 - `NEXTAUTH_SECRET`: segredo forte da sessão e do hash de rate limit.
 - `RATE_LIMIT_SECRET`: segredo opcional dedicado ao hash de rate limit; se ausente, usa `NEXTAUTH_SECRET`.
-- `NEXTAUTH_URL`: origem pública HTTPS.
+- `TRUSTED_PROXY_IP_HEADER`: cabeçalho de IP sanitizado pelo proxy (`x-real-ip`, `cf-connecting-ip` ou `x-forwarded-for`). Sem ele, produção usa um bucket anônimo conservador.
+- `APP_ORIGIN` (preferencial) ou `NEXTAUTH_URL`: origem pública HTTPS. Em produção, cabeçalhos `Host` enviados pelo cliente nunca são usados para gerar links.
 - `MEDIA_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer áudio, separados por vírgula.
 - `IMAGE_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer capas, separados por vírgula.
 - `MERCADO_PAGO_ACCESS_TOKEN`: credencial privada da API.
 - `MERCADO_PAGO_WEBHOOK_SECRET`: segredo de assinatura do webhook.
 - `AGENTMAIL_API_KEY` e `AGENTMAIL_INBOX_ID`: entrega de recuperação de senha.
+
+O seed não contém senhas padrão. Para executá-lo em desenvolvimento, defina `SEED_ADMIN_PASSWORD` e `SEED_DEMO_PASSWORD` (mínimo de 12 caracteres). Em produção ele é bloqueado; uma carga deliberada exige também `ALLOW_PRODUCTION_SEED=true`.
 
 Exemplo de allowlists, sem credenciais:
 
@@ -50,6 +54,7 @@ Após implantar esta versão no PostgreSQL existente, aplique uma vez:
 
 ```bash
 npx prisma db execute --file prisma/aiven-2026-07-01-security-hardening.sql
+npx prisma db execute --file prisma/aiven-2026-07-28-billing-intent-snapshots.sql
 ```
 
-O script cria a tabela compartilhada de rate limit e os índices usados na recuperação de senha. Downloads offline são criptografados e vinculados ao ID da mesma conta; sair da conta não os transfere para outro usuário.
+Os scripts criam a tabela compartilhada de rate limit, os índices de recuperação de senha e os snapshots imutáveis usados para validar pagamentos. Downloads offline são criptografados e vinculados ao ID da mesma conta; sair da conta não os transfere para outro usuário.

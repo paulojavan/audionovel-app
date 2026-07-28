@@ -12,6 +12,9 @@ export type ApprovedPaymentReference = {
   paymentId: string;
   userId: string;
   planId: string;
+  planName: string;
+  amountCents: number;
+  currency: string;
   premiumDays: number;
   checkoutIntentId: string;
   usedAt: Date | null;
@@ -28,7 +31,8 @@ export function resolveApprovedPaymentReference(
 }
 
 export function resolvePaymentEventUserId(
-  payment: Pick<MercadoPagoPaymentResponse, "external_reference">,
+  payment: Pick<MercadoPagoPaymentResponse, "external_reference"> &
+    Partial<Pick<MercadoPagoPaymentResponse, "id" | "status">>,
   checkoutIntent: Pick<ApprovedPaymentReference, "checkoutIntentId" | "userId"> | { id: string; userId: string } | null,
 ) {
   const checkoutIntentId = payment.external_reference?.trim();
@@ -51,16 +55,11 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
   try {
     return await prisma.$transaction(async (tx) => {
       const now = new Date();
-      const user = await tx.user.findUnique({
-        where: { id: reference.userId },
-        select: { premiumUntil: true },
-      });
-      const plan = await tx.subscriptionPlan.findUnique({
-        where: { id: reference.planId },
-        select: { name: true, amountCents: true, currency: true },
-      });
-      if (!user || !plan) return { status: "missing-target" as const, userId: reference.userId };
-      if (!validateCheckoutPayment(payment, reference, plan, now, options.expectedUserId)) {
+      const [user] = await tx.$queryRaw<Array<{ premiumUntil: Date | null }>>`
+        SELECT "premiumUntil" FROM "User" WHERE "id" = ${reference.userId} FOR UPDATE
+      `;
+      if (!user) return { status: "missing-target" as const, userId: reference.userId };
+      if (!validateCheckoutPayment(payment, reference, now, options.expectedUserId)) {
         return { status: "ignored" as const };
       }
 
@@ -79,7 +78,7 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
         data: {
           plan: "PREMIUM",
           subscriptionStatus: "ACTIVE",
-          premiumUntil: calculateFixedPremiumUntil(user.premiumUntil, reference.premiumDays),
+          premiumUntil: calculateFixedPremiumUntil(user.premiumUntil, reference.premiumDays, now),
         },
       });
 
@@ -89,10 +88,10 @@ export async function applyApprovedMercadoPagoPayment(payment: MercadoPagoPaymen
           providerEventId: options.eventId ?? `mp-payment-${reference.paymentId}-approved`,
           providerPaymentId: reference.paymentId,
           userId: reference.userId,
-          amountCents: toCents(payment.transaction_amount),
-          currency: payment.currency_id!.toLowerCase(),
+          amountCents: reference.amountCents,
+          currency: reference.currency,
           status: "SUCCEEDED",
-          description: `Mercado Pago - ${plan.name} (${reference.premiumDays} dias)`,
+          description: `Mercado Pago - ${reference.planName} (${reference.premiumDays} dias)`,
         },
         update: {},
       });
@@ -119,6 +118,9 @@ async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expe
       id: true,
       userId: true,
       planId: true,
+      planName: true,
+      amountCents: true,
+      currency: true,
       premiumDays: true,
       usedAt: true,
       expiresAt: true,
@@ -131,6 +133,9 @@ async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expe
     paymentId: String(payment.id),
     userId: checkoutIntent.userId,
     planId: checkoutIntent.planId,
+    planName: checkoutIntent.planName,
+    amountCents: checkoutIntent.amountCents,
+    currency: checkoutIntent.currency,
     premiumDays: checkoutIntent.premiumDays,
     checkoutIntentId: checkoutIntent.id,
     usedAt: checkoutIntent.usedAt,
@@ -140,16 +145,15 @@ async function resolvePaymentReference(payment: MercadoPagoPaymentResponse, expe
 
 export function validateCheckoutPayment(
   payment: Pick<MercadoPagoPaymentResponse, "status" | "transaction_amount" | "currency_id">,
-  intent: Pick<ApprovedPaymentReference, "userId" | "usedAt" | "expiresAt">,
-  plan: { amountCents: number; currency: string },
+  intent: Pick<ApprovedPaymentReference, "userId" | "usedAt" | "expiresAt" | "amountCents" | "currency">,
   now = new Date(),
   expectedUserId?: string,
 ) {
   if (payment.status !== "approved") return false;
   if (intent.usedAt || intent.expiresAt.getTime() <= now.getTime()) return false;
   if (expectedUserId && intent.userId !== expectedUserId) return false;
-  if (toCents(payment.transaction_amount) !== plan.amountCents) return false;
-  return payment.currency_id?.toLowerCase() === plan.currency.toLowerCase();
+  if (toCents(payment.transaction_amount) !== intent.amountCents) return false;
+  return payment.currency_id?.toLowerCase() === intent.currency.toLowerCase();
 }
 
 function toCents(amount: number | undefined) {

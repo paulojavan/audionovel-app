@@ -17,7 +17,6 @@ import {
   type ChapterPlaybackPart,
   type ChapterSeekDetail,
 } from "@/lib/chapter-playback";
-import { resolveOnlineAudioFailure } from "@/lib/online-audio-playback";
 
 type Cue = {
   start: number;
@@ -270,6 +269,10 @@ export function AudioPlayer({
         keepalive,
         signal: controller.signal,
       });
+      if (response.status === 429) {
+        if (lastProgressPayloadRef.current === payload) lastProgressPayloadRef.current = "";
+        return;
+      }
       if (!response.ok) throw new Error("Nao foi possivel salvar o progresso.");
       // O servidor confirmou uma posicao mais nova: a versao enfileirada e lixo.
       if (accountScopeRef.current !== "anonymous") {
@@ -429,34 +432,18 @@ export function AudioPlayer({
     const generation = audioGenerationRef.current;
 
     try {
-      let playbackSource: string;
-      try {
+      let playbackSource = currentAudioIdentityRef.current.src;
+      if (!navigator.onLine) {
         playbackSource = await getDownloadedAudioUrl();
         if (generation !== audioGenerationRef.current) return;
-      } catch (error) {
-        if (
-          generation !== audioGenerationRef.current ||
-          error instanceof StaleAudioPlaybackError
-        ) return;
-        const failure = resolveOnlineAudioFailure(error);
-        if (failure.kind === "error") {
-          desiredPlaybackRef.current = false;
-          playbackActiveRef.current = false;
-          setPlaying(false);
-          setKaraokeMode(false);
-          setPlaybackError(failure.message);
-          return;
-        }
-
-        const currentIdentity = currentAudioIdentityRef.current;
-        playbackSource = currentIdentity.src;
-        setAudioSource({
-          chapterId,
-          audioRevision: currentIdentity.audioRevision,
-          source: currentIdentity.src,
-          objectUrl: currentIdentity.src,
-        });
       }
+      const currentIdentity = currentAudioIdentityRef.current;
+      setAudioSource({
+        chapterId,
+        audioRevision: currentIdentity.audioRevision,
+        source: currentIdentity.src,
+        objectUrl: playbackSource,
+      });
 
       if (!audioRef.current) return;
       const activeAudio = audioRef.current;

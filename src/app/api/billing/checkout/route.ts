@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/api";
+import { calculateFixedPremiumUntil } from "@/lib/billing";
 import { buildMercadoPagoPreferencePayload, getCheckoutErrorMessage, getFixedPremiumDays } from "@/lib/billing-checkout";
 import { createMercadoPagoPreference, isMercadoPagoConfigured } from "@/lib/mercado-pago";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
 
   const origin = getPublicOrigin({
     headers: request.headers,
-    envOrigin: process.env.NEXTAUTH_URL,
+    envOrigin: process.env.APP_ORIGIN ?? process.env.NEXTAUTH_URL,
     fallbackOrigin: request.url,
   });
 
@@ -56,6 +57,9 @@ export async function POST(request: Request) {
       data: {
         userId: auth.user.id,
         planId: plan.id,
+        planName: plan.name,
+        amountCents: plan.amountCents,
+        currency: plan.currency.toLowerCase(),
         premiumDays,
         expiresAt,
       },
@@ -71,7 +75,7 @@ export async function POST(request: Request) {
     });
 
     const preference = await createMercadoPagoPreference(preferencePayload, {
-      idempotencyKey: `checkout-${auth.user.id}-${plan.id}-${Date.now()}`,
+      idempotencyKey: `checkout-${checkoutIntent.id}`,
     });
 
     const url = preference.init_point ?? preference.sandbox_init_point;
@@ -93,15 +97,21 @@ export async function POST(request: Request) {
 }
 
 async function activateDevSubscription(userId: string, plan: { id: string; name: string; interval: string; premiumDays: number; amountCents: number; currency: string }) {
-  const premiumUntil = new Date();
-  premiumUntil.setDate(premiumUntil.getDate() + getFixedPremiumDays(plan));
+  await prisma.$transaction(async (tx) => {
+    const [user] = await tx.$queryRaw<Array<{ premiumUntil: Date | null }>>`
+      SELECT "premiumUntil" FROM "User" WHERE "id" = ${userId} FOR UPDATE
+    `;
+    if (!user) throw new Error("Usuario nao encontrado.");
 
-  await prisma.$transaction([
-    prisma.user.update({
+    await tx.user.update({
       where: { id: userId },
-      data: { plan: "PREMIUM", subscriptionStatus: "ACTIVE", premiumUntil },
-    }),
-    prisma.paymentTransaction.create({
+      data: {
+        plan: "PREMIUM",
+        subscriptionStatus: "ACTIVE",
+        premiumUntil: calculateFixedPremiumUntil(user.premiumUntil, getFixedPremiumDays(plan)),
+      },
+    });
+    await tx.paymentTransaction.create({
       data: {
         userId,
         providerEventId: `dev-subscription-${plan.id}-${userId}-${Date.now()}`,
@@ -110,6 +120,6 @@ async function activateDevSubscription(userId: string, plan: { id: string; name:
         status: "TEST",
         description: `Assinatura ${plan.name} ativada para teste local`,
       },
-    }),
-  ]);
+    });
+  });
 }

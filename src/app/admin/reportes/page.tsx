@@ -1,4 +1,5 @@
 import { AdminBugReportStatusForm } from "@/components/admin-bug-report-status-form";
+import { formatAppDateTime } from "@/lib/app-time";
 import { ADMIN_BUG_REPORT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 
@@ -33,7 +34,7 @@ export default async function AdminBugReportsPage() {
                     <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-zinc-200">{statusLabels[report.status] ?? report.status}</span>
                   </div>
                   <p className="mt-1 text-sm text-zinc-400">
-                    {report.user?.name ?? "Usuario removido"} - {report.user?.email ?? "sem email"} - {report.createdAt.toLocaleString("pt-BR")}
+                    {report.user?.name ?? "Usuario removido"} - {report.user?.email ?? "sem email"} - {formatAppDateTime(report.createdAt)}
                   </p>
                   {report.pageUrl ? <p className="mt-1 break-all text-xs text-[#b8fbff]">{report.pageUrl}</p> : null}
                 </div>

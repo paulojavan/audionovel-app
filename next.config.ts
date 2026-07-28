@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 
-const isDevelopment = process.env.NODE_ENV === "development";
 const isProduction = process.env.NODE_ENV === "production";
 const allowedImageHosts = Array.from(
   new Set(
@@ -16,23 +15,6 @@ const allowedImageHosts = Array.from(
       .filter(Boolean),
   ),
 );
-const imageSources = allowedImageHosts.map((host) => `https://${host}`).join(" ");
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' blob: data: ${imageSources}`,
-  "media-src 'self' blob:",
-  "connect-src 'self'",
-  "worker-src 'self' blob:",
-  "frame-src 'self' https://www.youtube-nocookie.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'self'",
-  "upgrade-insecure-requests",
-].join("; ");
-
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: allowedImageHosts.map((hostname) => ({ protocol: "https" as const, hostname })),
@@ -93,17 +75,15 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [
-          { key: "Cache-Control", value: "no-cache, must-revalidate" },
           // Headers de segurança mobile
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Content-Security-Policy", value: contentSecurityPolicy },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self), usb=()" },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           ...(isProduction
             ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]
             : []),
-          // Permite instalação PWA em todos os navegadores
           { key: "Cross-Origin-Embedder-Policy", value: "unsafe-none" },
         ],
       },

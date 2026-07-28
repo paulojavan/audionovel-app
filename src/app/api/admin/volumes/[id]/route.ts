@@ -15,7 +15,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const parsed = volumeUpdateSchema.safeParse(await request.json());
+  const parsed = volumeUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
 
   try {

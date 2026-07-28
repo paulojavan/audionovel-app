@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit({ key: `comments:${auth.user.id}`, limit: 12, windowMs: 60_000 });
   if (limited) return limited;
 
-  const parsed = commentSchema.safeParse(await request.json());
+  const parsed = commentSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Comentario invalido." }, { status: 400 });
 
   const parent = parsed.data.parentId

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
   const batch = chapterBatchSchema.safeParse(body);
   const single = chapterSchema.safeParse(body);
   const batchPayload = typeof body === "object" && body !== null && "chapters" in body;

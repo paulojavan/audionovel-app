@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronDown, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState, useTransition } from "react";
+import { formatAppDate } from "@/lib/app-time";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { AdminDeleteButton } from "./admin-delete-button";
 
@@ -183,5 +184,5 @@ export function AdminVolumeAccordion({ volumes }: { volumes: AdminVolume[] }) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value));
+  return formatAppDate(value, { dateStyle: "medium" });
 }

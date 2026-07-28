@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { ArrowRight, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { setBrowserAccountScopeConfirmed } from "@/lib/account-scope";
 import { ensureClientDeviceToken, getClientDeviceName } from "@/lib/client-device";
@@ -62,10 +63,10 @@ export function LoginForm({
       setError(
         result?.error === "RATE_LIMITED"
           ? "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
-          : "E-mail ou senha invalidos.",
+          : "E-mail ou senha inválidos.",
       );
     } catch {
-      setError("Nao foi possivel preparar este dispositivo. Verifique a conexao e tente novamente.");
+      setError("Não foi possível preparar este dispositivo. Verifique a conexão e tente novamente.");
     } finally {
       if (!keepPendingForNavigation) {
         submittingRef.current = false;
@@ -76,44 +77,78 @@ export function LoginForm({
 
   return (
     <>
-      <form onSubmit={submitLogin} aria-busy={pending} className="mt-6 grid gap-4">
-        {error ? <p className="rounded-md bg-red-500/10 p-3 text-sm text-red-300">{error}</p> : null}
-        <label className="grid gap-2 text-sm font-bold text-zinc-200">
+      <form onSubmit={submitLogin} aria-busy={pending} className="mt-7 grid gap-5">
+        {error ? (
+          <p role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/8 p-3.5 text-sm leading-6 text-red-200">
+            {error}
+          </p>
+        ) : null}
+
+        <label className="grid gap-2 text-sm font-bold text-[#d6e5e7]">
           E-mail
-          <input
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            disabled={pending}
-            className="min-h-12 rounded-md border border-white/10 bg-[#020809] px-4 py-3 text-white outline-none ring-[#18b7bd]/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-          />
+          <span className="relative">
+            <Mail
+              size={18}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#5d7c80]"
+            />
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="voce@exemplo.com"
+              required
+              disabled={pending}
+              className="min-h-13 w-full rounded-xl border border-white/10 bg-[#020b0d]/75 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-[#526b6f] hover:border-white/20 focus:border-[#22d3dc]/50 focus:ring-4 focus:ring-[#18b7bd]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </span>
         </label>
-        <label className="grid gap-2 text-sm font-bold text-zinc-200">
+
+        <label className="grid gap-2 text-sm font-bold text-[#d6e5e7]">
           Senha
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            disabled={pending}
-            className="min-h-12 rounded-md border border-white/10 bg-[#020809] px-4 py-3 text-white outline-none ring-[#18b7bd]/40 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-          />
+          <span className="relative">
+            <LockKeyhole
+              size={18}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#5d7c80]"
+            />
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Digite sua senha"
+              required
+              disabled={pending}
+              className="min-h-13 w-full rounded-xl border border-white/10 bg-[#020b0d]/75 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-[#526b6f] hover:border-white/20 focus:border-[#22d3dc]/50 focus:ring-4 focus:ring-[#18b7bd]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </span>
         </label>
+
         <Link
           href="/recuperar-senha"
           aria-disabled={pending}
           tabIndex={pending ? -1 : undefined}
-          className="justify-self-end text-sm font-bold text-[#8ff7ff] hover:text-white"
+          className="justify-self-end text-sm font-bold text-[#72e8ed] transition hover:text-white"
         >
           Esqueci minha senha
         </Link>
+
         <button
           type="submit"
           disabled={pending}
-          className="min-h-12 rounded-full bg-[#18b7bd] px-5 py-3 font-black text-[#021114] hover:bg-[#22d3dc] disabled:cursor-not-allowed disabled:opacity-60"
+          className="group inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-[#18b7bd] px-5 py-3 font-black text-[#021114] shadow-xl shadow-[#18b7bd]/15 transition hover:-translate-y-0.5 hover:bg-[#32d5dc] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {pending ? "Entrando..." : "Entrar"}
+          {pending ? (
+            <>
+              <LoaderCircle size={19} className="animate-spin" aria-hidden="true" />
+              Entrando...
+            </>
+          ) : (
+            <>
+              Entrar
+              <ArrowRight size={18} className="transition group-hover:translate-x-0.5" aria-hidden="true" />
+            </>
+          )}
         </button>
       </form>
 
@@ -128,17 +163,16 @@ export function LoginForm({
         tabIndex={-1}
       >
         <div
-          className="grid w-full max-w-xs justify-items-center gap-5 rounded-2xl border border-white/10 bg-[#031316] p-7 text-center shadow-2xl shadow-black/60"
+          className="grid w-full max-w-xs justify-items-center gap-5 rounded-3xl border border-white/10 bg-[#06171a] p-8 text-center shadow-2xl shadow-black/60"
           role="status"
           aria-live="polite"
         >
-          <div
-            className="h-24 w-24 animate-spin rounded-full border-[7px] border-white/15 border-t-[#18b7bd] motion-reduce:animate-none"
-            aria-hidden="true"
-          />
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#18b7bd]/10 text-[#55e1e7]">
+            <LoaderCircle size={38} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          </div>
           <div className="grid gap-2">
             <p id="login-loading-title" className="text-xl font-black text-white">Entrando...</p>
-            <p id="login-loading-description" className="text-sm text-zinc-300">
+            <p id="login-loading-description" className="text-sm leading-6 text-[#9bb4b8]">
               Aguarde enquanto verificamos seus dados.
             </p>
           </div>

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   const origin = getPublicOrigin({
     headers: request.headers,
-    envOrigin: process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL,
+    envOrigin: process.env.APP_ORIGIN ?? process.env.NEXTAUTH_URL,
     fallbackOrigin: new URL(request.url).origin,
   });
   const result = await createPasswordResetRequest(parsed.data.email, origin);

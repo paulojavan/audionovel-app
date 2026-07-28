@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { getAppDateInputValue } from "@/lib/app-time";
 
 export const FAVORITE_NOVEL_NEW_CHAPTERS = "FAVORITE_NOVEL_NEW_CHAPTERS";
 
@@ -10,20 +11,12 @@ type NotificationInput = {
 };
 
 export function buildFavoriteChapterNotification(input: NotificationInput) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(input.publishedAt);
-  const value = (type: "year" | "month" | "day") => parts.find((part) => part.type === type)?.value ?? "";
-  const year = value("year");
-  const month = value("month");
-  const day = value("day");
+  const publicationDate = getAppDateInputValue(input.publishedAt);
+  const [year, month, day] = publicationDate.split("-");
 
   return {
     type: FAVORITE_NOVEL_NEW_CHAPTERS,
-    eventKey: `${input.novelId}:${year}-${month}-${day}`,
+    eventKey: `${input.novelId}:${publicationDate}`,
     title: "Novos capítulos adicionados",
     message: `Novos capítulos adicionados à novel ${input.novelTitle} em ${day}/${month}/${year}.`,
     href: `/novels/${input.novelSlug}`,

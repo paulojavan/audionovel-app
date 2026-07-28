@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AdminNav } from "@/components/admin-nav";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getActiveServerSession();

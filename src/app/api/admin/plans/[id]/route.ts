@@ -8,7 +8,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const parsed = subscriptionPlanSchema.safeParse(await request.json());
+  const parsed = subscriptionPlanSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Plano invalido." }, { status: 400 });
 
   const plan = await prisma.subscriptionPlan.update({

@@ -1,3 +1,4 @@
+import { formatAppDateTime } from "@/lib/app-time";
 import { getRecentSecurityEvents } from "@/lib/device-session";
 
 export default async function AdminSecurityPage() {
@@ -24,7 +25,7 @@ export default async function AdminSecurityPage() {
                 </p>
                 <p className="mt-1 text-xs font-bold uppercase text-[#8ff7ff]">{event.type}</p>
               </div>
-              <time className="text-sm text-zinc-400">{new Date(event.createdAt).toLocaleString("pt-BR")}</time>
+              <time className="text-sm text-zinc-400">{formatAppDateTime(event.createdAt)}</time>
             </article>
           ))
         ) : (

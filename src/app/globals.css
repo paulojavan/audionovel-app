@@ -75,6 +75,11 @@ textarea {
   font: inherit;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+
 /* Inputs — evita zoom em iOS ao focar (mínimo 16px) */
 input[type="text"],
 input[type="email"],

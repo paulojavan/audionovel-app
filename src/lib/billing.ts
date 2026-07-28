@@ -22,6 +22,6 @@ export function calculateFixedPremiumUntil(currentPremiumUntil: Date | string | 
   const current = currentPremiumUntil ? new Date(currentPremiumUntil) : null;
   const base = current && current.getTime() > now.getTime() ? current : now;
   const next = new Date(base);
-  next.setDate(next.getDate() + premiumDays);
+  next.setUTCDate(next.getUTCDate() + premiumDays);
   return next;
 }

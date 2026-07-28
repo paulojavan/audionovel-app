@@ -51,6 +51,7 @@ export const PUBLIC_NOVEL_SELECT = {
       title: true,
       position: true,
       chapters: {
+        where: { published: true },
         orderBy: { position: "asc" },
         select: {
           id: true,
@@ -254,6 +255,7 @@ export const CHAPTER_MEDIA_SOURCE_SELECT = {
   id: true,
   contentType: true,
   audioUrl: true,
+  premiumOnly: true,
 } as const satisfies Prisma.ChapterSelect;
 
 export const CHAPTER_AUDIO_REVISION_SELECT = {

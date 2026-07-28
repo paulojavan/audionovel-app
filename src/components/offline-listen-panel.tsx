@@ -11,6 +11,7 @@ import {
   OfflineAudioInvalidError,
   removeOfflineItem,
 } from "@/lib/audio-cache";
+import { formatAppDate } from "@/lib/app-time";
 import { getInitialResumePosition, isPlaybackComplete, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import { getQueuedProgress, queueProgress } from "@/lib/progress-outbox";
 import { OfflineCryptoUnavailableError, OFFLINE_CRYPTO_UNAVAILABLE_MESSAGE } from "@/lib/offline-crypto";
@@ -393,7 +394,7 @@ export function OfflineListenPanel({ accountScope, items }: { accountScope: stri
                     <span className="text-sm text-zinc-400">
                       {item.volumeTitle} - Capitulo {item.chapterPositionLabel ?? item.chapterPosition}
                     </span>
-                    <span className="text-xs text-zinc-500">Disponivel ate {new Date(item.expiresAt).toLocaleDateString("pt-BR")}</span>
+                    <span className="text-xs text-zinc-500">Disponivel ate {formatAppDate(item.expiresAt)}</span>
                   </button>
                 ))}
               </div>

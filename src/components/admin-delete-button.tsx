@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 type AdminDeleteButtonProps = {
   endpoint: string;
@@ -16,6 +16,17 @@ export function AdminDeleteButton({ endpoint, label, confirmMessage, redirectTo 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
+  const dialogRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+    dialogRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pending) setConfirmOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [confirmOpen, pending]);
 
   function deleteItem() {
     setMessage("");
@@ -59,7 +70,13 @@ export function AdminDeleteButton({ endpoint, label, confirmMessage, redirectTo 
       {message ? <span className="max-w-48 text-right text-xs text-red-300">{message}</span> : null}
       {confirmOpen ? (
         <span
+          ref={dialogRef}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-delete-title"
+          aria-describedby="admin-delete-description"
+          tabIndex={-1}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -71,8 +88,8 @@ export function AdminDeleteButton({ endpoint, label, confirmMessage, redirectTo 
                 <AlertTriangle size={22} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-lg font-black text-white">Confirmar exclusao</span>
-                <span className="mt-1 block text-sm leading-6 text-zinc-300">{confirmMessage}</span>
+                <span id="admin-delete-title" className="block text-lg font-black text-white">Confirmar exclusao</span>
+                <span id="admin-delete-description" className="mt-1 block text-sm leading-6 text-zinc-300">{confirmMessage}</span>
               </span>
               <button
                 type="button"

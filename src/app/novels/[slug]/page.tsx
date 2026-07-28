@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,11 +16,39 @@ import { getCachedPublicNovel } from "@/lib/public-data";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
 
-export default async function NovelPage({ params }: { params: Promise<{ slug: string }> }) {
+type NovelPageProps = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: NovelPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const [novel, session] = await Promise.all([
+  const novel = await getCachedPublicNovel(slug);
+  if (!novel) return { title: "Novel nao encontrada", robots: { index: false, follow: false } };
+
+  return {
+    title: novel.title,
+    description: novel.synopsis,
+    alternates: { canonical: `/novels/${slug}` },
+    openGraph: {
+      type: "article",
+      url: `/novels/${slug}`,
+      title: novel.title,
+      description: novel.synopsis,
+      images: [{ url: novel.coverUrl, alt: `Capa de ${novel.title}` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: novel.title,
+      description: novel.synopsis,
+      images: [novel.coverUrl],
+    },
+  };
+}
+
+export default async function NovelPage({ params }: NovelPageProps) {
+  const { slug } = await params;
+  const [novel, session, requestHeaders] = await Promise.all([
     getCachedPublicNovel(slug),
     getActiveServerSession(),
+    headers(),
   ]);
 
   if (!novel) notFound();
@@ -55,12 +85,34 @@ export default async function NovelPage({ params }: { params: Promise<{ slug: st
   const isLoggedIn = Boolean(session?.user?.id && !session.user.isBlocked);
   const canUseOffline = hasPremiumAccess(session?.user);
   const statusLabel = getNovelStatusLabel(novel.status);
+  const structuredData = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Book",
+    name: novel.title,
+    author: { "@type": "Person", name: novel.author },
+    description: novel.synopsis,
+    image: novel.coverUrl,
+    url: `https://audionovelbr.com.br/novels/${slug}`,
+    aggregateRating: novel.ratingCount
+      ? {
+          "@type": "AggregateRating",
+          ratingValue: novel.ratingScore,
+          ratingCount: novel.ratingCount,
+          bestRating: 5,
+        }
+      : undefined,
+  }).replaceAll("<", "\\u003c");
 
   return (
     <div className="px-4 py-6 md:px-8">
+      <script
+        type="application/ld+json"
+        nonce={requestHeaders.get("x-nonce") ?? undefined}
+        dangerouslySetInnerHTML={{ __html: structuredData }}
+      />
       <section className="mb-8 grid gap-6 md:grid-cols-[220px_1fr]">
         <div className="relative aspect-square w-full max-w-[260px] overflow-hidden rounded-lg shadow-2xl">
-          <Image src={novel.coverUrl} alt="" fill sizes="(min-width: 768px) 220px, 260px" className="object-cover" />
+          <Image src={novel.coverUrl} alt={`Capa de ${novel.title}`} fill sizes="(min-width: 768px) 220px, 260px" className="object-cover" />
           <span className="absolute right-3 top-3 rounded-full bg-[#18b7bd] px-3 py-1 text-xs font-black uppercase text-[#021114] shadow-lg shadow-black/30">
             {statusLabel}
           </span>

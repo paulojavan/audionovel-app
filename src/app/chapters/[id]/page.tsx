@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
@@ -23,7 +24,36 @@ type Cue = {
   text: string;
 };
 
-export default async function ChapterPage({ params }: { params: Promise<{ id: string }> }) {
+type ChapterPageProps = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: ChapterPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const chapter = await prisma.chapter.findUnique({
+    where: { id, published: true },
+    select: {
+      title: true,
+      coverUrl: true,
+      volume: { select: { novel: { select: { title: true, coverUrl: true } } } },
+    },
+  });
+  if (!chapter) return { title: "Capitulo nao encontrado", robots: { index: false, follow: false } };
+
+  const description = `Ouça ${chapter.title}, de ${chapter.volume.novel.title}, no Audio Novel BR.`;
+  return {
+    title: `${chapter.title} — ${chapter.volume.novel.title}`,
+    description,
+    alternates: { canonical: `/chapters/${id}` },
+    openGraph: {
+      type: "article",
+      url: `/chapters/${id}`,
+      title: chapter.title,
+      description,
+      images: [{ url: chapter.coverUrl ?? chapter.volume.novel.coverUrl, alt: `Capa de ${chapter.volume.novel.title}` }],
+    },
+  };
+}
+
+export default async function ChapterPage({ params }: ChapterPageProps) {
   const { id } = await params;
   const session = await getActiveServerSession();
   const access = await canPlayChapter(id, session?.user?.id);

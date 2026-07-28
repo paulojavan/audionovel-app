@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const progressSchema = z.object({
   chapterId: z.string().min(1),
-  positionSec: z.number().int().min(0),
-  durationSec: z.number().int().min(0),
+  positionSec: z.number().int().min(0).max(7 * 24 * 60 * 60),
+  durationSec: z.number().int().min(0).max(7 * 24 * 60 * 60),
   completed: z.boolean().default(false),
 });
 

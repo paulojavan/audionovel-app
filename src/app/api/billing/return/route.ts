@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyApprovedMercadoPagoPayment } from "@/lib/billing-reconciliation";
-import { getCheckoutReturnPaymentId, getCleanCheckoutReturnPath, isApprovedCheckoutReturn } from "@/lib/billing-return";
+import { getCheckoutReturnPaymentId, getCleanCheckoutReturnPath } from "@/lib/billing-return";
 import { getMercadoPagoPayment } from "@/lib/mercado-pago";
 import { getPublicOrigin } from "@/lib/public-origin";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -30,10 +30,10 @@ export async function GET(request: Request) {
 
   const origin = getPublicOrigin({
     headers: request.headers,
-    envOrigin: process.env.NEXTAUTH_URL,
+    envOrigin: process.env.APP_ORIGIN ?? process.env.NEXTAUTH_URL,
     fallbackOrigin: url.origin,
   });
 
-  const returnPath = paymentApplied || isApprovedCheckoutReturn(params) ? "/assinaturas?checkout=success" : getCleanCheckoutReturnPath(params);
+  const returnPath = paymentApplied ? "/assinaturas?checkout=success" : getCleanCheckoutReturnPath(params);
   return NextResponse.redirect(new URL(returnPath, origin));
 }

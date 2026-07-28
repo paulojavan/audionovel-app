@@ -12,8 +12,18 @@ const transcript = JSON.stringify([
 ]);
 
 async function main() {
-  const adminPasswordHash = await hashPassword("admin123456");
-  const demoPasswordHash = await hashPassword("usuario123456");
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    throw new Error("Seed bloqueado em producao. Use ALLOW_PRODUCTION_SEED=true somente em uma operacao controlada.");
+  }
+
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const demoPassword = process.env.SEED_DEMO_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12 || !demoPassword || demoPassword.length < 12) {
+    throw new Error("Defina SEED_ADMIN_PASSWORD e SEED_DEMO_PASSWORD com pelo menos 12 caracteres.");
+  }
+
+  const adminPasswordHash = await hashPassword(adminPassword);
+  const demoPasswordHash = await hashPassword(demoPassword);
 
   await prisma.user.upsert({
     where: { email: "admin@novelbeat.local" },

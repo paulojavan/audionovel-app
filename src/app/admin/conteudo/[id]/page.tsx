@@ -28,7 +28,7 @@ export default async function AdminNovelPanelPage({ params }: { params: Promise<
       </Link>
 
       <section className="grid gap-5 rounded-lg bg-[#06272b] p-4 md:grid-cols-[180px_1fr]">
-        <Image src={novel.coverUrl} alt="" width={360} height={360} className="aspect-square w-full max-w-48 rounded-md object-cover" />
+        <Image src={novel.coverUrl} alt={`Capa de ${novel.title}`} width={360} height={360} className="aspect-square w-full max-w-48 rounded-md object-cover" />
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-3xl font-black">{novel.title}</h2>

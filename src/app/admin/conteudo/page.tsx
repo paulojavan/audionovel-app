@@ -43,6 +43,7 @@ export default async function AdminContentPage({
 
       <form className="flex flex-col gap-2 rounded-lg bg-[#06272b] p-3 sm:flex-row" action="/admin/conteudo">
         <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Pesquisar novels por titulo, autor ou sinopse</span>
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
             name="q"
@@ -77,7 +78,7 @@ export default async function AdminContentPage({
                 href={`/admin/conteudo/${novel.id}`}
                 className="grid gap-4 rounded-lg bg-[#06272b] p-3 hover:bg-[#08353a] md:grid-cols-[96px_1fr_auto]"
               >
-                <Image src={novel.coverUrl} alt="" width={192} height={192} className="aspect-square w-24 rounded-md object-cover" />
+                <Image src={novel.coverUrl} alt={`Capa de ${novel.title}`} width={192} height={192} className="aspect-square w-24 rounded-md object-cover" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-xl font-black">{novel.title}</h3>

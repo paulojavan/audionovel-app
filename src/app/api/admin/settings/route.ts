@@ -12,7 +12,7 @@ export async function PATCH(request: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
-  const parsed = settingsSchema.safeParse(await request.json());
+  const parsed = settingsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Configuracoes invalidas." }, { status: 400 });
 
   await updateSystemSettings(parsed.data);

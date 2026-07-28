@@ -15,6 +15,7 @@ declare module "next-auth" {
       isBlocked?: boolean | null;
       sessionId?: string | null;
       sessionInvalid?: boolean | null;
+      userAgentHash?: string | null;
     };
   }
 
@@ -26,6 +27,7 @@ declare module "next-auth" {
     isBlocked?: boolean | null;
     sessionId?: string | null;
     sessionInvalid?: boolean | null;
+    userAgentHash?: string | null;
   }
 }
 
@@ -41,5 +43,6 @@ declare module "next-auth/jwt" {
     sessionInvalid?: boolean | null;
     sessionCheckedAt?: number | null;
     sessionValidatedAt?: number | null;
+    userAgentHash?: string | null;
   }
 }

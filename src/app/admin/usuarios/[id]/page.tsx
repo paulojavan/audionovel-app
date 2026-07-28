@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminUserDetailActions } from "@/components/admin-user-detail-actions";
 import { ADMIN_USER_DETAIL_SELECT } from "@/lib/page-data-select";
+import { formatAppDate, formatAppDateTime, getAppDateInputValue } from "@/lib/app-time";
 import { prisma } from "@/lib/prisma";
 import { hasPremiumAccess } from "@/lib/subscription";
 
@@ -41,7 +42,7 @@ export default async function AdminUserStatsPage({ params }: { params: Promise<{
   const totalPaid = user.payments
     .filter((payment) => payment.status === "SUCCEEDED")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
-  const premiumUntilValue = user.premiumUntil ? user.premiumUntil.toISOString().slice(0, 10) : "";
+  const premiumUntilValue = user.premiumUntil ? getAppDateInputValue(user.premiumUntil) : "";
   const premium = hasPremiumAccess(user);
 
   return (
@@ -77,7 +78,7 @@ export default async function AdminUserStatsPage({ params }: { params: Promise<{
                   <Link key={novel.slug} href={`/novels/${novel.slug}`} className="rounded-md bg-black/40 p-3 hover:bg-white/10">
                     <strong>{novel.title}</strong>
                     <span className="block text-sm text-zinc-400">
-                      {novel.source} - atualizado em {novel.updatedAt.toLocaleDateString("pt-BR")}
+                      {novel.source} - atualizado em {formatAppDate(novel.updatedAt)}
                     </span>
                   </Link>
                 ))
@@ -100,7 +101,7 @@ export default async function AdminUserStatsPage({ params }: { params: Promise<{
                       <span className="text-sm font-bold text-[#18b7bd]">{label}</span>
                       {comment.chapter ? <span className="block text-xs text-zinc-500">Capitulo: {comment.chapter.title}</span> : null}
                       <p className="mt-2 text-zinc-300">{comment.body}</p>
-                      <span className="mt-2 block text-xs text-zinc-500">{comment.createdAt.toLocaleString("pt-BR")}</span>
+                      <span className="mt-2 block text-xs text-zinc-500">{formatAppDateTime(comment.createdAt)}</span>
                     </Link>
                   );
                 })

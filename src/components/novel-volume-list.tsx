@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, Lock, Play, PlaySquare } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatAppDate } from "@/lib/app-time";
 import { getChapterPartsForDisplay, type ChapterPart } from "@/lib/chapter-grouping";
 import { getChapterPositionLabel } from "@/lib/chapter-time";
 import { getSavedOfflineItems } from "@/lib/audio-cache";
@@ -268,5 +269,5 @@ export function NovelVolumeList({
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value));
+  return formatAppDate(value, { dateStyle: "medium" });
 }

@@ -23,6 +23,7 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const name = String(formData.get("name") ?? "");
+    const currentPassword = String(formData.get("currentPassword") ?? "");
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
@@ -41,7 +42,7 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
       const response = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, password, confirmPassword }),
+        body: JSON.stringify({ name, currentPassword, password, confirmPassword }),
       });
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(body?.error ?? "Nao foi possivel atualizar o perfil.");
@@ -90,7 +91,17 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
         />
       </label>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="grid gap-2 text-sm font-bold text-zinc-200">
+          Senha atual
+          <input
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            className="min-h-12 rounded-md border border-white/10 bg-[#020809] px-4 py-3 text-white outline-none ring-[#18b7bd]/40 focus:ring-2"
+          />
+        </label>
+
         <label className="grid gap-2 text-sm font-bold text-zinc-200">
           Nova senha
           <input

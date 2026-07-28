@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   let chapterIds: string[];
   try {
-    const body = await request.json() as { chapterIds?: unknown };
+    const body = await request.json().catch(() => ({})) as { chapterIds?: unknown };
     chapterIds = normalizeRenewalChapterIds(body.chapterIds);
   } catch (error) {
     return NextResponse.json(

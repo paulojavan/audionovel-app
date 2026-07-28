@@ -8,6 +8,10 @@ export function getPublicOrigin({ headers, envOrigin, fallbackOrigin }: PublicOr
   const normalizedEnvOrigin = normalizeOrigin(envOrigin);
   if (normalizedEnvOrigin && !isLocalOrigin(normalizedEnvOrigin)) return normalizedEnvOrigin;
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Configure APP_ORIGIN ou NEXTAUTH_URL com uma origem publica HTTPS.");
+  }
+
   const forwardedOrigin = getForwardedOrigin(headers);
   if (forwardedOrigin && !isLocalOrigin(forwardedOrigin)) return forwardedOrigin;
 

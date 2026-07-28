@@ -18,19 +18,21 @@ test("normaliza nome e ignora senha vazia na edicao de perfil", () => {
 test("aceita nova senha quando confirmacao confere", () => {
   const parsed = parseProfileUpdatePayload({
     name: "Novo Nome",
+    currentPassword: "senha-antiga",
     password: "senha1234",
     confirmPassword: "senha1234",
   });
 
   assert.equal(parsed.success, true);
   if (parsed.success) {
-    assert.deepEqual(parsed.data, { name: "Novo Nome", password: "senha1234" });
+    assert.deepEqual(parsed.data, { name: "Novo Nome", currentPassword: "senha-antiga", password: "senha1234" });
   }
 });
 
 test("rejeita nova senha quando confirmacao nao confere", () => {
   const parsed = parseProfileUpdatePayload({
     name: "Novo Nome",
+    currentPassword: "senha-antiga",
     password: "senha1234",
     confirmPassword: "diferente123",
   });

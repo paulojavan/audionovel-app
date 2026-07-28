@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
 
-  const { novelId } = (await request.json()) as { novelId?: string };
+  const { novelId } = (await request.json().catch(() => ({}))) as { novelId?: string };
   if (!novelId) return NextResponse.json({ error: "Novel obrigatória." }, { status: 400 });
 
   await prisma.favorite.upsert({
@@ -22,7 +22,7 @@ export async function DELETE(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
 
-  const { novelId } = (await request.json()) as { novelId?: string };
+  const { novelId } = (await request.json().catch(() => ({}))) as { novelId?: string };
   if (!novelId) return NextResponse.json({ error: "Novel obrigatória." }, { status: 400 });
 
   await prisma.favorite.deleteMany({ where: { userId: auth.user.id, novelId } });

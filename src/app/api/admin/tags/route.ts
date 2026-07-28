@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
-  const parsed = tagSchema.safeParse(await request.json());
+  const parsed = tagSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Tag invalida." }, { status: 400 });
 
   const slug = slugify(parsed.data.name, { fallback: "tag", maxLength: 38 });

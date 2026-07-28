@@ -32,6 +32,7 @@ export default async function NovelsPage({
 
       <form className="mb-4 flex flex-col gap-2 rounded-lg bg-[#06272b] p-3 sm:flex-row" action="/novels">
         <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Pesquisar novels por titulo, autor ou sinopse</span>
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
             name="q"

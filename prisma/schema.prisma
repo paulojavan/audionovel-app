@@ -293,6 +293,9 @@ model BillingCheckoutIntent {
   id          String    @id @default(cuid())
   userId      String
   planId      String
+  planName    String
+  amountCents Int
+  currency    String
   premiumDays Int
   usedAt      DateTime?
   expiresAt   DateTime

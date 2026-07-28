@@ -244,7 +244,7 @@ function PwaNotice({
 
   return (
     <aside
-      role="dialog"
+      role="status"
       aria-live="polite"
       aria-label={title}
       style={{
@@ -274,7 +274,6 @@ function PwaNotice({
             width={56}
             height={56}
             className="h-full w-full object-cover"
-            priority
           />
           {/* Colored badge icon overlay */}
           <span
@@ -379,7 +378,7 @@ function IosInstallGuide({ onDismiss }: { onDismiss: () => void }) {
 
   return (
     <aside
-      role="dialog"
+      role="region"
       aria-live="polite"
       aria-label="Como instalar no iOS"
       style={{
@@ -401,7 +400,6 @@ function IosInstallGuide({ onDismiss }: { onDismiss: () => void }) {
               width={40}
               height={40}
               className="h-full w-full object-cover"
-              priority
             />
           </div>
           <div className="flex-1 min-w-0">

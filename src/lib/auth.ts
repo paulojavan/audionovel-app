@@ -95,6 +95,7 @@ export const authOptions: NextAuthOptions = {
           premiumUntil: dbUser.premiumUntil?.toISOString() ?? null,
           isBlocked: dbUser.isBlocked,
           sessionId: deviceSession.sessionId,
+          userAgentHash: deviceSession.userAgentHash,
           sessionInvalid: false,
         };
       },
@@ -122,6 +123,7 @@ export const authOptions: NextAuthOptions = {
         token.premiumUntil = dbUser?.premiumUntil?.toISOString() ?? user.premiumUntil;
         token.isBlocked = dbUser?.isBlocked ?? user.isBlocked;
         token.sessionId = user.sessionId ?? token.sessionId;
+        token.userAgentHash = user.userAgentHash ?? token.userAgentHash;
         token.sessionInvalid = user.sessionInvalid ?? false;
         token.sessionCheckedAt = 0;
       }

@@ -36,10 +36,8 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
       .catch((err) => {
         console.warn("[SW] Cache install error:", err);
-        return self.skipWaiting();
       }),
   );
 });

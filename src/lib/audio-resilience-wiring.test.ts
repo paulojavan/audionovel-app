@@ -102,37 +102,23 @@ test("player offline grava a posicao no dispositivo e retoma de onde parou", () 
   assert.match(offlinePlayer, /getInitialResumePosition\(queuedProgress\.positionSec, queuedProgress\.durationSec, queuedProgress\.completed\)/);
 });
 
-test("player baixa o audio completo no cache criptografado antes de entregar o blob ao elemento audio", () => {
+test("player preserva o cache criptografado para reproducao offline", () => {
   assert.match(player, /getEncryptedAudioUrl/);
   assert.match(player, /mode:\s*"temporary"/);
   assert.match(player, /URL\.revokeObjectURL/);
   assert.match(player, /src=\{activeAudioSource \|\| undefined\}/);
-  assert.match(downloadModal, /Baixando audio/);
-  assert.match(player, /downloadPercent/);
-  assert.match(player, /AudioDownloadModal/);
-  assert.doesNotMatch(player, /h-3 overflow-hidden[\s\S]{0,300}downloadPercent/);
+  assert.match(player, /if \(!navigator\.onLine\) \{\s*playbackSource = await getDownloadedAudioUrl\(\)/);
   assert.doesNotMatch(player, /preload="metadata"/);
 });
 
-test("player online usa streaming direto somente quando o cache permite fallback", () => {
-  assert.match(
-    player,
-    /import \{ resolveOnlineAudioFailure \} from "@\/lib\/online-audio-playback"/,
-  );
-  assert.match(
-    player,
-    /getEncryptedAudioUrl\(chapterId, identity\.src,[\s\S]*?catch \(error\)[\s\S]*?resolveOnlineAudioFailure\(error\)/,
-  );
-  assert.match(
-    player,
-    /if \(failure\.kind === "error"\) \{[\s\S]*?setPlaybackError\(failure\.message\);[\s\S]*?return;/,
-  );
-  assert.match(player, /playbackSource = currentIdentity\.src/);
+test("player online inicia streaming direto sem baixar o arquivo inteiro", () => {
+  assert.match(player, /let playbackSource = currentAudioIdentityRef\.current\.src/);
   assert.match(
     player,
     /activeAudio\.getAttribute\("src"\) !== playbackSource/,
   );
   assert.match(player, /activeAudio\.src = playbackSource/);
+  assert.doesNotMatch(player, /resolveOnlineAudioFailure/);
   assert.doesNotMatch(
     offlinePlayer,
     /resolveOnlineAudioFailure|playbackSource = currentIdentity\.src/,
@@ -205,7 +191,8 @@ test("erro do elemento local nao tenta reiniciar streaming", () => {
 });
 
 test("servidor grava a conclusao mais recente e nao aborta streaming depois dos cabecalhos", () => {
-  assert.match(progressRoute, /completed:\s*parsed\.data\.completed,/);
+  assert.match(progressRoute, /const completed = isPlaybackComplete\(positionSec, durationSec\)/);
+  assert.doesNotMatch(progressRoute, /completed:\s*parsed\.data\.completed/);
   assert.doesNotMatch(progressRoute, /\? true : undefined/);
   assert.match(audioUpstream, /new AbortController/);
   assert.match(audioUpstream, /clearTimeout/);
@@ -252,9 +239,9 @@ test("rota protege criacao sincrona do stream e registra apenas campos sanitizad
 });
 
 test("rota preserva autorizacao, validacao offline e rejeicao de redirect", () => {
-  assert.match(audioRoute, /canPlayChapter\(id, session\?\.user\?\.id\)/);
-  assert.match(audioRoute, /if \(!access\.allowed \|\| !access\.chapter\)/);
-  assert.match(audioRoute, /enforceRateLimit\(/);
+  assert.match(audioRoute, /select:\s*CHAPTER_MEDIA_SOURCE_SELECT/);
+  assert.match(audioRoute, /media\.premiumOnly && !hasPremiumAccess\(session\?\.user\)/);
+  assert.match(audioRoute, /checkRateLimit\(/);
   assert.match(audioRoute, /if \(!session\?\.user\?\.id\)/);
   assert.match(audioRoute, /prisma\.offlineDownload\.findFirst/);
   assert.match(audioRoute, /prisma\.offlineDownload\.update/);

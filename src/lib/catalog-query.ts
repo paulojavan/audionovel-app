@@ -15,11 +15,12 @@ export type CatalogFilters = {
 };
 
 export function normalizeCatalogQuery(params: CatalogSearchParams): CatalogFilters {
+  const parsedPage = Number.parseInt(params.page ?? "1", 10);
   return {
-    query: params.q?.trim() ?? "",
-    selectedTag: params.tag?.trim() ?? "",
-    selectedAuthor: params.author?.trim() ?? "",
-    currentPage: Math.max(1, Number(params.page ?? 1) || 1),
+    query: (params.q?.trim() ?? "").slice(0, 100),
+    selectedTag: (params.tag?.trim() ?? "").slice(0, 80),
+    selectedAuthor: (params.author?.trim() ?? "").slice(0, 120),
+    currentPage: Number.isSafeInteger(parsedPage) ? Math.min(10_000, Math.max(1, parsedPage)) : 1,
   };
 }
 

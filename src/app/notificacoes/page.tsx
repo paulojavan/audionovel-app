@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NotificationReadButton } from "@/components/notification-read-button";
+import { formatAppDateTime } from "@/lib/app-time";
 import { NOTIFICATION_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
@@ -51,7 +52,7 @@ export default async function NotificationsPage() {
             >
               <p className="font-bold">{notification.title}</p>
               <p className="mt-1 text-sm text-zinc-300">{notification.message}</p>
-              <span className="mt-2 block text-xs text-zinc-500">{notification.createdAt.toLocaleString("pt-BR")}</span>
+              <span className="mt-2 block text-xs text-zinc-500">{formatAppDateTime(notification.createdAt)}</span>
             </Link>
           ))
         ) : (

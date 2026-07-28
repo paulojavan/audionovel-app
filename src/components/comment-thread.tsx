@@ -1,5 +1,6 @@
 import { CommentActions } from "./comment-actions";
 import { CommentBodyText } from "./comment-body-text";
+import { formatAppDateTime } from "@/lib/app-time";
 
 type CommentThreadProps = {
   target: "novel" | "chapter";
@@ -84,7 +85,7 @@ function CommentBody({ comment }: { comment: CommentItem | ReplyItem }) {
     <>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-bold">{removed ? "Moderacao" : comment.user.name}</p>
-        <span className="text-xs text-zinc-500">{comment.createdAt.toLocaleString("pt-BR")}</span>
+        <span className="text-xs text-zinc-500">{formatAppDateTime(comment.createdAt)}</span>
         {comment.editedAt && !removed ? <span className="text-xs text-zinc-500">editado</span> : null}
       </div>
       {removed ? (

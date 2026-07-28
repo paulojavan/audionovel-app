@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { canPlayChapter } from "@/lib/api";
 import { openAudioUpstream } from "@/lib/audio-upstream";
 import { prisma } from "@/lib/prisma";
 import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
-import { enforceRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
+import { checkRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
 import {
   createResumableAudioStream,
   isSafeAudioPassThroughResponse,
 } from "@/lib/resumable-audio-stream";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
+import { hasPremiumAccess } from "@/lib/subscription";
 import { isSafeMediaHttpsUrl } from "@/lib/url-security";
 
 type Context = {
@@ -22,28 +22,40 @@ const LAST_USED_WRITE_THROTTLE_MS = 5 * 60_000;
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
   const session = await getActiveServerSession();
-  const access = await canPlayChapter(id, session?.user?.id);
-
-  if (!access.allowed || !access.chapter) {
-    return NextResponse.json({ error: access.reason }, { status: access.status });
-  }
 
   const media = await prisma.chapter.findUnique({
     where: { id, published: true },
     select: CHAPTER_MEDIA_SOURCE_SELECT,
   });
 
-  if (!media || media.contentType !== "AUDIO" || !media.audioUrl) {
+  if (!media) {
+    return NextResponse.json({ error: "Capitulo nao encontrado." }, { status: 404 });
+  }
+  if (media.premiumOnly && !session?.user?.id) {
+    return NextResponse.json({ error: "Faca login para ouvir este capitulo." }, { status: 401 });
+  }
+  if (media.premiumOnly && !hasPremiumAccess(session?.user)) {
+    return NextResponse.json({ error: "Capitulo disponivel apenas para premium." }, { status: 402 });
+  }
+  if (media.contentType !== "AUDIO" || !media.audioUrl) {
     return NextResponse.json({ error: "Este capitulo nao possui audio hospedado." }, { status: 400 });
   }
   const audioUrl = media.audioUrl;
 
-  const limited = await enforceRateLimit({
+  // Range requests fazem parte do streaming normal. Um contador em memoria
+  // evita uma escrita no PostgreSQL para cada chunk; o proxy/CDN deve aplicar
+  // o limite distribuido de borda em producao.
+  const rateLimit = checkRateLimit({
     key: `audio:${id}:${getRequestIdentifier(request, session?.user?.id)}`,
-    limit: 120,
+    limit: 240,
     windowMs: 60_000,
   });
-  if (limited) return limited;
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Muitas requisicoes de audio. Aguarde um pouco." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSec) } },
+    );
+  }
 
   if (!isSafeMediaHttpsUrl(audioUrl)) {
     return NextResponse.json({ error: "URL de audio invalida ou nao permitida." }, { status: 400 });

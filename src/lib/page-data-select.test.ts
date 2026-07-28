@@ -80,7 +80,7 @@ test("pagina de capitulo restringe a novel relacionada", () => {
 
   assert.deepEqual(Object.keys(novel).sort(), ["coverUrl", "slug", "title"]);
   assert.equal("audioUrl" in CHAPTER_PAGE_SELECT, false);
-  assert.deepEqual(Object.keys(CHAPTER_MEDIA_SOURCE_SELECT).sort(), ["audioUrl", "contentType", "id"]);
+  assert.deepEqual(Object.keys(CHAPTER_MEDIA_SOURCE_SELECT).sort(), ["audioUrl", "contentType", "id", "premiumOnly"]);
   assert.equal(CHAPTER_PAGE_SELECT.transcriptJson, true);
   assert.equal(CHAPTER_PAGE_SELECT.audioRevision, true);
   assert.equal(PUBLIC_NOVEL_SELECT.volumes.select.chapters.select.audioRevision, true);

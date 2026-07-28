@@ -1,4 +1,5 @@
 import { getConfirmedPaymentWhere, getPendingPaymentWhere } from "@/lib/admin-payments";
+import { appZonedDateTimeToDate, formatAppDate } from "@/lib/app-time";
 import { ADMIN_PAYMENT_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getFinanceMonthPeriod } from "@/lib/finance-period";
@@ -64,7 +65,7 @@ export default async function AdminFinancePage({
                 </span>
                 <span>{payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)}</span>
                 <span>{payment.status}</span>
-                <span className="text-zinc-400">{payment.createdAt.toLocaleDateString("pt-BR")}</span>
+                <span className="text-zinc-400">{formatAppDate(payment.createdAt)}</span>
               </div>
             ))
           ) : (
@@ -85,7 +86,7 @@ export default async function AdminFinancePage({
                 </span>
                 <span>{payment.currency.toUpperCase()} {(payment.amountCents / 100).toFixed(2)}</span>
                 <span>{payment.status}</span>
-                <span className="text-zinc-400">{payment.createdAt.toLocaleDateString("pt-BR")}</span>
+                <span className="text-zinc-400">{formatAppDate(payment.createdAt)}</span>
               </div>
             ))
           ) : (
@@ -120,9 +121,10 @@ async function getPaymentStats(start: Date, end: Date) {
 
 function formatMonth(month: string) {
   const [year, monthIndex] = month.split("-").map(Number);
-  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(
-    new Date(Date.UTC(year, monthIndex - 1, 1)),
-  );
+  return formatAppDate(appZonedDateTimeToDate(year, monthIndex, 1), {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function FinanceCard({ label, value }: { label: string; value: string }) {

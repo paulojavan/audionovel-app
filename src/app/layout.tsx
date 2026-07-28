@@ -29,6 +29,22 @@ export const metadata: Metadata = {
     template: "%s | Audio Novel BR",
   },
   description: "Ouça novels com áudio, texto sincronizado, assinatura premium e modo offline. Plataforma brasileira de audiolivros e web novels.",
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    url: "/",
+    siteName: "Audio Novel BR",
+    title: "Audio Novel BR",
+    description: "Ouça novels com áudio, texto sincronizado e modo offline.",
+    images: [{ url: "/icons/icon-512x512.png", width: 512, height: 512, alt: "Audio Novel BR" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Audio Novel BR",
+    description: "Ouça novels com áudio, texto sincronizado e modo offline.",
+    images: ["/icons/icon-512x512.png"],
+  },
+  robots: { index: true, follow: true },
   manifest: "/manifest.webmanifest",
   keywords: ["audio novel", "audiolivro", "web novel", "novels brasileiras", "ouvir novel"],
   icons: {

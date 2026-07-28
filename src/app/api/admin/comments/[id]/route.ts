@@ -12,7 +12,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if ("error" in auth) return auth.error;
 
   const { id } = await context.params;
-  const parsed = moderationSchema.safeParse(await request.json());
+  const parsed = moderationSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Acao invalida." }, { status: 400 });
 
   const comment = await prisma.comment.findUnique({
