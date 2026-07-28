@@ -47,8 +47,9 @@ export function PublicLandingPage() {
                 <Image
                   src="/logo-audio-novel-br.png"
                   alt=""
-                  fill
-                  className="object-cover"
+                  width={40}
+                  height={40}
+                  className="block h-full w-full object-cover"
                   sizes="40px"
                 />
               </span>
@@ -76,16 +77,15 @@ export function PublicLandingPage() {
         </header>
 
         <div className="relative min-h-[68svh] flex-1 overflow-hidden bg-[#01070a] sm:min-h-[72svh]">
-          <div className="absolute inset-0">
-            <Image
-              src="/hero-audio-novel-br.png"
-              alt="Áudio Novel BR — livro aberto iluminado e microfone com ondas sonoras"
-              fill
-              className="object-cover object-center"
-              sizes="100vw"
-              priority
-            />
-          </div>
+          <Image
+            src="/hero-audio-novel-br.png"
+            alt="Áudio Novel BR — livro aberto iluminado e microfone com ondas sonoras"
+            width={1731}
+            height={909}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            sizes="100vw"
+            priority
+          />
           <div className="absolute inset-0 bg-gradient-to-b from-[#02090b]/35 via-transparent to-[#02090b]/75 sm:from-[#02090b]/20 sm:to-[#02090b]/45" />
           <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#02090b] to-transparent" />
         </div>
@@ -179,8 +179,9 @@ export function PublicLandingPage() {
             <Image
               src="/logo-audio-novel-br.png"
               alt="Livro e microfone representando a experiência Áudio Novel BR"
-              fill
-              className="object-cover"
+              width={1254}
+              height={1254}
+              className="h-full w-full object-cover"
               sizes="(min-width: 1024px) 48vw, 100vw"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#061518]/80 via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:to-[#061518]/55" />
