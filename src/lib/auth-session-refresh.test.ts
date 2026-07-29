@@ -10,6 +10,7 @@ function createToken(overrides: Record<string, unknown> = {}) {
     id: "user-1",
     sessionId: "session-1",
     sessionInvalid: false,
+    sessionUnavailable: false,
     sessionCheckedAt: 1,
     sessionValidatedAt: 1,
     email: "old@example.com",
@@ -109,7 +110,7 @@ test("graces a transient device failure without advancing the anchor or reading 
   ]);
 });
 
-test("repeated transient user refresh failures preserve the old anchor and fail at five minutes", async () => {
+test("repeated transient user refresh failures preserve the old anchor and mark the session unavailable at five minutes", async () => {
   const anchor = 100_000;
   const token = createToken({ sessionCheckedAt: anchor, sessionValidatedAt: anchor });
   const transient = { code: "P2024" };
@@ -132,8 +133,9 @@ test("repeated transient user refresh failures preserve the old anchor and fail 
     },
   });
 
-  await assert.rejects(expiredHarness.run, (error) => error === transient);
+  await expiredHarness.run();
   assert.equal(token.sessionValidatedAt, anchor);
+  assert.equal(token.sessionUnavailable, true);
   assert.equal(expiredHarness.failures.at(-1)?.graceApplied, false);
 });
 
@@ -229,6 +231,7 @@ test("uses legacy checkedAt once as the fixed trusted anchor", async () => {
     },
   });
 
-  await assert.rejects(expiredHarness.run, (error) => error === transient);
+  await expiredHarness.run();
   assert.equal(token.sessionValidatedAt, anchor);
+  assert.equal(token.sessionUnavailable, true);
 });

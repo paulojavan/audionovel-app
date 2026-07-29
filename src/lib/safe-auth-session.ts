@@ -77,8 +77,16 @@ function buildSessionFromToken(token: JWT): Session | null {
       isBlocked: token.isBlocked === true,
       sessionId,
       sessionInvalid: false,
+      sessionUnavailable: false,
     },
   };
+}
+
+export class AuthSessionUnavailableError extends Error {
+  constructor() {
+    super("Nao foi possivel verificar a sessao no banco de dados.");
+    this.name = "AuthSessionUnavailableError";
+  }
 }
 
 export const getSafeServerSession = cache(async function getSafeServerSession() {
@@ -86,8 +94,29 @@ export const getSafeServerSession = cache(async function getSafeServerSession() 
   if (!token) return null;
 
   try {
-    return await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
+    if (session?.user?.sessionUnavailable) {
+      throw new AuthSessionUnavailableError();
+    }
+    if (session) return session;
+
+    // O NextAuth 4 captura erros do callback JWT internamente e devolve null.
+    // Um JWT ainda legivel e completo nao deve virar "deslogado" por causa de
+    // uma oscilacao do banco: usamos a mesma ancora curta de seguranca e,
+    // depois dela, exibimos indisponibilidade em vez da tela de login.
+    const fallback = buildSessionFromToken(token);
+    if (!fallback) return null;
+
+    const now = Date.now();
+    const grace = evaluateSessionDatabaseGrace({
+      now,
+      lastValidatedAt: getTrustedValidationAnchor(token),
+      sessionInvalid: token.sessionInvalid === true,
+    });
+    if (grace.allowed) return fallback;
+    throw new AuthSessionUnavailableError();
   } catch (error) {
+    if (error instanceof AuthSessionUnavailableError) throw error;
     if (!isTransientPrismaSessionError(error)) throw error;
 
     const now = Date.now();
@@ -106,7 +135,7 @@ export const getSafeServerSession = cache(async function getSafeServerSession() 
     });
 
     if (grace.allowed) return buildSessionFromToken(token);
-    return null;
+    throw new AuthSessionUnavailableError();
   }
 });
 

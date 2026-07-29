@@ -419,7 +419,10 @@ export function createResumableAudioStream({
     cleanUpAbortListener();
     continuationAbort.abort(error);
     cancelActiveReader(error);
-    controller?.error(error);
+    // O navegador cancela requisicoes de range ao pausar, buscar outra
+    // posicao ou trocar de capitulo. Isso encerra o downstream normalmente e
+    // nao deve chegar ao runtime do Next como uncaughtException/ECONNRESET.
+    controller?.close();
   }
 
   async function openContinuation() {

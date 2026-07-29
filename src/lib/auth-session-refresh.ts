@@ -8,6 +8,7 @@ export type EstablishedSessionToken = {
   id?: string | null;
   sessionId?: string | null;
   sessionInvalid?: boolean | null;
+  sessionUnavailable?: boolean | null;
   sessionCheckedAt?: number | null;
   sessionValidatedAt?: number | null;
   email?: string | null;
@@ -93,6 +94,7 @@ export async function refreshEstablishedSession({
     now - lastValidatedAt >= SESSION_DATABASE_GRACE_MS;
   if (
     token.sessionInvalid !== true &&
+    token.sessionUnavailable !== true &&
     lastCheckedAt !== null &&
     now - lastCheckedAt < validationIntervalMs &&
     !graceExpired
@@ -125,6 +127,7 @@ export async function refreshEstablishedSession({
   try {
     deviceSession = await validateDeviceSession(token.sessionId);
   } catch (error) {
+    const transient = isTransientPrismaSessionError(error);
     const grace = evaluateGrace(error);
     logDatabaseFailure({
       error,
@@ -133,10 +136,16 @@ export async function refreshEstablishedSession({
       remainingMs: grace.remainingMs,
       now,
     });
-    if (!grace.allowed) {
+    if (!transient) {
       throw error;
     }
+    if (!grace.allowed) {
+      token.sessionUnavailable = true;
+      token.sessionCheckedAt = now;
+      return token;
+    }
 
+    token.sessionUnavailable = false;
     token.sessionCheckedAt = now;
     return token;
   }
@@ -144,6 +153,7 @@ export async function refreshEstablishedSession({
   token.sessionCheckedAt = now;
   if (!deviceSession.valid) {
     token.sessionInvalid = true;
+    token.sessionUnavailable = false;
     token.id = undefined;
     return token;
   }
@@ -157,6 +167,7 @@ export async function refreshEstablishedSession({
   try {
     userState = await findUserState(token.id);
   } catch (error) {
+    const transient = isTransientPrismaSessionError(error);
     const grace = evaluateGrace(error);
     logDatabaseFailure({
       error,
@@ -165,10 +176,15 @@ export async function refreshEstablishedSession({
       remainingMs: grace.remainingMs,
       now,
     });
-    if (!grace.allowed) {
+    if (!transient) {
       throw error;
     }
+    if (!grace.allowed) {
+      token.sessionUnavailable = true;
+      return token;
+    }
 
+    token.sessionUnavailable = false;
     return token;
   }
 
@@ -181,6 +197,7 @@ export async function refreshEstablishedSession({
     userState?.subscriptionStatus ?? token.subscriptionStatus;
   token.premiumUntil =
     userState?.premiumUntil?.toISOString() ?? token.premiumUntil;
+  token.sessionUnavailable = false;
   token.sessionValidatedAt = now;
 
   return token;

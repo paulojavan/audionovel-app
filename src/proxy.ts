@@ -15,6 +15,7 @@ const publicFiles = new Set([
   "/apple-touch-icon.png",
   "/logo-audio-novel-br.png",
   "/offline-fallback.html",
+  "/loading-fallback.html",
   "/sw.js",
 ]);
 

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth-shell";
 import { LoginForm } from "@/components/login-form";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 export const metadata: Metadata = {
   title: "Entrar",
@@ -14,6 +16,17 @@ export default async function LoginPage({
   searchParams: Promise<{ blocked?: string; signup?: string; callbackUrl?: string }>;
 }) {
   const { blocked, signup, callbackUrl } = await searchParams;
+  const session = await getActiveServerSession();
+  if (session) {
+    const safeCallbackUrl =
+      callbackUrl?.startsWith("/") &&
+      !callbackUrl.startsWith("//") &&
+      !callbackUrl.startsWith("/login")
+        ? callbackUrl
+        : "/";
+    redirect(safeCallbackUrl);
+  }
+
   const initialError =
     blocked === "1"
       ? "Usuário bloqueado. Entre em contato com o administrador via Discord."

@@ -74,14 +74,16 @@ test("coalesces simultaneous established-session database lookups", () => {
   );
 });
 
-test("keeps new-login hydration fail-closed without invoking database grace", () => {
+test("hydrates a new login from the user already verified by authorize", () => {
   const newLoginBranch = sourceBetween(
     authSource,
     "if (user?.email) {",
     "if (token.id && !token.sessionId)",
   );
 
-  assert.match(newLoginBranch, /await prisma\.user\.findUnique/);
+  assert.doesNotMatch(newLoginBranch, /prisma\.user\.findUnique/);
+  assert.match(newLoginBranch, /token\.id = user\.id/);
+  assert.match(newLoginBranch, /token\.sessionValidatedAt = now/);
   assert.doesNotMatch(newLoginBranch, /evaluateSessionDatabaseGrace/);
   assert.doesNotMatch(newLoginBranch, /isTransientPrismaSessionError/);
   assert.doesNotMatch(newLoginBranch, /logSessionDatabaseFailure/);
@@ -97,7 +99,7 @@ test("records successful device validation as the trustworthy grace anchor", () 
 
   assert.ok(userStateAssignmentIndex >= 0);
   assert.ok(validationAnchorIndex > userStateAssignmentIndex);
-  assert.doesNotMatch(authSource, /token\.sessionValidatedAt = now;/);
+  assert.match(authSource, /token\.sessionValidatedAt = now;/);
 });
 
 test("handles explicit invalid device sessions before any user-state refresh", () => {
@@ -118,5 +120,12 @@ test("safe session fallback preserves validated JWT during transient database fa
   assert.match(safeAuthSource, /buildSessionFromToken/);
   assert.match(safeAuthSource, /catch \(error\)[\s\S]*isTransientPrismaSessionError\(error\)/);
   assert.match(safeAuthSource, /grace\.allowed[\s\S]*return buildSessionFromToken/);
-  assert.match(safeAuthSource, /return null/);
+  assert.match(safeAuthSource, /throw new AuthSessionUnavailableError/);
+});
+
+test("propagates temporary database unavailability without clearing JWT identity", () => {
+  assert.match(refreshSource, /token\.sessionUnavailable = true/);
+  assert.match(authSource, /session\.user\.sessionUnavailable = Boolean\(token\.sessionUnavailable\)/);
+  assert.match(safeAuthSource, /session\?\.user\?\.sessionUnavailable/);
+  assert.match(safeAuthSource, /class AuthSessionUnavailableError/);
 });

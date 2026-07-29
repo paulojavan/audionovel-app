@@ -1,14 +1,12 @@
-import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { authOptions } from "./auth";
 import { CHAPTER_AUDIO_REVISION_SELECT, CHAPTER_PAGE_SELECT, REQUIRE_USER_SELECT } from "./page-data-select";
 import { prisma } from "./prisma";
-import { hasActiveSessionUser } from "./session-state";
+import { getActiveServerSession } from "./safe-auth-session";
 import { hasPremiumAccess } from "./subscription";
 
 export async function requireUser() {
-  const session = await getServerSession(authOptions);
-  if (!hasActiveSessionUser(session)) {
+  const session = await getActiveServerSession();
+  if (!session) {
     return { error: NextResponse.json({ error: "Não autenticado." }, { status: 401 }) };
   }
 

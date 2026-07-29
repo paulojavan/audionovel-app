@@ -25,7 +25,7 @@ Segredos devem existir apenas nas variáveis do servidor. Nunca use prefixo `NEX
 Variáveis obrigatórias ou recomendadas em produção:
 
 - `DATABASE_URL`: conexão PostgreSQL usada pelo Prisma.
-- `PRISMA_CONNECTION_LIMIT`: tamanho máximo do pool por processo do Next.js. O padrão é `3`; use `2` ou `3` em planos pequenos do Aiven.
+- `PRISMA_CONNECTION_LIMIT`: override opcional do pool por processo do Next.js. Sem ele, a aplicação preserva `connection_limit` da `DATABASE_URL`; se nenhum dos dois existir, usa `3`.
 - `NEXTAUTH_SECRET`: segredo forte da sessão e do hash de rate limit.
 - `RATE_LIMIT_SECRET`: segredo opcional dedicado ao hash de rate limit; se ausente, usa `NEXTAUTH_SECRET`.
 - `TRUSTED_PROXY_IP_HEADER`: cabeçalho de IP sanitizado pelo proxy (`x-real-ip`, `cf-connecting-ip` ou `x-forwarded-for`). Sem ele, produção usa um bucket anônimo conservador.

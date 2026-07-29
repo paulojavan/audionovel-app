@@ -13,3 +13,16 @@ test("hasActiveSessionUser rejects missing or revoked session state", () => {
 test("hasActiveSessionUser accepts active session state carried by the jwt", () => {
   assert.equal(hasActiveSessionUser({ user: { id: "user-1", sessionId: "session-1", sessionInvalid: false, isBlocked: false } }), true);
 });
+
+test("hasActiveSessionUser rejects a temporarily unverifiable session", () => {
+  assert.equal(
+    hasActiveSessionUser({
+      user: {
+        id: "user-1",
+        sessionId: "session-1",
+        sessionUnavailable: true,
+      },
+    }),
+    false,
+  );
+});

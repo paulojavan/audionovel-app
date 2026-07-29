@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#18b7bd">
+  <title>Carregando - Audio Novel BR</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      min-height: 100vh;
+      min-height: 100svh;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(24,183,189,.16), transparent 28rem),
+        linear-gradient(180deg, #03191c, #020b0d);
+      color: #f8ffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-align: center;
+    }
+    main {
+      width: min(100%, 26rem);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      background: rgba(6,39,43,.82);
+      box-shadow: 0 2rem 5rem rgba(0,0,0,.35);
+    }
+    .mark {
+      display: grid;
+      width: 4rem;
+      height: 4rem;
+      margin: 0 auto 1.25rem;
+      place-items: center;
+      border-radius: 1.25rem;
+      background: rgba(24,183,189,.12);
+      color: #55e1e7;
+      font-size: 2rem;
+    }
+    p:first-of-type {
+      margin: 0 0 .5rem;
+      color: #65e3e9;
+      font-size: .75rem;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: 1.6rem; line-height: 1.2; }
+    .message { margin: 1rem 0 0; color: #a7bec2; line-height: 1.6; }
+    button {
+      width: 100%;
+      min-height: 3rem;
+      margin-top: 1.5rem;
+      border: 0;
+      border-radius: 999px;
+      background: #18b7bd;
+      color: #021114;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+    }
+    button:disabled { opacity: .65; cursor: wait; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">↻</div>
+    <p>Audio Novel BR</p>
+    <h1>O aplicativo demorou para responder</h1>
+    <p class="message">Sua sessão continua salva. Aguarde alguns segundos e tente carregar novamente.</p>
+    <button type="button" onclick="retry(this)">Tentar novamente</button>
+  </main>
+  <script>
+    function retry(button) {
+      button.disabled = true;
+      button.textContent = "Carregando...";
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

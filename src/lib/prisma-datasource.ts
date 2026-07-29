@@ -8,9 +8,15 @@ export function getPrismaDatasourceUrl(
 
   try {
     const url = new URL(rawUrl);
+    const connectionLimit =
+      normalizeConfiguredConnectionLimit(configuredLimit) ??
+      normalizeConfiguredConnectionLimit(
+        url.searchParams.get("connection_limit") ?? undefined,
+      ) ??
+      DEFAULT_CONNECTION_LIMIT;
     url.searchParams.set(
       "connection_limit",
-      String(normalizeConnectionLimit(configuredLimit)),
+      String(connectionLimit),
     );
     return url.toString();
   } catch {
@@ -21,8 +27,12 @@ export function getPrismaDatasourceUrl(
 }
 
 export function normalizeConnectionLimit(value: string | undefined) {
+  return normalizeConfiguredConnectionLimit(value) ?? DEFAULT_CONNECTION_LIMIT;
+}
+
+function normalizeConfiguredConnectionLimit(value: string | undefined) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 50
     ? parsed
-    : DEFAULT_CONNECTION_LIMIT;
+    : null;
 }

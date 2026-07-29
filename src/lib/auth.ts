@@ -60,11 +60,20 @@ export const authOptions: NextAuthOptions = {
         const requestIdentifier = getRequestIdentifierFromHeaders(
           (request as AuthRequestLike | undefined)?.headers,
         );
-        const [ipLimit, emailLimit] = await Promise.all([
-          consumeRateLimit({ key: `login:ip:${requestIdentifier}`, limit: 12, windowMs: 15 * 60_000 }),
-          consumeRateLimit({ key: `login:email:${email}`, limit: 8, windowMs: 15 * 60_000 }),
-        ]);
-        if (!ipLimit.allowed || !emailLimit.allowed) {
+        const ipLimit = await consumeRateLimit({
+          key: `login:ip:${requestIdentifier}`,
+          limit: 12,
+          windowMs: 15 * 60_000,
+        });
+        if (!ipLimit.allowed) {
+          throw new Error("RATE_LIMITED");
+        }
+        const emailLimit = await consumeRateLimit({
+          key: `login:email:${email}`,
+          limit: 8,
+          windowMs: 15 * 60_000,
+        });
+        if (!emailLimit.allowed) {
           throw new Error("RATE_LIMITED");
         }
 
@@ -97,6 +106,7 @@ export const authOptions: NextAuthOptions = {
           sessionId: deviceSession.sessionId,
           userAgentHash: deviceSession.userAgentHash,
           sessionInvalid: false,
+          sessionUnavailable: false,
         };
       },
     }),
@@ -104,28 +114,19 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user?.email) {
-        const dbUser = await prisma.user.findUnique({
-          where: { email: user.email.toLowerCase() },
-          select: {
-            id: true,
-            role: true,
-            plan: true,
-            subscriptionStatus: true,
-            premiumUntil: true,
-            isBlocked: true,
-          },
-        });
-
-        token.id = dbUser?.id ?? user.id;
-        token.role = dbUser?.role ?? user.role;
-        token.plan = dbUser?.plan ?? user.plan;
-        token.subscriptionStatus = dbUser?.subscriptionStatus ?? user.subscriptionStatus;
-        token.premiumUntil = dbUser?.premiumUntil?.toISOString() ?? user.premiumUntil;
-        token.isBlocked = dbUser?.isBlocked ?? user.isBlocked;
+        const now = Date.now();
+        token.id = user.id;
+        token.role = user.role;
+        token.plan = user.plan;
+        token.subscriptionStatus = user.subscriptionStatus;
+        token.premiumUntil = user.premiumUntil;
+        token.isBlocked = user.isBlocked;
         token.sessionId = user.sessionId ?? token.sessionId;
         token.userAgentHash = user.userAgentHash ?? token.userAgentHash;
         token.sessionInvalid = user.sessionInvalid ?? false;
-        token.sessionCheckedAt = 0;
+        token.sessionUnavailable = user.sessionUnavailable ?? false;
+        token.sessionCheckedAt = now;
+        token.sessionValidatedAt = now;
       }
 
       if (token.id && !token.sessionId) {
@@ -174,6 +175,7 @@ export const authOptions: NextAuthOptions = {
         session.user.isBlocked = Boolean(token.isBlocked);
         session.user.sessionId = token.sessionId as string | null;
         session.user.sessionInvalid = Boolean(token.sessionInvalid);
+        session.user.sessionUnavailable = Boolean(token.sessionUnavailable);
       }
       return session;
     },

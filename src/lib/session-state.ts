@@ -3,6 +3,7 @@ type SessionLike = {
     id?: string | null;
     sessionId?: string | null;
     sessionInvalid?: boolean | null;
+    sessionUnavailable?: boolean | null;
     isBlocked?: boolean | null;
   } | null;
 } | null;
@@ -18,5 +19,11 @@ type ActiveSessionLike = {
 
 export function hasActiveSessionUser<T extends SessionLike>(session: T): session is NonNullable<T> & ActiveSessionLike {
   const user = session?.user;
-  return Boolean(user?.id && user.sessionId && !user.sessionInvalid && !user.isBlocked);
+  return Boolean(
+    user?.id &&
+      user.sessionId &&
+      !user.sessionInvalid &&
+      !user.sessionUnavailable &&
+      !user.isBlocked,
+  );
 }

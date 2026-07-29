@@ -1,15 +1,16 @@
-// Audio Novel BR - Service Worker v14
+// Audio Novel BR - Service Worker v15
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v14";
-const RELEASE_REVISION = "pwa-icon-consistency-2026-07-28";
-const PREVIOUS_CACHE_VERSION = "v13";
+const CACHE_VERSION = "v15";
+const RELEASE_REVISION = "pwa-startup-recovery-2026-07-29";
+const PREVIOUS_CACHE_VERSION = "v14";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
 const ACCOUNT_META_URL = "/__audio-novel-account-scope__";
 const ANONYMOUS_ACCOUNT_SCOPE = "anonymous";
+const NAVIGATION_RESPONSE_TIMEOUT_MS = 12_000;
 
 // Assets críticos para funcionamento offline
 const STATIC_ASSETS = [
@@ -28,17 +29,29 @@ const STATIC_ASSETS = [
   "/icons/icon-512x512.png?v=20260728-3",
   "/icons/maskable-512x512.png?v=20260728-3",
   "/offline-fallback.html",
+  "/loading-fallback.html",
 ];
 
 // ─── INSTALL ────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
-      .catch((err) => {
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const results = await Promise.allSettled(
+          STATIC_ASSETS.map((asset) => cache.add(asset)),
+        );
+        if (results.some((result) => result.status === "rejected")) {
+          console.warn("[SW] Alguns arquivos do cache inicial nao foram salvos.");
+        }
+      } catch (err) {
         console.warn("[SW] Cache install error:", err);
-      }),
+      } finally {
+        // Uma versao quebrada nao pode ficar controlando o PWA enquanto a
+        // correcao aguarda um clique numa interface que talvez nem carregue.
+        await self.skipWaiting();
+      }
+    })(),
   );
 });
 
@@ -176,12 +189,14 @@ async function cacheFirst(request) {
   }
 }
 
-async function networkOnlyWithOfflineFallback(request) {
-  try {
-    return await fetch(request);
-  } catch {
-    return getOfflineFallback();
-  }
+async function networkOnlyWithOfflineFallback(
+  request,
+  timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
+) {
+  const result = await waitForNetworkResult(fetch(request), timeoutMs);
+  if (result.kind === "response") return result.response;
+  if (result.kind === "failure") return getOfflineFallback();
+  return getNavigationRecoveryFallback();
 }
 
 function isCacheableNavigationPath(pathname) {
@@ -201,12 +216,14 @@ function getNavigationCacheKey(request) {
   return url.href;
 }
 
-// Paginas visitadas seguem a mesma regra das paginas de capitulo: o cache local
-// so e usado quando a rede realmente falha (offline). Um timeout artificial
-// entregava HTML antigo (com chunks de builds anteriores) ou o fallback de
-// offline para usuarios online sempre que o servidor ficava lento, o que no
-// iOS derrubava a navegacao e reiniciava o PWA na tela inicial.
-async function networkFirstWithPageCache(request, event) {
+// Em uma inicializacao a frio, uma resposta de rede presa deixava a janela do
+// PWA exibindo somente a background_color do manifest. Apos o limite, servimos
+// cache apenas quando o HTML e todos os chunks daquele documento estao locais.
+async function networkFirstWithPageCache(
+  request,
+  event,
+  timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
+) {
   const scope = await getAccountScope();
   const networkTask = fetch(request).then(async (response) => {
     try {
@@ -219,20 +236,27 @@ async function networkFirstWithPageCache(request, event) {
 
   event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
 
-  try {
-    return await networkTask;
-  } catch {
+  const result = await waitForNetworkResult(networkTask, timeoutMs);
+  if (result.kind === "response") return result.response;
+  if (result.kind === "failure") {
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
     return cached ?? getOfflineFallback();
   }
+
+  const compatibleCached = await getCompatibleCachedNavigation(request, scope);
+  return compatibleCached ?? getNavigationRecoveryFallback();
 }
 
 // Paginas de capitulo trazem a posicao de escuta embutida no HTML. Servir um
 // HTML cacheado so porque a rede esta lenta faria o player retomar de uma
-// posicao antiga e regravar essa regressao no servidor. Por isso o cache local
-// so e usado quando a rede realmente falha (offline), sem timeout artificial.
-async function networkFirstChapterPage(request, event) {
+// posicao antiga e regravar essa regressao no servidor. Em caso de lentidao,
+// mostramos a recuperacao; o cache local continua reservado para queda real.
+async function networkFirstChapterPage(
+  request,
+  event,
+  timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
+) {
   const scope = await getAccountScope();
   const networkTask = fetch(request).then(async (response) => {
     try {
@@ -245,13 +269,14 @@ async function networkFirstChapterPage(request, event) {
 
   event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
 
-  try {
-    return await networkTask;
-  } catch {
+  const result = await waitForNetworkResult(networkTask, timeoutMs);
+  if (result.kind === "response") return result.response;
+  if (result.kind === "failure") {
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
     return cached ?? getOfflineFallback();
   }
+  return getNavigationRecoveryFallback();
 }
 
 async function publishNavigationPage(response, request, scope) {
@@ -277,13 +302,15 @@ async function publishNavigationPage(response, request, scope) {
 }
 
 // O shell offline em cache abre na hora e continua sendo atualizado em segundo
-// plano. Sem shell, a navegacao aguarda a rede de verdade: devolver o fallback
-// depois de um timeout artificial fazia um usuario online cair na pagina de
-// "voce esta offline" sempre que o servidor demorava.
-async function accountScopedOfflinePage(request, event) {
+// plano. Sem shell, uma rede presa termina na tela de recuperacao, nao em branco.
+async function accountScopedOfflinePage(
+  request,
+  event,
+  timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
+) {
   const scope = await getAccountScope();
   if (scope === ANONYMOUS_ACCOUNT_SCOPE) {
-    return networkOnlyWithOfflineFallback(request);
+    return networkOnlyWithOfflineFallback(request, timeoutMs);
   }
 
   const cache = await caches.open(getAccountPageCacheName(scope));
@@ -303,11 +330,49 @@ async function accountScopedOfflinePage(request, event) {
   event?.waitUntil?.(refreshTask);
   if (cached) return cached;
 
-  try {
-    return await networkTask;
-  } catch {
-    return getOfflineFallback();
-  }
+  const result = await waitForNetworkResult(networkTask, timeoutMs);
+  if (result.kind === "response") return result.response;
+  if (result.kind === "failure") return getOfflineFallback();
+  return getNavigationRecoveryFallback();
+}
+
+function waitForNetworkResult(networkTask, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(result);
+    };
+    const timeoutId = setTimeout(
+      () => finish({ kind: "timeout" }),
+      timeoutMs,
+    );
+
+    networkTask.then(
+      (response) => finish({ kind: "response", response }),
+      (error) => finish({ kind: "failure", error }),
+    );
+  });
+}
+
+async function getCompatibleCachedNavigation(request, scope) {
+  const pageCache = await caches.open(getAccountPageCacheName(scope));
+  const cached = await pageCache.match(getNavigationCacheKey(request));
+  if (!cached) return null;
+
+  const html = await cached.clone().text();
+  if (extractOfflineAccountScope(html) !== scope) return null;
+
+  const assetUrls = extractNextStaticAssetUrls(html);
+  if (assetUrls.length === 0) return null;
+
+  const staticCache = await caches.open(CACHE_NAME);
+  const assets = await Promise.all(
+    assetUrls.map((assetUrl) => staticCache.match(assetUrl)),
+  );
+  return assets.every(Boolean) ? cached : null;
 }
 
 function getAccountPageCacheName(scope) {
@@ -446,6 +511,17 @@ function extractNextStaticAssetUrls(html) {
   }
 
   return Array.from(assetUrls);
+}
+
+async function getNavigationRecoveryFallback() {
+  const cache = await caches.open(CACHE_NAME);
+  const recoveryPage = await cache.match("/loading-fallback.html");
+  if (recoveryPage) return recoveryPage;
+
+  return new Response(
+    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#18b7bd"><title>Carregando - Audio Novel BR</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#f8ffff;min-height:100vh;display:grid;place-items:center;padding:2rem;text-align:center;margin:0}main{max-width:26rem;padding:2rem;border:1px solid #ffffff1a;border-radius:1.5rem;background:#06272b}h1{font-size:1.5rem;margin:0 0 .75rem;color:#fff}p{color:#a7bec2;line-height:1.6}button{width:100%;min-height:3rem;margin-top:1rem;background:#18b7bd;color:#021114;border:0;border-radius:9999px;font-weight:900;cursor:pointer}</style></head><body><main><h1>O aplicativo demorou para responder</h1><p>Sua sessao continua salva. Aguarde alguns segundos e tente novamente.</p><button onclick="window.location.reload()">Tentar novamente</button></main></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+  );
 }
 
 async function getOfflineFallback() {

@@ -983,7 +983,7 @@ test("closes at the original Content-Length without reading duplicate trailing b
   assert.equal(continuationCancelled, true);
 });
 
-test("downstream abort cancels the active reader and never opens a continuation", async () => {
+test("downstream abort closes cleanly, cancels the active reader and never opens a continuation", async () => {
   let cancelled = false;
   let attempts = 0;
   const abortController = new AbortController();
@@ -1016,7 +1016,10 @@ test("downstream abort cancels the active reader and never opens a continuation"
     value: new Uint8Array([1]),
   });
   abortController.abort();
-  await assert.rejects(reader.read(), /abort/i);
+  assert.deepEqual(await reader.read(), {
+    done: true,
+    value: undefined,
+  });
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(cancelled, true);
