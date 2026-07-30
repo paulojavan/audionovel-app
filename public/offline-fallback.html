@@ -257,7 +257,7 @@
 <body>
   <div class="container">
     <div class="icon-wrapper">
-      <img src="/icons/icon-192x192.png?v=20260728-3" alt="Audio Novel BR" onerror="this.style.display='none'">
+      <img src="/icons/icon-192x192.png?v=20260728-3" alt="Audio Novel BR" data-pwa-hide-on-error>
     </div>
 
     <div class="wifi-icon">
@@ -284,7 +284,7 @@
     <p>Conecte-se à internet para acessar o catálogo completo de novels e audiolivros.</p>
 
     <div class="actions">
-      <button class="btn-primary" onclick="tryReload(this)" id="reload-btn">
+      <button class="btn-primary" type="button" data-pwa-retry id="reload-btn">
         <span class="spinner"></span>
         <span class="btn-text">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:4px">
@@ -294,7 +294,7 @@
         </span>
       </button>
 
-      <button class="btn-secondary" onclick="goHome()" id="home-btn">
+      <button class="btn-secondary" type="button" data-pwa-home id="home-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:4px">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
@@ -305,21 +305,6 @@
     <p class="hint">Conteúdo offline disponível para assinantes premium</p>
   </div>
 
-  <script>
-    function tryReload(btn) {
-      btn.classList.add('loading');
-      btn.disabled = true;
-      setTimeout(() => window.location.reload(), 300);
-    }
-
-    function goHome() {
-      window.location.href = '/';
-    }
-
-    // Auto-reconnect: recarrega quando a conexão voltar
-    window.addEventListener('online', () => {
-      setTimeout(() => window.location.reload(), 500);
-    });
-  </script>
+  <script src="/pwa-fallback.js" defer></script>
 </body>
 </html>

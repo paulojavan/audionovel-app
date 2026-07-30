@@ -60,13 +60,15 @@ export const authOptions: NextAuthOptions = {
         const requestIdentifier = getRequestIdentifierFromHeaders(
           (request as AuthRequestLike | undefined)?.headers,
         );
-        const ipLimit = await consumeRateLimit({
-          key: `login:ip:${requestIdentifier}`,
-          limit: 12,
-          windowMs: 15 * 60_000,
-        });
-        if (!ipLimit.allowed) {
-          throw new Error("RATE_LIMITED");
+        if (requestIdentifier) {
+          const ipLimit = await consumeRateLimit({
+            key: `login:${requestIdentifier}`,
+            limit: 12,
+            windowMs: 15 * 60_000,
+          });
+          if (!ipLimit.allowed) {
+            throw new Error("RATE_LIMITED");
+          }
         }
         const emailLimit = await consumeRateLimit({
           key: `login:email:${email}`,
@@ -104,7 +106,6 @@ export const authOptions: NextAuthOptions = {
           premiumUntil: dbUser.premiumUntil?.toISOString() ?? null,
           isBlocked: dbUser.isBlocked,
           sessionId: deviceSession.sessionId,
-          userAgentHash: deviceSession.userAgentHash,
           sessionInvalid: false,
           sessionUnavailable: false,
         };
@@ -122,7 +123,6 @@ export const authOptions: NextAuthOptions = {
         token.premiumUntil = user.premiumUntil;
         token.isBlocked = user.isBlocked;
         token.sessionId = user.sessionId ?? token.sessionId;
-        token.userAgentHash = user.userAgentHash ?? token.userAgentHash;
         token.sessionInvalid = user.sessionInvalid ?? false;
         token.sessionUnavailable = user.sessionUnavailable ?? false;
         token.sessionCheckedAt = now;

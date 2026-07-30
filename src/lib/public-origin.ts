@@ -2,15 +2,21 @@ type PublicOriginInput = {
   headers: Headers;
   envOrigin?: string | null;
   fallbackOrigin?: string | null;
+  production?: boolean;
 };
 
-export function getPublicOrigin({ headers, envOrigin, fallbackOrigin }: PublicOriginInput) {
+export const DEFAULT_PUBLIC_ORIGIN = "https://audionovelbr.com.br";
+
+export function getPublicOrigin({
+  headers,
+  envOrigin,
+  fallbackOrigin,
+  production = process.env.NODE_ENV === "production",
+}: PublicOriginInput) {
   const normalizedEnvOrigin = normalizeOrigin(envOrigin);
   if (normalizedEnvOrigin && !isLocalOrigin(normalizedEnvOrigin)) return normalizedEnvOrigin;
 
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Configure APP_ORIGIN ou NEXTAUTH_URL com uma origem publica HTTPS.");
-  }
+  if (production) return DEFAULT_PUBLIC_ORIGIN;
 
   const forwardedOrigin = getForwardedOrigin(headers);
   if (forwardedOrigin && !isLocalOrigin(forwardedOrigin)) return forwardedOrigin;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { openAudioUpstream } from "@/lib/audio-upstream";
 import { prisma } from "@/lib/prisma";
 import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
-import { checkRateLimit, getRequestIdentifier } from "@/lib/rate-limit";
+import { consumeRateLimitWithLease, getRequestIdentifier } from "@/lib/rate-limit";
 import {
   createResumableAudioStream,
   isSafeAudioPassThroughResponse,
@@ -18,6 +18,7 @@ type Context = {
 // O player abre varios range requests por reproducao; lastUsedAt so precisa
 // granularidade suficiente para ordenar a lista de "recentes" da area offline.
 const LAST_USED_WRITE_THROTTLE_MS = 5 * 60_000;
+const MAX_AUDIO_CONTINUATIONS = 96;
 
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
@@ -42,19 +43,22 @@ export async function GET(request: Request, context: Context) {
   }
   const audioUrl = media.audioUrl;
 
-  // Range requests fazem parte do streaming normal. Um contador em memoria
-  // evita uma escrita no PostgreSQL para cada chunk; o proxy/CDN deve aplicar
-  // o limite distribuido de borda em producao.
-  const rateLimit = checkRateLimit({
-    key: `audio:${id}:${getRequestIdentifier(request, session?.user?.id)}`,
-    limit: 240,
-    windowMs: 60_000,
-  });
-  if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: "Muitas requisicoes de audio. Aguarde um pouco." },
-      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSec) } },
-    );
+  // Cada processo reserva pequenos lotes no contador compartilhado. Assim o
+  // limite continua distribuido sem gravar no PostgreSQL a cada range request.
+  const requestIdentifier = getRequestIdentifier(request, session?.user?.id);
+  if (requestIdentifier) {
+    const rateLimit = await consumeRateLimitWithLease({
+      key: `audio:${id}:${requestIdentifier}`,
+      limit: 240,
+      windowMs: 60_000,
+      leaseSize: 12,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Muitas requisicoes de audio. Aguarde um pouco." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSec) } },
+      );
+    }
   }
 
   if (!isSafeMediaHttpsUrl(audioUrl)) {
@@ -140,7 +144,7 @@ export async function GET(request: Request, context: Context) {
             headers,
             AbortSignal.any([request.signal, continuationSignal]),
           ),
-        maxContinuations: 12,
+        maxContinuations: MAX_AUDIO_CONTINUATIONS,
         downstreamSignal: request.signal,
         onFailure({ attempt, byteOffset }) {
           console.warn(JSON.stringify({

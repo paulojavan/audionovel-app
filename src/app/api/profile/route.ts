@@ -7,6 +7,8 @@ import { parseProfileUpdatePayload } from "@/lib/profile-validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { createRandomSessionId } from "@/lib/device-session";
 
+class IncorrectCurrentPasswordError extends Error {}
+
 export async function PATCH(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
@@ -19,27 +21,23 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const changingPassword = Boolean(parsed.data.password);
-  if (changingPassword) {
-    const currentUser = await prisma.user.findUnique({
-      where: { id: auth.user.id },
-      select: { passwordHash: true },
-    });
-    const validCurrentPassword =
-      currentUser &&
-      parsed.data.currentPassword &&
-      (await verifyPassword(parsed.data.currentPassword, currentUser.passwordHash));
-
-    if (!validCurrentPassword) {
-      return NextResponse.json({ error: "A senha atual esta incorreta." }, { status: 403 });
-    }
-  }
-
   const passwordHash = parsed.data.password ? await hashPassword(parsed.data.password) : null;
   const now = new Date();
 
   try {
     const user = await prisma.$transaction(async (tx) => {
+      if (passwordHash) {
+        const rows = await tx.$queryRaw<Array<{ passwordHash: string }>>`
+          SELECT "passwordHash" FROM "User" WHERE "id" = ${auth.user.id} FOR UPDATE
+        `;
+        const currentUser = rows[0];
+        const validCurrentPassword =
+          currentUser &&
+          parsed.data.currentPassword &&
+          (await verifyPassword(parsed.data.currentPassword, currentUser.passwordHash));
+        if (!validCurrentPassword) throw new IncorrectCurrentPasswordError();
+      }
+
       const updatedUser = await tx.user.update({
         where: { id: auth.user.id },
         data: {
@@ -80,6 +78,9 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ user });
   } catch (error) {
+    if (error instanceof IncorrectCurrentPasswordError) {
+      return NextResponse.json({ error: "A senha atual esta incorreta." }, { status: 403 });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json({ error: "Este nome de usuario ja esta em uso." }, { status: 409 });
     }

@@ -28,8 +28,8 @@ Variáveis obrigatórias ou recomendadas em produção:
 - `PRISMA_CONNECTION_LIMIT`: override opcional do pool por processo do Next.js. Sem ele, a aplicação preserva `connection_limit` da `DATABASE_URL`; se nenhum dos dois existir, usa `3`.
 - `NEXTAUTH_SECRET`: segredo forte da sessão e do hash de rate limit.
 - `RATE_LIMIT_SECRET`: segredo opcional dedicado ao hash de rate limit; se ausente, usa `NEXTAUTH_SECRET`.
-- `TRUSTED_PROXY_IP_HEADER`: cabeçalho de IP sanitizado pelo proxy (`x-real-ip`, `cf-connecting-ip` ou `x-forwarded-for`). Sem ele, produção usa um bucket anônimo conservador.
-- `APP_ORIGIN` (preferencial) ou `NEXTAUTH_URL`: origem pública HTTPS. Em produção, cabeçalhos `Host` enviados pelo cliente nunca são usados para gerar links.
+- `TRUSTED_PROXY_IP_HEADER`: cabeçalho de IP sanitizado pelo proxy (`x-real-ip`, `cf-connecting-ip` ou `x-forwarded-for`). Sem ele, limites anônimos por IP são desativados em produção para não bloquear todos os usuários no mesmo bucket; limites por conta/e-mail continuam ativos.
+- `APP_ORIGIN` (preferencial) ou `NEXTAUTH_URL`: origem pública HTTPS. Em produção, cabeçalhos `Host` enviados pelo cliente nunca são usados para gerar links; na ausência da variável, o domínio oficial `https://audionovelbr.com.br` é usado como contingência.
 - `MEDIA_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer áudio, separados por vírgula.
 - `IMAGE_URL_ALLOWED_HOSTS`: hosts adicionais autorizados a fornecer capas, separados por vírgula.
 - `MERCADO_PAGO_ACCESS_TOKEN`: credencial privada da API.
@@ -45,7 +45,7 @@ MEDIA_URL_ALLOWED_HOSTS=audio.exemplo.com
 IMAGE_URL_ALLOWED_HOSTS=imagens.exemplo.com,images.unsplash.com
 ```
 
-O navegador recebe somente URLs locais como `/api/chapters/:id/audio`. A URL real do áudio permanece no banco e é buscada pelo servidor depois da autorização.
+O navegador recebe somente URLs locais como `/api/chapters/:id/audio`. A URL real do áudio permanece no banco e é buscada pelo servidor depois da autorização. Range requests usam pequenas reservas no rate limit compartilhado, reduzindo gravações sem perder a proteção entre instâncias.
 Os hosts exatos usados atualmente no banco já fazem parte da allowlist; use as variáveis acima somente ao adicionar um novo provedor.
 
 ## Banco de dados

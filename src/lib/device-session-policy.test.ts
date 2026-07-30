@@ -5,7 +5,6 @@ import test from "node:test";
 import { shouldRefreshSessionLastSeen } from "./device-session";
 import {
   evaluateDeviceLogin,
-  hasSuspiciousUserAgentChange,
   selectDeviceToReplace,
 } from "./device-session-policy";
 
@@ -103,9 +102,12 @@ test("persistencia serializa a substituicao e nao revoga todas as sessoes", () =
   assert.doesNotMatch(createBlock, /revokeAllUserSessions/);
 });
 
-test("detecta mudanca suspeita de user-agent na mesma sessao", () => {
-  assert.equal(hasSuspiciousUserAgentChange("ua-a", "ua-a"), false);
-  assert.equal(hasSuspiciousUserAgentChange("ua-a", "ua-b"), true);
+test("atualizacao do navegador nao revoga uma sessao valida", () => {
+  const validationBlock = deviceSessionSource.match(
+    /export async function validateDeviceSession[\s\S]*?\n}\n\nexport async function revokeDeviceSession/,
+  )?.[0] ?? "";
+
+  assert.doesNotMatch(validationBlock, /user-agent|USER_AGENT_CHANGED|revokeAllUserSessions/);
 });
 
 test("atualiza lastSeenAt apenas depois da janela minima", () => {

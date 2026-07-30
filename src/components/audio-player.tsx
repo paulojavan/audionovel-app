@@ -305,7 +305,7 @@ export function AudioPlayer({
     };
   }, [chapterId, saveProgress]);
 
-  const getDownloadedAudioUrl = useCallback(async () => {
+  const getDownloadedAudioUrl = useCallback(async ({ online = navigator.onLine } = {}) => {
     const generation = audioGenerationRef.current;
     const assertCurrentGeneration = () => {
       if (generation !== audioGenerationRef.current) {
@@ -319,7 +319,7 @@ export function AudioPlayer({
     const identity = await getCurrentChapterAudioIdentity(
       chapterId,
       fallbackIdentity,
-      { online: navigator.onLine },
+      { online },
     );
     assertCurrentGeneration();
     const nextIdentity = {
@@ -432,50 +432,69 @@ export function AudioPlayer({
     const generation = audioGenerationRef.current;
 
     try {
+      const startPlayback = async (playbackSource: string) => {
+        const currentIdentity = currentAudioIdentityRef.current;
+        setAudioSource({
+          chapterId,
+          audioRevision: currentIdentity.audioRevision,
+          source: currentIdentity.src,
+          objectUrl: playbackSource,
+        });
+
+        if (!audioRef.current) return;
+        const activeAudio = audioRef.current;
+        const justLoadedSource = activeAudio.getAttribute("src") !== playbackSource;
+        if (justLoadedSource) {
+          activeAudio.src = playbackSource;
+          activeAudio.load();
+        }
+        await waitForMetadata(activeAudio);
+        if (generation !== audioGenerationRef.current) return;
+        const currentRelativePosition = Math.max(0, activeAudio.currentTime - startOffset);
+        const shouldReplayFromBeginning = activeAudio.ended || isPlaybackComplete(currentRelativePosition, progressDuration);
+        const nextPosition =
+          position ??
+          (shouldReplayFromBeginning
+            ? startOffset
+            : activeAudio.currentTime < startOffset ||
+                // So retoma a posicao inicial quando a fonte acabou de carregar:
+                // um currentTime 0 com a mesma fonte e uma pausa legitima no inicio.
+                (justLoadedSource && activeAudio.currentTime === 0 && (resumePositionRef.current > 0 || startOffset > 0))
+              ? startOffset + resumePositionRef.current
+              : activeAudio.currentTime);
+        activeAudio.currentTime = nextPosition;
+        setKaraokeMode(playMode === "karaoke");
+        setPlaybackError("");
+        activeAudio.playbackRate = playbackRate;
+        activeAudio.volume = volume;
+        activeAudio.muted = muted;
+        desiredPlaybackRef.current = true;
+        await activeAudio.play();
+        if (generation !== audioGenerationRef.current) return;
+        setPlaying(true);
+      };
+
+      const sourceWasDirectStream = navigator.onLine;
       let playbackSource = currentAudioIdentityRef.current.src;
-      if (!navigator.onLine) {
-        playbackSource = await getDownloadedAudioUrl();
+      if (!sourceWasDirectStream) {
+        playbackSource = await getDownloadedAudioUrl({ online: false });
         if (generation !== audioGenerationRef.current) return;
       }
-      const currentIdentity = currentAudioIdentityRef.current;
-      setAudioSource({
-        chapterId,
-        audioRevision: currentIdentity.audioRevision,
-        source: currentIdentity.src,
-        objectUrl: playbackSource,
-      });
 
-      if (!audioRef.current) return;
-      const activeAudio = audioRef.current;
-      const justLoadedSource = activeAudio.getAttribute("src") !== playbackSource;
-      if (justLoadedSource) {
-        activeAudio.src = playbackSource;
-        activeAudio.load();
+      try {
+        await startPlayback(playbackSource);
+      } catch (error) {
+        if (
+          !sourceWasDirectStream ||
+          generation !== audioGenerationRef.current ||
+          error instanceof StaleAudioPlaybackError
+        ) {
+          throw error;
+        }
+        playbackSource = await getDownloadedAudioUrl({ online: false });
+        if (generation !== audioGenerationRef.current) return;
+        await startPlayback(playbackSource);
       }
-      await waitForMetadata(activeAudio);
-      if (generation !== audioGenerationRef.current) return;
-      const currentRelativePosition = Math.max(0, activeAudio.currentTime - startOffset);
-      const shouldReplayFromBeginning = activeAudio.ended || isPlaybackComplete(currentRelativePosition, progressDuration);
-      const nextPosition =
-        position ??
-        (shouldReplayFromBeginning
-          ? startOffset
-          : activeAudio.currentTime < startOffset ||
-              // So retoma a posicao inicial quando a fonte acabou de carregar:
-              // um currentTime 0 com a mesma fonte e uma pausa legitima no inicio.
-              (justLoadedSource && activeAudio.currentTime === 0 && (resumePositionRef.current > 0 || startOffset > 0))
-            ? startOffset + resumePositionRef.current
-            : activeAudio.currentTime);
-      activeAudio.currentTime = nextPosition;
-      setKaraokeMode(playMode === "karaoke");
-      setPlaybackError("");
-      activeAudio.playbackRate = playbackRate;
-      activeAudio.volume = volume;
-      activeAudio.muted = muted;
-      desiredPlaybackRef.current = true;
-      await activeAudio.play();
-      if (generation !== audioGenerationRef.current) return;
-      setPlaying(true);
     } catch (error) {
       if (
         generation !== audioGenerationRef.current ||

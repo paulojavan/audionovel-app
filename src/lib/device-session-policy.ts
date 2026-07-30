@@ -25,10 +25,6 @@ export function evaluateDeviceLogin({ activeDeviceHashes, currentDeviceHash, max
   return { allowed: false as const, reason: "DEVICE_LIMIT_EXCEEDED" as const };
 }
 
-export function hasSuspiciousUserAgentChange(storedUserAgentHash: string | null | undefined, currentUserAgentHash: string) {
-  return Boolean(storedUserAgentHash && storedUserAgentHash !== currentUserAgentHash);
-}
-
 function compareSessionRecency(a: DeviceSessionCandidate, b: DeviceSessionCandidate) {
   const lastSeenDifference = new Date(a.lastSeenAt).getTime() - new Date(b.lastSeenAt).getTime();
   if (lastSeenDifference) return lastSeenDifference;

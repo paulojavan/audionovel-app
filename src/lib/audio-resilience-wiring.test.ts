@@ -107,7 +107,7 @@ test("player preserva o cache criptografado para reproducao offline", () => {
   assert.match(player, /mode:\s*"temporary"/);
   assert.match(player, /URL\.revokeObjectURL/);
   assert.match(player, /src=\{activeAudioSource \|\| undefined\}/);
-  assert.match(player, /if \(!navigator\.onLine\) \{\s*playbackSource = await getDownloadedAudioUrl\(\)/);
+  assert.match(player, /if \(!sourceWasDirectStream\) \{\s*playbackSource = await getDownloadedAudioUrl\(\{ online: false \}\)/);
   assert.doesNotMatch(player, /preload="metadata"/);
 });
 
@@ -118,6 +118,10 @@ test("player online inicia streaming direto sem baixar o arquivo inteiro", () =>
     /activeAudio\.getAttribute\("src"\) !== playbackSource/,
   );
   assert.match(player, /activeAudio\.src = playbackSource/);
+  assert.match(
+    player,
+    /catch \(error\)[\s\S]*?sourceWasDirectStream[\s\S]*?getDownloadedAudioUrl\(\{ online: false \}\)/,
+  );
   assert.doesNotMatch(player, /resolveOnlineAudioFailure/);
   assert.doesNotMatch(
     offlinePlayer,
@@ -210,7 +214,8 @@ test("rota usa stream retomavel e propaga cancelamento", () => {
 });
 
 test("rota permite varias retomadas antes de desistir do audio", () => {
-  assert.match(audioRoute, /maxContinuations:\s*12/);
+  assert.match(audioRoute, /MAX_AUDIO_CONTINUATIONS\s*=\s*96/);
+  assert.match(audioRoute, /maxContinuations:\s*MAX_AUDIO_CONTINUATIONS/);
 });
 
 test("rota preserva respostas Range validas que nao podem ser retomadas", () => {
@@ -241,7 +246,8 @@ test("rota protege criacao sincrona do stream e registra apenas campos sanitizad
 test("rota preserva autorizacao, validacao offline e rejeicao de redirect", () => {
   assert.match(audioRoute, /select:\s*CHAPTER_MEDIA_SOURCE_SELECT/);
   assert.match(audioRoute, /media\.premiumOnly && !hasPremiumAccess\(session\?\.user\)/);
-  assert.match(audioRoute, /checkRateLimit\(/);
+  assert.match(audioRoute, /consumeRateLimitWithLease\(/);
+  assert.match(audioRoute, /leaseSize:\s*12/);
   assert.match(audioRoute, /if \(!session\?\.user\?\.id\)/);
   assert.match(audioRoute, /prisma\.offlineDownload\.findFirst/);
   assert.match(audioRoute, /prisma\.offlineDownload\.update/);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getPublicOrigin } from "./public-origin";
+import { DEFAULT_PUBLIC_ORIGIN, getPublicOrigin } from "./public-origin";
 
 test("usa host encaminhado pelo proxy quando disponivel", () => {
   const headers = new Headers({
@@ -34,5 +34,22 @@ test("prioriza env publico sobre host encaminhado nao confiavel", () => {
   assert.equal(
     getPublicOrigin({ headers, envOrigin: "https://audionovelbr.com.br" }),
     "https://audionovelbr.com.br",
+  );
+});
+
+test("producao usa origem oficial segura quando a configuracao esta ausente", () => {
+  const headers = new Headers({
+    "x-forwarded-proto": "https",
+    "x-forwarded-host": "attacker.example",
+  });
+
+  assert.equal(
+    getPublicOrigin({
+      headers,
+      envOrigin: "http://localhost:3000",
+      fallbackOrigin: "http://localhost:3000",
+      production: true,
+    }),
+    DEFAULT_PUBLIC_ORIGIN,
   );
 });

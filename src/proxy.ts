@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { clearNextAuthSessionCookies, hasNextAuthSessionCookie } from "./lib/session-cookies";
 import { isDecodedSessionTokenUsable } from "./lib/session-token";
-import { hashSessionValue } from "./lib/session-fingerprint";
 
 const publicPages = new Set(["/", "/login", "/cadastro", "/recuperar-senha", "/redefinir-senha"]);
 const publicPagePrefixes = ["/novels", "/chapters"];
@@ -16,14 +15,20 @@ const publicFiles = new Set([
   "/logo-audio-novel-br.png",
   "/offline-fallback.html",
   "/loading-fallback.html",
+  "/pwa-fallback.js",
   "/sw.js",
 ]);
 
 function createRequestSecurityHeaders(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const isPwaFallback =
+    request.nextUrl.pathname === "/offline-fallback.html" ||
+    request.nextUrl.pathname === "/loading-fallback.html";
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+    isPwaFallback
+      ? "script-src 'self'"
+      : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data: https:",
     "media-src 'self' blob:",
@@ -54,8 +59,8 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/_next/")) return true;
   if (pathname.startsWith("/icons/")) return true;
   if (pathname.startsWith("/images/")) return true;
-  if (publicApiPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
-  if (publicApiSuffixes.some((suffix) => pathname.startsWith(suffix))) return true;
+  if (publicApiPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
+  if (publicApiSuffixes.some((suffix) => pathname === suffix || pathname.startsWith(`${suffix}/`))) return true;
   return /\.(png|jpg|jpeg|webp|svg|ico|css|js|map|txt|xml|webmanifest)$/i.test(pathname);
 }
 
@@ -74,12 +79,7 @@ export async function proxy(request: NextRequest) {
   const cookieNames = request.cookies.getAll().map((cookie) => cookie.name);
   const hasSessionCookie = hasNextAuthSessionCookie(cookieNames);
   const token = hasSessionCookie ? await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET }) : null;
-  const userAgentHash = request.headers.get("user-agent")
-    ? hashSessionValue(request.headers.get("user-agent")!)
-    : null;
-  const userAgentMatches =
-    !token?.userAgentHash || !userAgentHash || token.userAgentHash === userAgentHash;
-  const hasInvalidSessionCookie = hasSessionCookie && (!token || !userAgentMatches);
+  const hasInvalidSessionCookie = hasSessionCookie && !token;
 
   if (isPublicPath(pathname)) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
@@ -87,7 +87,7 @@ export async function proxy(request: NextRequest) {
     return secureResponse(response, csp);
   }
 
-  if (userAgentMatches && isDecodedSessionTokenUsable(token)) {
+  if (isDecodedSessionTokenUsable(token)) {
     return secureResponse(NextResponse.next({ request: { headers: requestHeaders } }), csp);
   }
 

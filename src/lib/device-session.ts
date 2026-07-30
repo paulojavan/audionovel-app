@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { hasSuspiciousUserAgentChange, selectDeviceToReplace } from "./device-session-policy";
+import { selectDeviceToReplace } from "./device-session-policy";
 import { prisma } from "./prisma";
 import { hashSessionValue } from "./session-fingerprint";
 
@@ -105,29 +105,16 @@ export async function createDeviceSession({ userId, deviceId, deviceName, header
     return replacement;
   });
 
-  return { allowed: true as const, sessionId, expiresAt, replacedDeviceHash, userAgentHash };
+  return { allowed: true as const, sessionId, expiresAt, replacedDeviceHash };
 }
 
-export async function validateDeviceSession(sessionId: string | null | undefined, headers?: HeaderLike) {
+export async function validateDeviceSession(sessionId: string | null | undefined) {
   if (!sessionId) return { valid: false as const, reason: "MISSING_SESSION" as const };
 
   const now = new Date();
   const session = await getSessionById(sessionId);
   if (!session || session.revokedAt || new Date(session.expiresAt).getTime() <= now.getTime()) {
     return { valid: false as const, reason: "SESSION_REVOKED" as const };
-  }
-
-  const currentUserAgent = getHeaderValue(headers, "user-agent");
-  const currentUserAgentHash = currentUserAgent ? hashSessionValue(currentUserAgent) : null;
-  if (currentUserAgentHash && hasSuspiciousUserAgentChange(session.userAgentHash, currentUserAgentHash)) {
-    await revokeAllUserSessions(session.userId);
-    await createSecurityEvent({
-      userId: session.userId,
-      type: "USER_AGENT_CHANGED",
-      message: "Mudanca suspeita de navegador/dispositivo detectada. Todas as sessoes foram encerradas.",
-      metadata: { sessionId },
-    });
-    return { valid: false as const, reason: "SUSPICIOUS_USER_AGENT" as const };
   }
 
   if (shouldRefreshSessionLastSeen(session.lastSeenAt, now)) {
@@ -172,11 +159,4 @@ async function getSessionById(sessionId: string) {
     LIMIT 1
   `;
   return rows[0] ?? null;
-}
-
-async function createSecurityEvent({ userId, type, message, metadata }: { userId: string; type: string; message: string; metadata: Record<string, unknown> }) {
-  await prisma.$executeRaw`
-    INSERT INTO "SecurityEvent" ("id", "userId", "type", "severity", "message", "metadata", "readAt", "createdAt")
-    VALUES (${createRandomSessionId()}, ${userId}, ${type}, 'HIGH', ${message}, ${JSON.stringify(metadata)}, NULL, ${new Date()})
-  `;
 }

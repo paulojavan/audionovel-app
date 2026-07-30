@@ -11,12 +11,15 @@ type Context = {
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
   const session = await getActiveServerSession();
-  const limited = await enforceRateLimit({
-    key: `audio-revision:${id}:${getRequestIdentifier(request, session?.user?.id)}`,
-    limit: 120,
-    windowMs: 60_000,
-  });
-  if (limited) return limited;
+  const requestIdentifier = getRequestIdentifier(request, session?.user?.id);
+  if (requestIdentifier) {
+    const limited = await enforceRateLimit({
+      key: `audio-revision:${id}:${requestIdentifier}`,
+      limit: 120,
+      windowMs: 60_000,
+    });
+    if (limited) return limited;
+  }
 
   const access = await canPlayChapterAudioRevision(id, session?.user?.id);
 

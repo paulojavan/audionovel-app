@@ -6,6 +6,10 @@ import { PWA_ICON_REVISION } from "./pwa-assets";
 
 const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 const proxySource = readFileSync(join(process.cwd(), "src", "proxy.ts"), "utf8");
+const registerSource = readFileSync(
+  join(process.cwd(), "src", "components", "service-worker-register.tsx"),
+  "utf8",
+);
 const staticAssetsBlock = serviceWorkerSource.match(/const STATIC_ASSETS = \[[\s\S]*?\];/)?.[0] ?? "";
 
 test("service worker nao pre-cacheia o manifest publico", () => {
@@ -14,8 +18,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v15"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "pwa-startup-recovery-2026-07-29"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v16"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "auth-pwa-reliability-2026-07-29"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
@@ -42,9 +46,22 @@ test("service worker ativa a correcao sem depender da interface antiga", () => {
   )?.[0] ?? "";
 
   assert.match(installBlock, /Promise\.allSettled/);
-  assert.match(installBlock, /finally[\s\S]*?self\.skipWaiting\(\)/);
+  assert.doesNotMatch(installBlock, /finally[\s\S]*?self\.skipWaiting\(\)/);
+  assert.match(installBlock, /if \(FORCE_RECOVERY_ACTIVATION\)[\s\S]*?self\.skipWaiting\(\)/);
   assert.match(staticAssetsBlock, /loading-fallback\.html/);
+  assert.match(staticAssetsBlock, /pwa-fallback\.js/);
   assert.match(proxySource, /["']\/loading-fallback\.html["']/);
+});
+
+test("registro nao recarrega a janela quando recebe o primeiro controlador", () => {
+  assert.match(
+    registerSource,
+    /canReloadForControllerChange = Boolean\(navigator\.serviceWorker\.controller\)/,
+  );
+  assert.match(
+    registerSource,
+    /if \(!canReloadForControllerChange\) \{[\s\S]*?canReloadForControllerChange = true;[\s\S]*?return;/,
+  );
 });
 
 test("service worker limita cache de navegacao as rotas aprovadas e separa por conta", () => {

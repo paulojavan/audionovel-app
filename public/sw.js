@@ -1,10 +1,11 @@
-// Audio Novel BR - Service Worker v15
+// Audio Novel BR - Service Worker v16
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v15";
-const RELEASE_REVISION = "pwa-startup-recovery-2026-07-29";
-const PREVIOUS_CACHE_VERSION = "v14";
+const CACHE_VERSION = "v16";
+const RELEASE_REVISION = "auth-pwa-reliability-2026-07-29";
+const PREVIOUS_CACHE_VERSION = "v15";
+const FORCE_RECOVERY_ACTIVATION = CACHE_VERSION === "v16";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -30,6 +31,7 @@ const STATIC_ASSETS = [
   "/icons/maskable-512x512.png?v=20260728-3",
   "/offline-fallback.html",
   "/loading-fallback.html",
+  "/pwa-fallback.js",
 ];
 
 // ─── INSTALL ────────────────────────────────────────────────────────────────
@@ -46,9 +48,11 @@ self.addEventListener("install", (event) => {
         }
       } catch (err) {
         console.warn("[SW] Cache install error:", err);
-      } finally {
-        // Uma versao quebrada nao pode ficar controlando o PWA enquanto a
-        // correcao aguarda um clique numa interface que talvez nem carregue.
+      }
+
+      // Esta versao precisa substituir imediatamente o worker v15, que podia
+      // manter o PWA em branco. A comparacao fica falsa no proximo bump.
+      if (FORCE_RECOVERY_ACTIVATION) {
         await self.skipWaiting();
       }
     })(),
@@ -194,7 +198,9 @@ async function networkOnlyWithOfflineFallback(
   timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
 ) {
   const result = await waitForNetworkResult(fetch(request), timeoutMs);
-  if (result.kind === "response") return result.response;
+  if (result.kind === "response" && isUsableNavigationResponse(result.response)) {
+    return result.response;
+  }
   if (result.kind === "failure") return getOfflineFallback();
   return getNavigationRecoveryFallback();
 }
@@ -237,7 +243,9 @@ async function networkFirstWithPageCache(
   event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
 
   const result = await waitForNetworkResult(networkTask, timeoutMs);
-  if (result.kind === "response") return result.response;
+  if (result.kind === "response" && isUsableNavigationResponse(result.response)) {
+    return result.response;
+  }
   if (result.kind === "failure") {
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
@@ -270,7 +278,9 @@ async function networkFirstChapterPage(
   event?.waitUntil?.(networkTask.then(() => undefined).catch(() => undefined));
 
   const result = await waitForNetworkResult(networkTask, timeoutMs);
-  if (result.kind === "response") return result.response;
+  if (result.kind === "response" && isUsableNavigationResponse(result.response)) {
+    return result.response;
+  }
   if (result.kind === "failure") {
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
@@ -331,9 +341,15 @@ async function accountScopedOfflinePage(
   if (cached) return cached;
 
   const result = await waitForNetworkResult(networkTask, timeoutMs);
-  if (result.kind === "response") return result.response;
+  if (result.kind === "response" && isUsableNavigationResponse(result.response)) {
+    return result.response;
+  }
   if (result.kind === "failure") return getOfflineFallback();
   return getNavigationRecoveryFallback();
+}
+
+function isUsableNavigationResponse(response) {
+  return response.status < 500;
 }
 
 function waitForNetworkResult(networkTask, timeoutMs) {
@@ -519,7 +535,7 @@ async function getNavigationRecoveryFallback() {
   if (recoveryPage) return recoveryPage;
 
   return new Response(
-    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#18b7bd"><title>Carregando - Audio Novel BR</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#f8ffff;min-height:100vh;display:grid;place-items:center;padding:2rem;text-align:center;margin:0}main{max-width:26rem;padding:2rem;border:1px solid #ffffff1a;border-radius:1.5rem;background:#06272b}h1{font-size:1.5rem;margin:0 0 .75rem;color:#fff}p{color:#a7bec2;line-height:1.6}button{width:100%;min-height:3rem;margin-top:1rem;background:#18b7bd;color:#021114;border:0;border-radius:9999px;font-weight:900;cursor:pointer}</style></head><body><main><h1>O aplicativo demorou para responder</h1><p>Sua sessao continua salva. Aguarde alguns segundos e tente novamente.</p><button onclick="window.location.reload()">Tentar novamente</button></main></body></html>`,
+    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#18b7bd"><title>Carregando - Audio Novel BR</title><style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#f8ffff;min-height:100vh;display:grid;place-items:center;padding:2rem;text-align:center;margin:0}main{max-width:26rem;padding:2rem;border:1px solid #ffffff1a;border-radius:1.5rem;background:#06272b}h1{font-size:1.5rem;margin:0 0 .75rem;color:#fff}p{color:#a7bec2;line-height:1.6}button{width:100%;min-height:3rem;margin-top:1rem;background:#18b7bd;color:#021114;border:0;border-radius:9999px;font-weight:900;cursor:pointer}</style><script src="/pwa-fallback.js" defer></script></head><body><main><h1>O aplicativo demorou para responder</h1><p>Sua sessao continua salva. Aguarde alguns segundos e tente novamente.</p><button type="button" data-pwa-retry>Tentar novamente</button></main></body></html>`,
     { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 }
@@ -530,7 +546,7 @@ async function getOfflineFallback() {
   if (offlinePage) return offlinePage;
 
   return new Response(
-    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - Audio Novel BR</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#e4e4e7;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}h1{font-size:1.5rem;font-weight:900;margin-bottom:.75rem;color:#22d3dc}p{color:#a1a1aa;max-width:28rem;line-height:1.6;margin-bottom:1.5rem}button{background:#18b7bd;color:#021114;border:none;padding:.75rem 1.5rem;border-radius:9999px;font-weight:900;cursor:pointer}</style></head><body><h1>Você está offline</h1><p>Conecte-se à internet para acessar o catálogo completo de novels.</p><button onclick="window.location.reload()">Tentar novamente</button></body></html>`,
+    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - Audio Novel BR</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#03191c;color:#e4e4e7;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}h1{font-size:1.5rem;font-weight:900;margin-bottom:.75rem;color:#22d3dc}p{color:#a1a1aa;max-width:28rem;line-height:1.6;margin-bottom:1.5rem}button{background:#18b7bd;color:#021114;border:none;padding:.75rem 1.5rem;border-radius:9999px;font-weight:900;cursor:pointer}</style><script src="/pwa-fallback.js" defer></script></head><body><h1>Você está offline</h1><p>Conecte-se à internet para acessar o catálogo completo de novels.</p><button type="button" data-pwa-retry>Tentar novamente</button></body></html>`,
     { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
   );
 }

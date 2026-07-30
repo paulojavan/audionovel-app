@@ -5,6 +5,8 @@ import { test } from "node:test";
 
 const config = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
 const proxy = readFileSync(join(process.cwd(), "src", "proxy.ts"), "utf8");
+const loadingFallback = readFileSync(join(process.cwd(), "public", "loading-fallback.html"), "utf8");
+const offlineFallback = readFileSync(join(process.cwd(), "public", "offline-fallback.html"), "utf8");
 
 test("configuracao de imagens nao aceita host global", () => {
   assert.doesNotMatch(config, /hostname:\s*"\*\*"/);
@@ -21,4 +23,13 @@ test("respostas incluem CSP HSTS e politica de permissoes", () => {
   assert.match(config, /Strict-Transport-Security/);
   assert.match(config, /Permissions-Policy/);
   assert.match(proxy, /frame-src 'self' https:\/\/www\.youtube-nocookie\.com/);
+});
+
+test("fallbacks do PWA funcionam sem scripts inline bloqueados pelo CSP", () => {
+  for (const fallback of [loadingFallback, offlineFallback]) {
+    assert.doesNotMatch(fallback, /\son(?:click|error)=/i);
+    assert.doesNotMatch(fallback, /<script(?!\s+src=)/i);
+    assert.match(fallback, /<script src="\/pwa-fallback\.js" defer><\/script>/);
+  }
+  assert.match(proxy, /isPwaFallback[\s\S]*?"script-src 'self'"/);
 });

@@ -6,8 +6,11 @@ import { getRegisterConflictMessage, parseRegisterPayload } from "@/lib/register
 import { getSystemSettingBoolean, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
 
 export async function POST(request: Request) {
-  const limited = await enforceRateLimit({ key: `register:${getRequestIdentifier(request)}`, limit: 8, windowMs: 60 * 60_000 });
-  if (limited) return limited;
+  const requestIdentifier = getRequestIdentifier(request);
+  if (requestIdentifier) {
+    const limited = await enforceRateLimit({ key: `register:${requestIdentifier}`, limit: 8, windowMs: 60 * 60_000 });
+    if (limited) return limited;
+  }
 
   const registrationsEnabled = await getSystemSettingBoolean(SYSTEM_SETTING_KEYS.registrationsEnabled, true);
   if (!registrationsEnabled) {

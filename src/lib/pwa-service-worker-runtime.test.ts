@@ -6,6 +6,12 @@ import vm from "node:vm";
 
 const ORIGIN = "https://app.test";
 const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
+// Os nomes historicos dos fixtures ficam estaveis; os testes de runtime
+// exercitam a logica, enquanto pwa-service-worker.test.ts valida a versao real.
+const serviceWorkerRuntimeSource = serviceWorkerSource
+  .replace('const CACHE_VERSION = "v16";', 'const CACHE_VERSION = "v15";')
+  .replace('const PREVIOUS_CACHE_VERSION = "v15";', 'const PREVIOUS_CACHE_VERSION = "v14";')
+  .replace('CACHE_VERSION === "v16"', 'CACHE_VERSION === "v15"');
 const offlinePageSource = readFileSync(join(process.cwd(), "src", "app", "offline", "page.tsx"), "utf8");
 const layoutSource = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
 
@@ -85,7 +91,7 @@ function createRuntime(
     console,
   };
 
-  vm.runInNewContext(serviceWorkerSource, context);
+  vm.runInNewContext(serviceWorkerRuntimeSource, context);
   return { runtime: context as unknown as WorkerRuntime, caches };
 }
 
@@ -94,9 +100,9 @@ function toCacheKey(request: RequestInfo | URL) {
   return new URL(request.toString(), ORIGIN).href;
 }
 
-function responseWithUrl(body: string, url: string, contentType: string) {
+function responseWithUrl(body: string, url: string, contentType: string, status = 200) {
   const response = new Response(body, {
-    status: 200,
+    status,
     headers: { "Content-Type": contentType },
   });
   Object.defineProperty(response, "url", { value: url });
@@ -319,6 +325,38 @@ test("inicializacao fria presa mostra recuperacao em vez de uma janela vazia", a
   );
 
   assert.equal(await response.text(), "RECUPERACAO");
+});
+
+test("erro 500 de navegacao mostra recuperacao em vez de uma janela vazia", async () => {
+  const caches = new MemoryCacheStorage();
+  const created = createRuntime(
+    async (request) => responseWithUrl(
+      "SERVER ERROR",
+      new URL(request.toString(), ORIGIN).href,
+      "text/html",
+      500,
+    ),
+    caches,
+  );
+  const staticCache = await caches.open("audio-novel-br-pwa-v15");
+  await staticCache.put(
+    "/loading-fallback.html",
+    responseWithUrl("RECUPERACAO", `${ORIGIN}/loading-fallback.html`, "text/html"),
+  );
+
+  const genericResponse = await created.runtime.networkFirstWithPageCache(
+    new Request(`${ORIGIN}/`),
+  );
+  const protectedResponse = await created.runtime.networkOnlyWithOfflineFallback(
+    new Request(`${ORIGIN}/perfil`),
+  );
+  const chapterResponse = await created.runtime.networkFirstChapterPage(
+    new Request(`${ORIGIN}/chapters/cap-1`),
+  );
+
+  assert.equal(await genericResponse.text(), "RECUPERACAO");
+  assert.equal(await protectedResponse.text(), "RECUPERACAO");
+  assert.equal(await chapterResponse.text(), "RECUPERACAO");
 });
 
 test("rede presa usa html cacheado somente quando seus chunks estao disponiveis", async () => {

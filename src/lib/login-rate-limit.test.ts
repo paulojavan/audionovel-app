@@ -13,7 +13,7 @@ test("login limita IP e email antes de consultar senha", () => {
   assert.notEqual(rateLimitIndex, -1);
   assert.notEqual(passwordIndex, -1);
   assert.ok(rateLimitIndex < passwordIndex);
-  assert.match(authSource, /login:ip:/);
+  assert.match(authSource, /if \(requestIdentifier\) \{[\s\S]*?key: `login:\$\{requestIdentifier\}`/);
   assert.match(authSource, /login:email:/);
 });
 

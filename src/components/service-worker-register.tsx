@@ -8,6 +8,7 @@ export function ServiceWorkerRegister({ accountScope }: { accountScope?: string 
     if (!("serviceWorker" in navigator)) return;
 
     let refreshing = false;
+    let canReloadForControllerChange = Boolean(navigator.serviceWorker.controller);
     const normalizedScope = normalizeAccountScope(accountScope);
 
     async function registerSW() {
@@ -53,8 +54,13 @@ export function ServiceWorkerRegister({ accountScope }: { accountScope?: string 
 
     registerSW();
 
-    // Recarrega a página quando o SW ativo muda (após skipWaiting)
+    // O primeiro controllerchange apenas confirma a instalacao inicial. Uma
+    // troca posterior corresponde a uma atualizacao e pode recarregar a pagina.
     const handleControllerChange = () => {
+      if (!canReloadForControllerChange) {
+        canReloadForControllerChange = true;
+        return;
+      }
       if (refreshing) return;
       refreshing = true;
       window.location.reload();

@@ -71,14 +71,8 @@
     <p>Audio Novel BR</p>
     <h1>O aplicativo demorou para responder</h1>
     <p class="message">Sua sessão continua salva. Aguarde alguns segundos e tente carregar novamente.</p>
-    <button type="button" onclick="retry(this)">Tentar novamente</button>
+    <button type="button" data-pwa-retry>Tentar novamente</button>
   </main>
-  <script>
-    function retry(button) {
-      button.disabled = true;
-      button.textContent = "Carregando...";
-      window.location.reload();
-    }
-  </script>
+  <script src="/pwa-fallback.js" defer></script>
 </body>
 </html>
