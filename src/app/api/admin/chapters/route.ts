@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import type { z } from "zod";
 import { chapterBatchSchema, chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireAdmin } from "@/lib/api";
+import { getPrismaErrorCode, isTransientPrismaSessionError } from "@/lib/auth-session-grace";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getChapterPersistenceBounds, getGroupedChapterSummary, normalizeChapterParts, parseChapterParts } from "@/lib/chapter-grouping";
 import { notifyFavoriteUsersAboutPublishedChapter } from "@/lib/favorite-chapter-notifications";
@@ -74,12 +75,18 @@ export async function POST(request: Request) {
       }
 
       return { created, notificationEvent };
-    });
+    }, { maxWait: 5_000, timeout: 15_000 });
 
     revalidateTag(CACHE_TAGS.content, "max");
     if (notificationEvent) revalidateTag(CACHE_TAGS.notifications, "max");
     return NextResponse.json(batch.success ? created : created[0], { status: 201 });
-  } catch {
+  } catch (error) {
+    if (isTransientPrismaSessionError(error) || getPrismaErrorCode(error) === "P2028") {
+      return NextResponse.json(
+        { error: "Banco de dados temporariamente indisponivel. Tente novamente." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "Capitulo duplicado, volume inexistente ou dados invalidos." }, { status: 409 });
   }
 }

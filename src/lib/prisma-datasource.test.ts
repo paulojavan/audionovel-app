@@ -5,16 +5,25 @@ import {
   normalizeConnectionLimit,
 } from "./prisma-datasource";
 
-test("preserva o limite da URL quando nao ha override explicito", () => {
+test("limita o pool implicito da URL para proteger os slots do banco", () => {
   const result = getPrismaDatasourceUrl(
     "postgresql://user:secret@db.example:5432/app?sslmode=require&connection_limit=18",
     undefined,
   );
   const url = new URL(result!);
 
-  assert.equal(url.searchParams.get("connection_limit"), "18");
+  assert.equal(url.searchParams.get("connection_limit"), "3");
   assert.equal(url.searchParams.get("sslmode"), "require");
   assert.equal(url.password, "secret");
+});
+
+test("preserva um limite da URL menor que o teto seguro", () => {
+  const result = getPrismaDatasourceUrl(
+    "postgresql://user:secret@db.example:5432/app?connection_limit=2",
+    undefined,
+  );
+
+  assert.equal(new URL(result!).searchParams.get("connection_limit"), "2");
 });
 
 test("permite configurar um limite explicito dentro da faixa segura", () => {

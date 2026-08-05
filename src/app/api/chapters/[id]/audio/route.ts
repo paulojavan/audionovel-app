@@ -6,6 +6,7 @@ import { consumeRateLimitWithLease, getRequestIdentifier } from "@/lib/rate-limi
 import {
   createResumableAudioStream,
   isSafeAudioPassThroughResponse,
+  shouldLogAudioInterruption,
 } from "@/lib/resumable-audio-stream";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
 import { hasPremiumAccess } from "@/lib/subscription";
@@ -147,6 +148,7 @@ export async function GET(request: Request, context: Context) {
         maxContinuations: MAX_AUDIO_CONTINUATIONS,
         downstreamSignal: request.signal,
         onFailure({ attempt, byteOffset }) {
+          if (!shouldLogAudioInterruption(attempt)) return;
           console.warn(JSON.stringify({
             event: "audio_upstream_interrupted",
             timestamp: new Date().toISOString(),

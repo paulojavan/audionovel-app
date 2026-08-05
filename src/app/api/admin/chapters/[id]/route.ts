@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { chapterSchema, cleanYouTubeUrl, getYouTubeVideoId, normalizeTranscript } from "@/lib/admin-chapter-validation";
 import { requireAdmin } from "@/lib/api";
+import { shouldIncrementAudioRevision } from "@/lib/audio-revision";
+import { getPrismaErrorCode, isTransientPrismaSessionError } from "@/lib/auth-session-grace";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { getChapterPersistenceBounds, normalizeChapterParts } from "@/lib/chapter-grouping";
-import { shouldIncrementAudioRevision } from "@/lib/audio-revision";
 import { notifyFavoriteUsersAboutPublishedChapter } from "@/lib/favorite-chapter-notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -77,12 +78,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
 
       return { chapter, notificationEvent };
-    });
+    }, { maxWait: 5_000, timeout: 15_000 });
 
     revalidateTag(CACHE_TAGS.content, "max");
     if (notificationEvent) revalidateTag(CACHE_TAGS.notifications, "max");
     return NextResponse.json(chapter);
-  } catch {
+  } catch (error) {
+    if (isTransientPrismaSessionError(error) || getPrismaErrorCode(error) === "P2028") {
+      return NextResponse.json(
+        { error: "Banco de dados temporariamente indisponivel. Tente novamente." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "Capitulo duplicado, inexistente ou dados invalidos." }, { status: 409 });
   }
 }

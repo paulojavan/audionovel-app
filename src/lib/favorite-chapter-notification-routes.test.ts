@@ -16,6 +16,20 @@ test("POST invalidates notification cache only for a publication event", () => {
   assert.match(createRoute, /notificationEvent[\s\S]*revalidateTag\(CACHE_TAGS\.notifications, "max"\)/);
 });
 
+test("chapter publication transactions tolerate the observed database latency", () => {
+  for (const route of [createRoute, editRoute]) {
+    assert.match(route, /\{ maxWait: 5_000, timeout: 15_000 \}/);
+  }
+});
+
+test("chapter publication reports transient database failures as unavailable", () => {
+  for (const route of [createRoute, editRoute]) {
+    assert.match(route, /isTransientPrismaSessionError\(error\)/);
+    assert.match(route, /getPrismaErrorCode\(error\) === "P2028"/);
+    assert.match(route, /status: 503/);
+  }
+});
+
 test("PATCH claims first publication with a conditional update", () => {
   assert.match(editRoute, /prisma\.\$transaction\(async \(tx\) =>/);
   assert.match(editRoute, /tx\.chapter\.updateMany/);

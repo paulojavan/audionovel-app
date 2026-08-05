@@ -20,6 +20,12 @@ export type CreateResumableAudioStreamOptions = {
   ) => void | Promise<void>;
 };
 
+export function shouldLogAudioInterruption(attempt: number) {
+  return Number.isSafeInteger(attempt) &&
+    attempt > 0 &&
+    Number.isInteger(Math.log2(attempt));
+}
+
 function parseSafeInteger(value: string): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;

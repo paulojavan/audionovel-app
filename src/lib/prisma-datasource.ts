@@ -10,10 +10,9 @@ export function getPrismaDatasourceUrl(
     const url = new URL(rawUrl);
     const connectionLimit =
       normalizeConfiguredConnectionLimit(configuredLimit) ??
-      normalizeConfiguredConnectionLimit(
+      getSafeImplicitConnectionLimit(
         url.searchParams.get("connection_limit") ?? undefined,
-      ) ??
-      DEFAULT_CONNECTION_LIMIT;
+      );
     url.searchParams.set(
       "connection_limit",
       String(connectionLimit),
@@ -24,6 +23,13 @@ export function getPrismaDatasourceUrl(
     // error without this helper ever logging credentials.
     return rawUrl;
   }
+}
+
+function getSafeImplicitConnectionLimit(value: string | undefined) {
+  const urlLimit = normalizeConfiguredConnectionLimit(value);
+  return urlLimit === null
+    ? DEFAULT_CONNECTION_LIMIT
+    : Math.min(urlLimit, DEFAULT_CONNECTION_LIMIT);
 }
 
 export function normalizeConnectionLimit(value: string | undefined) {

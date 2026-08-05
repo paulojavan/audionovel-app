@@ -9,7 +9,20 @@ import {
   getStrongEtag,
   isSafeAudioPassThroughResponse,
   isExactContinuationResponse,
+  shouldLogAudioInterruption,
 } from "./resumable-audio-stream";
+
+test("samples repeated audio interruption logs at powers of two", () => {
+  const loggedAttempts = Array.from(
+    { length: 96 },
+    (_, index) => index + 1,
+  ).filter(shouldLogAudioInterruption);
+
+  assert.deepEqual(loggedAttempts, [1, 2, 4, 8, 16, 32, 64]);
+  for (const invalid of [0, -1, 1.5, Number.NaN]) {
+    assert.equal(shouldLogAudioInterruption(invalid), false);
+  }
+});
 
 function streamFromChunks(
   chunks: Uint8Array[],
