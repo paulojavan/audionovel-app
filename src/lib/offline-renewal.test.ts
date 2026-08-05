@@ -27,5 +27,8 @@ test("rota em lote exige autenticacao premium e renova somente audio publicado",
   assert.match(routeSource, /contentType:\s*"AUDIO"/);
   assert.match(routeSource, /published:\s*true/);
   assert.match(routeSource, /getOfflineLicenseExpiry/);
-  assert.match(routeSource, /offlineDownload\.upsert/);
+  assert.match(routeSource, /offlineDownload\.findMany/);
+  assert.match(routeSource, /offlineDownload\.update/);
+  assert.doesNotMatch(routeSource, /offlineDownload\.upsert/);
+  assert.match(routeSource, /Math\.min\([\s\S]*?download\.expiresAt/);
 });

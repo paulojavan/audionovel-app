@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   await prisma.offlineDownload.upsert({
     where: { userId_chapterId: { userId: auth.user.id, chapterId } },
     create: { userId: auth.user.id, chapterId, cacheKey, expiresAt },
-    update: { cacheKey, expiresAt, lastUsedAt: now },
+    update: { cacheKey, expiresAt, lastUsedAt: now, createdAt: now },
   });
 
   return NextResponse.json({

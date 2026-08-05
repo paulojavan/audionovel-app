@@ -8,6 +8,9 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
   const calls: string[] = [];
   const saved: Array<{ cacheKey: string; expiresAt: string }> = [];
   const result = await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => {
+      calls.push("cleanup");
+    },
     ensureDeviceToken: async () => {
       calls.push("device");
     },
@@ -25,6 +28,7 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
       calls.push(`renew:${chapterIds.join(",")}`);
       return [{ chapterId: "chapter-1", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }];
     },
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, items) => {
       calls.push(`batch:${items.length}`);
@@ -36,10 +40,10 @@ test("reconcilia blob e metadado antes de publicar o shell offline", async () =>
     },
   });
 
-  assert.deepEqual(calls, ["device", "renew:chapter-1", "batch:1", "prepare"]);
+  assert.deepEqual(calls, ["cleanup", "device", "renew:chapter-1", "batch:1", "prepare"]);
   assert.deepEqual(
     saved.map(({ cacheKey, expiresAt }) => ({ cacheKey, expiresAt })),
-    [{ cacheKey: "new-key", expiresAt: "2026-08-10T00:00:00Z" }],
+    [{ cacheKey: "new-key", expiresAt: "2026-07-11T00:00:00.000Z" }],
   );
   assert.deepEqual(result, { renewed: 1, failed: 0 });
 });
@@ -58,6 +62,7 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
   };
 
   const result = await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => undefined,
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => [
       { ...baseItem, chapterId: "chapter-1" },
@@ -67,6 +72,7 @@ test("reconciliacao atualiza varios capitulos com uma unica chamada local", asyn
       { chapterId: "chapter-1", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-1", expiresAt: "2026-08-10T00:00:00Z" },
       { chapterId: "chapter-2", audioRevision: 1, audioUrl: "/api/audio?revision=1", cacheKey: "new-2", expiresAt: "2026-08-10T00:00:00Z" },
     ],
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, items) => {
       batchSizes.push(items.length);
@@ -99,6 +105,7 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
   const renewedChapterBatches: string[][] = [];
   const localBatchSizes: number[] = [];
   const dependencies = {
+    cleanupExpiredItems: async () => undefined,
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => items,
     renewItems: async (chapterIds) => {
@@ -112,6 +119,7 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
         expiresAt: "2026-08-10T00:00:00Z",
       }));
     },
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => undefined,
     updateItemsBatch: async (_scope, renewedItems) => {
       localBatchSizes.push(renewedItems.length);
@@ -140,6 +148,7 @@ test("reconciliacao renova um lote justo de cem capitulos por execucao", async (
 test("reconciliacao substitui audio desatualizado antes dos metadados", async () => {
   const calls: string[] = [];
   const result = await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => undefined,
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => [{
       id: "download-1",
@@ -159,6 +168,7 @@ test("reconciliacao substitui audio desatualizado antes dos metadados", async ()
       cacheKey: "new-key",
       expiresAt: "2026-08-10T00:00:00Z",
     }],
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => {
       calls.push("audio");
     },
@@ -178,6 +188,7 @@ test("reconciliacao substitui audio desatualizado antes dos metadados", async ()
 test("reconciliacao de revisao igual renova sem baixar novamente", async () => {
   let refreshCalls = 0;
   await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => undefined,
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => [{
       id: "download-1",
@@ -197,6 +208,7 @@ test("reconciliacao de revisao igual renova sem baixar novamente", async () => {
       cacheKey: "new-key",
       expiresAt: "2026-08-10T00:00:00Z",
     }],
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => {
       refreshCalls += 1;
     },
@@ -210,6 +222,7 @@ test("reconciliacao de revisao igual renova sem baixar novamente", async () => {
 test("falha ao substituir preserva metadados antigos e registra nova tentativa", async () => {
   const batches: number[] = [];
   const result = await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => undefined,
     ensureDeviceToken: async () => undefined,
     getRecoverableItems: async () => [{
       id: "download-1",
@@ -228,6 +241,7 @@ test("falha ao substituir preserva metadados antigos e registra nova tentativa",
       cacheKey: "new-key",
       expiresAt: "2026-08-10T00:00:00Z",
     }],
+    removeItemsBatch: async () => undefined,
     refreshAudio: async () => {
       throw new Error("network");
     },
@@ -242,11 +256,40 @@ test("falha ao substituir preserva metadados antigos e registra nova tentativa",
   assert.deepEqual(result, { renewed: 0, failed: 1 });
 });
 
-test("layout monta sincronizacao somente para premium ativo", () => {
+test("reconciliacao remove do dispositivo capitulos que o servidor nao renova", async () => {
+  const removed: string[][] = [];
+  const result = await reconcileOfflineEntitlement("user-1", {
+    cleanupExpiredItems: async () => undefined,
+    ensureDeviceToken: async () => undefined,
+    getRecoverableItems: async () => [{
+      id: "download-old",
+      chapterId: "chapter-old",
+      title: "Capitulo antigo",
+      novelTitle: "Novel",
+      volumeTitle: "Volume",
+      chapterPosition: 1,
+      cacheKey: "old-key",
+      expiresAt: "2026-08-10T00:00:00Z",
+    }],
+    renewItems: async () => [],
+    removeItemsBatch: async (_scope, chapterIds) => {
+      removed.push(chapterIds);
+    },
+    refreshAudio: async () => undefined,
+    updateItemsBatch: async () => 0,
+    preparePage: async () => undefined,
+  });
+
+  assert.deepEqual(removed, [["chapter-old"]]);
+  assert.deepEqual(result, { renewed: 0, failed: 0 });
+});
+
+test("layout monta limpeza para toda conta ativa e informa se pode renovar", () => {
   const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
   assert.match(layout, /OfflineEntitlementSync/);
   assert.match(layout, /hasPremiumAccess\(activeSession\.user\)/);
   assert.match(layout, /accountScope=\{activeSession\.user\.id\}/);
+  assert.match(layout, /canRenew=\{hasPremiumAccess\(activeSession\.user\)\}/);
 });
 
 test("coordenador aguarda catalogo no offline e limita rede e repeticoes", () => {

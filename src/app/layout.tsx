@@ -128,8 +128,11 @@ export default async function RootLayout({
         <BlockedSessionLogout blocked={session?.user?.isBlocked} />
         {activeSession ? <SessionHeartbeat /> : null}
         {activeSession ? <ProgressOutboxSync accountScope={activeSession.user.id} /> : null}
-        {activeSession && hasPremiumAccess(activeSession.user) ? (
-          <OfflineEntitlementSync accountScope={activeSession.user.id} />
+        {activeSession ? (
+          <OfflineEntitlementSync
+            accountScope={activeSession.user.id}
+            canRenew={hasPremiumAccess(activeSession.user)}
+          />
         ) : null}
         {!activeSession?.user ? (
           <main className="min-h-screen">{children}</main>

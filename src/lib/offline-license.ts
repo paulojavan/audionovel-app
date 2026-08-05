@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 
 const ADMIN_OFFLINE_LICENSE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const OFFLINE_LICENSE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const ED25519_PKCS8_SEED_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
 
 export type OfflineLicensePayloadV1 = {
@@ -75,7 +76,10 @@ export function getOfflineLicenseExpiry(
     throw new Error("Premium expirado.");
   }
 
-  return premiumExpiry;
+  return new Date(Math.min(
+    premiumExpiry.getTime(),
+    now.getTime() + OFFLINE_LICENSE_MAX_AGE_MS,
+  ));
 }
 
 export function createOfflineLicense({

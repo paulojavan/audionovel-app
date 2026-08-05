@@ -221,18 +221,6 @@ async function writeOfflineItem(accountScope: string, item: OfflineItem) {
   }).finally(() => db.close());
 }
 
-async function deleteOfflineItem(accountScope: string, chapterId: string) {
-  const db = await openAudioDb();
-  return new Promise<void>((resolve, reject) => {
-    const request = db
-      .transaction(OFFLINE_ITEMS_STORE_NAME, "readwrite")
-      .objectStore(OFFLINE_ITEMS_STORE_NAME)
-      .delete(buildAccountStorageKey(accountScope, `offline-item:${chapterId}`));
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  }).finally(() => db.close());
-}
-
 function waitForTransaction(transaction: IDBTransaction) {
   return new Promise<void>((resolve, reject) => {
     transaction.oncomplete = () => resolve();
@@ -270,9 +258,6 @@ export function getAudioCacheExpiry(
 
   const requestedExpiry =
     typeof expiresAt === "number" ? expiresAt : new Date(expiresAt).getTime();
-  if (mode === "offline" && Number.isFinite(requestedExpiry)) {
-    return requestedExpiry;
-  }
   return Number.isFinite(requestedExpiry)
     ? Math.min(defaultExpiry, requestedExpiry)
     : defaultExpiry;
@@ -458,16 +443,41 @@ export async function cleanupExpiredAudioCache() {
 
 export async function cleanupExpiredOfflineItems(accountScope: string) {
   const items = await readAllOfflineItems(accountScope);
-  const validItems = removeExpiredOfflineItems(items);
+  const now = Date.now();
+  const validItems = removeExpiredOfflineItems(items, now);
   const validChapterIds = new Set(validItems.map((item) => item.chapterId));
   const expiredItems = items.filter((item) => !validChapterIds.has(item.chapterId));
 
-  await Promise.all(
-    expiredItems.map(async (item) => {
-      await deleteOfflineItem(accountScope, item.chapterId);
-      await deleteRecord(getAudioCacheId(accountScope, item.chapterId, "offline"));
-    }),
-  );
+  if (expiredItems.length) {
+    const db = await openAudioDb();
+    try {
+      const transaction = db.transaction(
+        [OFFLINE_ITEMS_STORE_NAME, STORE_NAME],
+        "readwrite",
+      );
+      const itemStore = transaction.objectStore(OFFLINE_ITEMS_STORE_NAME);
+      const audioStore = transaction.objectStore(STORE_NAME);
+      for (const item of expiredItems) {
+        itemStore.delete(buildAccountStorageKey(
+          accountScope,
+          `offline-item:${item.chapterId}`,
+        ));
+        audioStore.delete(
+          getAudioCacheId(accountScope, item.chapterId, "offline"),
+        );
+      }
+      await waitForTransaction(transaction);
+      notifyOfflineCatalogUpdated(accountScope);
+    } finally {
+      db.close();
+    }
+  }
+
+  return validItems.reduce<number | null>((nextExpiry, item) => {
+    const expiresAt = new Date(item.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt)) return nextExpiry;
+    return nextExpiry === null ? expiresAt : Math.min(nextExpiry, expiresAt);
+  }, null);
 }
 
 export async function hasValidEncryptedAudio(
@@ -601,6 +611,35 @@ export async function removeOfflineItem(
   }
 }
 
+export async function removeOfflineItemsBatch(
+  accountScope: string,
+  chapterIds: string[],
+) {
+  if (!chapterIds.length) return 0;
+
+  const db = await openAudioDb();
+  try {
+    const transaction = db.transaction(
+      [OFFLINE_ITEMS_STORE_NAME, STORE_NAME],
+      "readwrite",
+    );
+    const itemStore = transaction.objectStore(OFFLINE_ITEMS_STORE_NAME);
+    const audioStore = transaction.objectStore(STORE_NAME);
+    for (const chapterId of chapterIds) {
+      itemStore.delete(buildAccountStorageKey(
+        accountScope,
+        `offline-item:${chapterId}`,
+      ));
+      audioStore.delete(getAudioCacheId(accountScope, chapterId, "offline"));
+    }
+    await waitForTransaction(transaction);
+    notifyOfflineCatalogUpdated(accountScope);
+    return chapterIds.length;
+  } finally {
+    db.close();
+  }
+}
+
 export async function saveOfflineItem(accountScope: string, item: OfflineItem) {
   await writeOfflineItem(accountScope, item);
 }
@@ -672,9 +711,14 @@ export async function updateOfflineItemsBatch(
       request.onsuccess = () => {
         const record = request.result as AudioRecord | undefined;
         if (!record) return;
-        audioStore.put({ ...record, expiresAt } satisfies AudioRecord);
+        const effectiveExpiry = Math.min(record.expiresAt, expiresAt);
+        audioStore.put({
+          ...record,
+          expiresAt: effectiveExpiry,
+        } satisfies AudioRecord);
         itemStore.put({
           ...item,
+          expiresAt: new Date(effectiveExpiry).toISOString(),
           storageId: buildAccountStorageKey(
             accountScope,
             `offline-item:${item.chapterId}`,

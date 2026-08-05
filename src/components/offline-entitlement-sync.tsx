@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
+  cleanupExpiredOfflineItems,
   getEncryptedAudioUrl,
   getRecoverableOfflineItems,
+  removeOfflineItemsBatch,
   updateOfflineItemsBatch,
 } from "@/lib/audio-cache";
 import { ensureClientDeviceToken } from "@/lib/client-device";
@@ -22,9 +24,16 @@ import {
 import { prepareOfflinePage } from "@/lib/pwa-offline";
 
 const RENEW_TIMEOUT_MS = 15_000;
+const MAX_BROWSER_TIMEOUT_MS = 2_147_483_647;
 const inFlightSyncs = new Map<string, Promise<void>>();
 
-export function OfflineEntitlementSync({ accountScope }: { accountScope: string }) {
+export function OfflineEntitlementSync({
+  accountScope,
+  canRenew,
+}: {
+  accountScope: string;
+  canRenew: boolean;
+}) {
   const pathname = usePathname();
 
   useEffect(() => {
@@ -32,10 +41,31 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
     const renewalCursorKey = `audio-novel-offline-renew-cursor:${accountScope}`;
     let disposed = false;
     let retryTimer: number | null = null;
+    let expiryTimer: number | null = null;
 
     const clearRetryTimer = () => {
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
+    };
+
+    const clearExpiryTimer = () => {
+      if (expiryTimer !== null) window.clearTimeout(expiryTimer);
+      expiryTimer = null;
+    };
+
+    const cleanupAndScheduleExpiry = async () => {
+      const nextExpiry = await cleanupExpiredOfflineItems(accountScope);
+      if (disposed) return;
+      clearExpiryTimer();
+      if (nextExpiry !== null) {
+        expiryTimer = window.setTimeout(
+          () => void cleanupAndScheduleExpiry().catch(() => undefined),
+          Math.min(
+            MAX_BROWSER_TIMEOUT_MS,
+            Math.max(0, nextExpiry - Date.now()),
+          ),
+        );
+      }
     };
 
     const scheduleAt = (nextAttemptAt: number) => {
@@ -58,7 +88,7 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
     };
 
     const scheduleStoredAttempt = () => {
-      if (disposed || !navigator.onLine) return;
+      if (disposed || !canRenew || !navigator.onLine) return;
       try {
         const storedValue = sessionStorage.getItem(storageKey);
         const nextAttemptAt = Number(storedValue);
@@ -85,7 +115,9 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
 
       return reconcileOfflineEntitlement(accountScope, {
         ensureDeviceToken: ensureClientDeviceToken,
+        cleanupExpiredItems: cleanupAndScheduleExpiry,
         getRecoverableItems: getRecoverableOfflineItems,
+        removeItemsBatch: removeOfflineItemsBatch,
         renewItems: async (chapterIds) => {
           const controller = new AbortController();
           const timeoutId = window.setTimeout(
@@ -131,7 +163,7 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
     }
 
     function startSync(force = false) {
-      if (disposed || !navigator.onLine) return;
+      if (disposed || !canRenew || !navigator.onLine) return;
       clearRetryTimer();
       try {
         const storedValue = sessionStorage.getItem(storageKey);
@@ -178,15 +210,25 @@ export function OfflineEntitlementSync({ accountScope }: { accountScope: string 
     }
 
     const handleOnline = () => startSync(true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void cleanupAndScheduleExpiry().catch(() => undefined);
+      }
+    };
     window.addEventListener("online", handleOnline);
-    scheduleStoredAttempt();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void cleanupAndScheduleExpiry()
+      .catch(() => undefined)
+      .finally(scheduleStoredAttempt);
 
     return () => {
       disposed = true;
       clearRetryTimer();
+      clearExpiryTimer();
       window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [accountScope, pathname]);
+  }, [accountScope, canRenew, pathname]);
 
   return null;
 }

@@ -40,12 +40,12 @@ test("cache temporario preserva seu limite padrao", () => {
   );
 });
 
-test("cache offline acompanha uma licenca premium superior a sete dias", () => {
+test("cache offline nunca ultrapassa sete dias mesmo com licenca maior", () => {
   const now = new Date("2026-07-10T12:00:00.000Z").getTime();
   const premiumExpiry = now + 30 * 24 * 60 * 60_000;
   assert.equal(
     audioCache.getAudioCacheExpiry("offline", now, premiumExpiry),
-    premiumExpiry,
+    now + 7 * 24 * 60 * 60_000,
   );
 });
 
@@ -107,6 +107,18 @@ test("remocao offline apaga somente as duas chaves do capitulo", () => {
   assert.match(removalBlock, /STORE_NAME/);
   assert.match(removalBlock, /getAudioCacheId\(accountScope, chapterId, "offline"\)/);
   assert.doesNotMatch(removalBlock, /openCursor/);
+});
+
+test("remocao offline em lote apaga metadados e blobs na mesma transacao", () => {
+  const removalBlock = audioCacheSource.match(
+    /export async function removeOfflineItemsBatch[\s\S]*?\r?\n}\r?\n/,
+  )?.[0] ?? "";
+
+  assert.match(removalBlock, /\[OFFLINE_ITEMS_STORE_NAME, STORE_NAME\]/);
+  assert.match(removalBlock, /waitForTransaction/);
+  assert.match(removalBlock, /itemStore\.delete/);
+  assert.match(removalBlock, /audioStore\.delete/);
+  assert.match(removalBlock, /notifyOfflineCatalogUpdated/);
 });
 
 test("renovacao offline agrupa audios e metadados em uma transacao", () => {

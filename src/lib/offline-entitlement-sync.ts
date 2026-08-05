@@ -31,8 +31,13 @@ export type RenewedOfflineItem = {
 
 type OfflineEntitlementSyncDependencies = {
   ensureDeviceToken: () => Promise<unknown>;
+  cleanupExpiredItems: (accountScope: string) => Promise<unknown>;
   getRecoverableItems: (accountScope: string) => Promise<OfflineItem[]>;
   renewItems: (chapterIds: string[]) => Promise<RenewedOfflineItem[]>;
+  removeItemsBatch: (
+    accountScope: string,
+    chapterIds: string[],
+  ) => Promise<unknown>;
   refreshAudio: (
     accountScope: string,
     item: RenewedOfflineItem,
@@ -49,6 +54,7 @@ export async function reconcileOfflineEntitlement(
   dependencies: OfflineEntitlementSyncDependencies,
   renewalCursor?: string | null,
 ): Promise<{ renewed: number; failed: number; nextCursor?: string }> {
+  await dependencies.cleanupExpiredItems(accountScope);
   await dependencies.ensureDeviceToken();
   const recoverableItems = await dependencies.getRecoverableItems(accountScope);
   if (!recoverableItems.length) return { renewed: 0, failed: 0 };
@@ -57,6 +63,15 @@ export async function reconcileOfflineEntitlement(
   const renewedItems = await dependencies.renewItems(
     renewalBatch.map((item) => item.chapterId),
   );
+  const renewedChapterIds = new Set(
+    renewedItems.map((item) => item.chapterId),
+  );
+  const unavailableChapterIds = renewalBatch
+    .filter((item) => !renewedChapterIds.has(item.chapterId))
+    .map((item) => item.chapterId);
+  if (unavailableChapterIds.length) {
+    await dependencies.removeItemsBatch(accountScope, unavailableChapterIds);
+  }
   const localByChapter = new Map(
     recoverableItems.map((item) => [item.chapterId, item]),
   );
@@ -77,7 +92,10 @@ export async function reconcileOfflineEntitlement(
       ...localItem,
       audioRevision: item.audioRevision,
       cacheKey: item.cacheKey,
-      expiresAt: item.expiresAt,
+      expiresAt: new Date(Math.min(
+        new Date(localItem.expiresAt).getTime(),
+        new Date(item.expiresAt).getTime(),
+      )).toISOString(),
     });
   }
   const renewed = await dependencies.updateItemsBatch(

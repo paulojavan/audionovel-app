@@ -36,39 +36,73 @@ export async function POST(request: Request) {
   }
   if (!chapterIds.length) return NextResponse.json({ items: [] });
 
-  const chapters = await prisma.chapter.findMany({
+  const now = new Date();
+  const downloads = await prisma.offlineDownload.findMany({
     where: {
-      id: { in: chapterIds },
-      contentType: "AUDIO",
-      published: true,
+      userId: auth.user.id,
+      chapterId: { in: chapterIds },
+      chapter: {
+        contentType: "AUDIO",
+        published: true,
+      },
     },
-    select: { id: true, audioRevision: true },
+    select: {
+      id: true,
+      chapterId: true,
+      createdAt: true,
+      expiresAt: true,
+      chapter: { select: { audioRevision: true } },
+    },
     take: 100,
   });
-  const now = new Date();
-  const expiresAt = getOfflineLicenseExpiry(
-    auth.user.premiumUntil,
-    now,
-    auth.user.role,
+  const grants = downloads.flatMap((download) => {
+    const maximumExpiry = getOfflineLicenseExpiry(
+      auth.user.premiumUntil,
+      download.createdAt,
+      auth.user.role,
+    );
+    const expiresAt = new Date(Math.min(
+      download.expiresAt.getTime(),
+      maximumExpiry.getTime(),
+    ));
+    if (
+      download.expiresAt.getTime() <= now.getTime() ||
+      expiresAt.getTime() <= now.getTime()
+    ) return [];
+    return [{
+      id: download.id,
+      chapterId: download.chapterId,
+      audioRevision: download.chapter.audioRevision,
+      cacheKey: randomBytes(24).toString("base64url"),
+      expiresAt,
+    }];
+  });
+  const grantedChapterIds = new Set(grants.map((grant) => grant.chapterId));
+  const unavailableChapterIds = chapterIds.filter(
+    (chapterId) => !grantedChapterIds.has(chapterId),
   );
-  const grants = chapters.map(({ id: chapterId, audioRevision }) => ({
-    chapterId,
-    audioRevision,
-    cacheKey: randomBytes(24).toString("base64url"),
-  }));
-  // Os upserts rodam em uma unica transacao sequencial: um Promise.all aqui
+  // As atualizacoes rodam em uma unica transacao sequencial: um Promise.all aqui
   // disparava ate 100 escritas concorrentes por request, ocupando todo o pool
   // de conexoes e derrubando o banco (P2037) nos horarios de pico.
   await prisma.$transaction(
-    grants.map(({ chapterId, cacheKey }) =>
-      prisma.offlineDownload.upsert({
-        where: { userId_chapterId: { userId: auth.user.id, chapterId } },
-        create: { userId: auth.user.id, chapterId, cacheKey, expiresAt },
-        update: { cacheKey, expiresAt, lastUsedAt: now },
-      }),
-    ),
+    [
+      ...grants.map(({ id, cacheKey, expiresAt }) =>
+        prisma.offlineDownload.update({
+          where: { id },
+          data: { cacheKey, expiresAt, lastUsedAt: now },
+        }),
+      ),
+      ...(unavailableChapterIds.length ? [
+        prisma.offlineDownload.deleteMany({
+          where: {
+            userId: auth.user.id,
+            chapterId: { in: unavailableChapterIds },
+          },
+        }),
+      ] : []),
+    ],
   );
-  const items = grants.map(({ chapterId, audioRevision, cacheKey }) => ({
+  const items = grants.map(({ chapterId, audioRevision, cacheKey, expiresAt }) => ({
     chapterId,
     cacheKey,
     expiresAt: expiresAt.toISOString(),

@@ -18,10 +18,10 @@ test("licenca offline termina no premiumUntil quando ele vem antes de 24 horas",
   );
 });
 
-test("licenca offline acompanha os trinta dias restantes do premium", () => {
+test("licenca offline fica limitada a sete dias quando o premium dura mais", () => {
   assert.equal(
     getOfflineLicenseExpiry(new Date("2026-08-10T12:00:00.000Z"), NOW).toISOString(),
-    "2026-08-10T12:00:00.000Z",
+    "2026-07-17T12:00:00.000Z",
   );
 });
 
@@ -43,7 +43,7 @@ test("licenca v2 fica vinculada ao dispositivo estavel e nao a sessao", () => {
 
   assert.equal(payload.version, 2);
   assert.equal(payload.deviceId, "device-1");
-  assert.equal(payload.expiresAt, "2026-08-10T12:00:00.000Z");
+  assert.equal(payload.expiresAt, "2026-07-17T12:00:00.000Z");
 });
 
 test("licenca v2 rejeita outro dispositivo", () => {
