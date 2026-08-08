@@ -1,4 +1,4 @@
-const DEFAULT_CONNECTION_LIMIT = 3;
+const DEFAULT_CONNECTION_LIMIT = 5;
 
 export function getPrismaDatasourceUrl(
   rawUrl: string | undefined,

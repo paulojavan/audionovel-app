@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { openAudioUpstream } from "@/lib/audio-upstream";
+import { getCachedChapterMedia } from "@/lib/chapter-media";
 import { prisma } from "@/lib/prisma";
-import { CHAPTER_MEDIA_SOURCE_SELECT } from "@/lib/page-data-select";
 import { consumeRateLimitWithLease, getRequestIdentifier } from "@/lib/rate-limit";
 import {
+  createCancellationSafeAudioStream,
   createResumableAudioStream,
   isSafeAudioPassThroughResponse,
   shouldLogAudioInterruption,
@@ -23,16 +24,15 @@ const MAX_AUDIO_CONTINUATIONS = 96;
 
 export async function GET(request: Request, context: Context) {
   const { id } = await context.params;
-  const session = await getActiveServerSession();
-
-  const media = await prisma.chapter.findUnique({
-    where: { id, published: true },
-    select: CHAPTER_MEDIA_SOURCE_SELECT,
-  });
+  const media = await getCachedChapterMedia(id);
 
   if (!media) {
     return NextResponse.json({ error: "Capitulo nao encontrado." }, { status: 404 });
   }
+  const offlineKey = new URL(request.url).searchParams.get("offline");
+  const requiresSession = media.premiumOnly || Boolean(offlineKey);
+  const session = requiresSession ? await getActiveServerSession() : null;
+
   if (media.premiumOnly && !session?.user?.id) {
     return NextResponse.json({ error: "Faca login para ouvir este capitulo." }, { status: 401 });
   }
@@ -66,7 +66,6 @@ export async function GET(request: Request, context: Context) {
     return NextResponse.json({ error: "URL de audio invalida ou nao permitida." }, { status: 400 });
   }
 
-  const offlineKey = new URL(request.url).searchParams.get("offline");
   if (offlineKey) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Autenticacao obrigatoria para audio offline." }, { status: 401 });
@@ -135,7 +134,7 @@ export async function GET(request: Request, context: Context) {
   let body: ReadableStream<Uint8Array>;
   try {
     body = isSafeAudioPassThroughResponse(range, upstream)
-      ? upstream.body
+      ? createCancellationSafeAudioStream(upstream.body, request.signal)
       : createResumableAudioStream({
         initialResponse: upstream,
         requestRange: range,

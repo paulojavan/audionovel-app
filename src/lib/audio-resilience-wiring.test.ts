@@ -19,6 +19,10 @@ const audioUpstream = readFileSync(
   join(process.cwd(), "src", "lib", "audio-upstream.ts"),
   "utf8",
 );
+const chapterMedia = readFileSync(
+  join(process.cwd(), "src", "lib", "chapter-media.ts"),
+  "utf8",
+);
 const downloadModalPath = join(process.cwd(), "src", "components", "audio-download-modal.tsx");
 const downloadModal = existsSync(downloadModalPath) ? readFileSync(downloadModalPath, "utf8") : "";
 
@@ -222,7 +226,7 @@ test("rota preserva respostas Range validas que nao podem ser retomadas", () => 
   assert.match(audioRoute, /isSafeAudioPassThroughResponse\(range,\s*upstream\)/);
   assert.match(
     audioRoute,
-    /isSafeAudioPassThroughResponse\(range,\s*upstream\)\s*\?\s*upstream\.body\s*:/,
+    /isSafeAudioPassThroughResponse\(range,\s*upstream\)\s*\?\s*createCancellationSafeAudioStream\(upstream\.body, request\.signal\)\s*:/,
   );
 });
 
@@ -244,7 +248,10 @@ test("rota protege criacao sincrona do stream e registra apenas campos sanitizad
 });
 
 test("rota preserva autorizacao, validacao offline e rejeicao de redirect", () => {
-  assert.match(audioRoute, /select:\s*CHAPTER_MEDIA_SOURCE_SELECT/);
+  assert.match(audioRoute, /getCachedChapterMedia\(id\)/);
+  assert.match(chapterMedia, /unstable_cache/);
+  assert.match(chapterMedia, /select:\s*CHAPTER_MEDIA_SOURCE_SELECT/);
+  assert.match(chapterMedia, /tags:\s*\[CACHE_TAGS\.content\]/);
   assert.match(audioRoute, /media\.premiumOnly && !hasPremiumAccess\(session\?\.user\)/);
   assert.match(audioRoute, /consumeRateLimitWithLease\(/);
   assert.match(audioRoute, /leaseSize:\s*12/);
@@ -252,6 +259,17 @@ test("rota preserva autorizacao, validacao offline e rejeicao de redirect", () =
   assert.match(audioRoute, /prisma\.offlineDownload\.findFirst/);
   assert.match(audioRoute, /prisma\.offlineDownload\.update/);
   assert.match(audioRoute, /upstream\.status >= 300 && upstream\.status < 400/);
+});
+
+test("rota publica evita validacao de sessao quando nao ha requisito privado", () => {
+  assert.match(
+    audioRoute,
+    /const requiresSession = media\.premiumOnly \|\| Boolean\(offlineKey\);/,
+  );
+  assert.match(
+    audioRoute,
+    /const session = requiresSession \? await getActiveServerSession\(\) : null;/,
+  );
 });
 
 test("rota encaminha apenas Range inicialmente e preserva metadados da resposta", () => {

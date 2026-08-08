@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { openAudioUpstream } from "./audio-upstream";
 import {
   createResumableAudioStream,
+  createCancellationSafeAudioStream,
+  getAudioContinuationRetryDelayMs,
   getAudioResponseStart,
   getContinuationRequestHeaders,
   getContinuationRange,
@@ -11,6 +13,44 @@ import {
   isExactContinuationResponse,
   shouldLogAudioInterruption,
 } from "./resumable-audio-stream";
+
+test("backs off only while a continuation makes no byte progress", () => {
+  assert.equal(getAudioContinuationRetryDelayMs(0), 0);
+  assert.equal(getAudioContinuationRetryDelayMs(1), 100);
+  assert.equal(getAudioContinuationRetryDelayMs(2), 200);
+  assert.equal(getAudioContinuationRetryDelayMs(3), 400);
+  assert.equal(getAudioContinuationRetryDelayMs(4), 800);
+  assert.equal(getAudioContinuationRetryDelayMs(5), 1_000);
+  assert.equal(getAudioContinuationRetryDelayMs(50), 1_000);
+});
+
+test("closes pass-through audio cleanly when the downstream disconnects", async () => {
+  const downstream = new AbortController();
+  let cancelled = false;
+  const source = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const stream = createCancellationSafeAudioStream(
+    source,
+    downstream.signal,
+  );
+  const reader = stream.getReader();
+
+  assert.deepEqual(await reader.read(), {
+    done: false,
+    value: new Uint8Array([1]),
+  });
+  downstream.abort();
+  assert.deepEqual(await reader.read(), { done: true, value: undefined });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(cancelled, true);
+});
 
 test("samples repeated audio interruption logs at powers of two", () => {
   const loggedAttempts = Array.from(

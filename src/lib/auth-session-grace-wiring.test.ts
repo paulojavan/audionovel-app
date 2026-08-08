@@ -52,11 +52,11 @@ test("coalesces simultaneous established-session database lookups", () => {
   );
   assert.match(
     authSource,
-    /const deviceSessionRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*0,[\s\S]*?maxEntries:\s*1_024/,
+    /const deviceSessionRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*SESSION_REFRESH_CACHE_TTL_MS,[\s\S]*?maxEntries:\s*1_024/,
   );
   assert.match(
     authSource,
-    /const userStateRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*0,[\s\S]*?maxEntries:\s*1_024/,
+    /const userStateRefreshCache = createAsyncTtlCache<[\s\S]*?ttlMs:\s*SESSION_REFRESH_CACHE_TTL_MS,[\s\S]*?maxEntries:\s*1_024/,
   );
 
   const establishedSessionRefresh = sourceBetween(
@@ -71,6 +71,15 @@ test("coalesces simultaneous established-session database lookups", () => {
   assert.match(
     establishedSessionRefresh,
     /findUserState:\s*\(userId\)\s*=>\s*userStateRefreshCache\.get\(/,
+  );
+});
+
+test("reuses successful refreshes briefly without exceeding the revocation bound", () => {
+  assert.match(authSource, /const SESSION_REVOCATION_MAX_DELAY_MS = 30_000;/);
+  assert.match(authSource, /const SESSION_REFRESH_CACHE_TTL_MS = 5_000;/);
+  assert.match(
+    authSource,
+    /const SESSION_VALIDATION_INTERVAL_MS\s*=\s*SESSION_REVOCATION_MAX_DELAY_MS\s*-\s*SESSION_REFRESH_CACHE_TTL_MS/,
   );
 });
 

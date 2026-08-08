@@ -26,6 +26,11 @@ export function shouldLogAudioInterruption(attempt: number) {
     Number.isInteger(Math.log2(attempt));
 }
 
+export function getAudioContinuationRetryDelayMs(stalledAttempts: number) {
+  if (!Number.isSafeInteger(stalledAttempts) || stalledAttempts <= 0) return 0;
+  return Math.min(100 * 2 ** Math.min(stalledAttempts - 1, 4), 1_000);
+}
+
 function parseSafeInteger(value: string): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
@@ -276,6 +281,108 @@ function createAbortError() {
   return new DOMException("Audio stream aborted.", "AbortError");
 }
 
+function waitForAudioRetry(delayMs: number, signal: AbortSignal) {
+  if (delayMs <= 0) return Promise.resolve();
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? createAbortError());
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal.reason ?? createAbortError());
+    };
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export function createCancellationSafeAudioStream(
+  source: ReadableStream<Uint8Array>,
+  downstreamSignal: AbortSignal,
+) {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let terminated = false;
+
+  const cleanUp = () => {
+    downstreamSignal.removeEventListener("abort", abort);
+  };
+  const releaseReader = (reason?: unknown) => {
+    const activeReader = reader;
+    reader = null;
+    if (!activeReader) return;
+    void activeReader.cancel(reason).catch(() => undefined).finally(() => {
+      try {
+        activeReader.releaseLock();
+      } catch {
+        // The runtime may have already released the completed reader.
+      }
+    });
+  };
+  const abort = () => {
+    if (terminated) return;
+    terminated = true;
+    cleanUp();
+    releaseReader(downstreamSignal.reason ?? createAbortError());
+    controller?.close();
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController;
+      reader = source.getReader();
+      downstreamSignal.addEventListener("abort", abort, { once: true });
+      if (downstreamSignal.aborted) abort();
+    },
+    async pull(streamController) {
+      const activeReader = reader;
+      if (!activeReader || terminated) return;
+      try {
+        const result = await activeReader.read();
+        if (terminated) return;
+        if (result.done) {
+          terminated = true;
+          cleanUp();
+          reader = null;
+          activeReader.releaseLock();
+          streamController.close();
+          return;
+        }
+        streamController.enqueue(result.value);
+      } catch (error) {
+        if (terminated) return;
+        terminated = true;
+        cleanUp();
+        reader = null;
+        try {
+          activeReader.releaseLock();
+        } catch {
+          // Best-effort cleanup after an upstream read failure.
+        }
+        streamController.error(error);
+      }
+    },
+    cancel(reason) {
+      if (terminated) return;
+      terminated = true;
+      cleanUp();
+      const activeReader = reader;
+      reader = null;
+      return activeReader?.cancel(reason).catch(() => undefined).finally(() => {
+        try {
+          activeReader.releaseLock();
+        } catch {
+          // Best-effort cleanup after downstream cancellation.
+        }
+      });
+    },
+  });
+}
+
 type InitialResponseMetadata = {
   responseStart: number;
   expectedLength: number | null;
@@ -371,6 +478,8 @@ export function createResumableAudioStream({
   const representationTotal = initialMetadata.representationTotal;
   const strongEtag = initialMetadata.strongEtag;
   let continuationAttempts = 0;
+  let lastContinuationOffset: number | null = null;
+  let stalledContinuationAttempts = 0;
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   let terminated = false;
   let abortListener: (() => void) | null = null;
@@ -453,6 +562,16 @@ export function createResumableAudioStream({
       }
 
       continuationAttempts += 1;
+      if (lastContinuationOffset === byteOffset) {
+        stalledContinuationAttempts += 1;
+      } else {
+        lastContinuationOffset = byteOffset;
+        stalledContinuationAttempts = 0;
+      }
+      await waitForAudioRetry(
+        getAudioContinuationRetryDelayMs(stalledContinuationAttempts),
+        continuationAbort.signal,
+      );
       try {
         const observation = onFailure?.({
           attempt: continuationAttempts,

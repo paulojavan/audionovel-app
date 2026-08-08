@@ -10,13 +10,16 @@ import { verifyPassword } from "./password";
 import { prisma } from "./prisma";
 import { consumeRateLimit, getRequestIdentifierFromHeaders } from "./rate-limit";
 
-const SESSION_VALIDATION_INTERVAL_MS = 30_000;
+const SESSION_REVOCATION_MAX_DELAY_MS = 30_000;
+const SESSION_REFRESH_CACHE_TTL_MS = 5_000;
+const SESSION_VALIDATION_INTERVAL_MS =
+  SESSION_REVOCATION_MAX_DELAY_MS - SESSION_REFRESH_CACHE_TTL_MS;
 
 const deviceSessionRefreshCache = createAsyncTtlCache<
   string,
   Awaited<ReturnType<typeof validateDeviceSession>>
 >({
-  ttlMs: 0,
+  ttlMs: SESSION_REFRESH_CACHE_TTL_MS,
   maxEntries: 1_024,
 });
 
@@ -24,7 +27,7 @@ const userStateRefreshCache = createAsyncTtlCache<
   string,
   RefreshedUserState | null
 >({
-  ttlMs: 0,
+  ttlMs: SESSION_REFRESH_CACHE_TTL_MS,
   maxEntries: 1_024,
 });
 
