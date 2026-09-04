@@ -3,9 +3,16 @@ import test from "node:test";
 import {
   advanceAudioRetryState,
   buildAudioRetrySource,
+  isPlaybackStartBlocked,
   resolveInterruptedAudioRetry,
   shouldRetryMediaError,
 } from "./audio-player-retry";
+
+test("does not treat an autoplay policy rejection as a streaming failure", () => {
+  assert.equal(isPlaybackStartBlocked({ name: "NotAllowedError" }), true);
+  assert.equal(isPlaybackStartBlocked({ name: "NetworkError" }), false);
+  assert.equal(isPlaybackStartBlocked(new Error("failed")), false);
+});
 
 test("retries one network or decode media failure", () => {
   assert.equal(shouldRetryMediaError({ errorCode: 2, retryCount: 0 }), true);

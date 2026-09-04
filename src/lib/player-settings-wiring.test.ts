@@ -31,7 +31,8 @@ test("player online usa menu de configuracoes para velocidade, pausa e proximo c
   assert.match(onlinePlayer, /PlayerSettingsMenu/);
   assert.match(onlinePlayer, /autoPlayNextChapter/);
   assert.match(onlinePlayer, /nextChapterHref/);
-  assert.match(onlinePlayer, /window\.location\.href = nextChapterHref/);
+  assert.match(onlinePlayer, /nextChapterPlayback/);
+  assert.match(onlinePlayer, /router\.push\(next\.href, \{ scroll: false \}\)/);
   assert.match(onlinePlayer, /playMode/);
   assert.match(onlinePlayer, /updateSettings\(\{ playMode: "karaoke" \}\)/);
   assert.match(onlinePlayer, /updateSettings\(\{ playMode: "page" \}\)/);
@@ -65,11 +66,13 @@ test("modo pagina mantem volume ao lado das configuracoes e abre o controle abai
 
 test("proximo capitulo automatico inicia playback no capitulo carregado", () => {
   assert.match(onlinePlayer, /NEXT_CHAPTER_AUTOPLAY_KEY/);
-  assert.match(onlinePlayer, /sessionStorage\.setItem\(NEXT_CHAPTER_AUTOPLAY_KEY,\s*nextChapterHref\)/);
+  assert.match(onlinePlayer, /sessionStorage\.setItem\(NEXT_CHAPTER_AUTOPLAY_KEY, next\.href\)/);
   assert.match(onlinePlayer, /sessionStorage\.getItem\(NEXT_CHAPTER_AUTOPLAY_KEY\)/);
   assert.match(onlinePlayer, /targetUrl\.pathname === window\.location\.pathname/);
   assert.match(onlinePlayer, /window\.setTimeout\(\(\) => \{[\s\S]*void playDownloadedAudio\(\)/);
   assert.match(onlinePlayer, /window\.clearTimeout\(autoplayTimer\)/);
+  assert.match(onlinePlayer, /continueWithNextChapter/);
+  assert.match(onlinePlayer, /audio\.src = next\.src/);
   assert.match(onlinePlayer, /setKaraokeMode\(playMode === "karaoke"\)/);
 });
 
@@ -96,4 +99,5 @@ test("player offline le somente o audio selecionado e nao faz preflight duplicad
 
 test("pagina de capitulo entrega link do proximo capitulo ao player", () => {
   assert.match(chapterPage, /nextChapterHref=\{nextChapter \? `\/chapters\/\$\{nextChapter\.id\}` : null\}/);
+  assert.match(chapterPage, /nextChapterPlayback=\{nextChapterPlayback\}/);
 });

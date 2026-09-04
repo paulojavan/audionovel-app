@@ -46,7 +46,8 @@ test("player integra controles nativos quando Media Session esta disponivel", ()
 });
 
 test("player reinicia o progresso ao trocar de capitulo e salva a posicao ao sair", () => {
-  assert.match(player, /playbackStartedRef\.current = false/);
+  assert.match(player, /playbackStartedRef\.current = isSeamlessContinuation/);
+  assert.match(player, /const isSeamlessContinuation = seamlessTransition\?\.chapterId === chapterId/);
   assert.match(player, /completionSentRef\.current = false;/);
   assert.match(player, /pendingStartRef\.current = null;/);
   assert.match(player, /resumePositionRef\.current = resumePosition/);
@@ -86,14 +87,13 @@ test("reouvir um capitulo concluido registra o novo tempo em vez de travar a con
   assert.doesNotMatch(player, /mergeCompletion/);
 });
 
-test("capitulo e marcado como concluido antes de avancar automaticamente para o proximo", () => {
-  const endedHandler = player.match(/onEnded=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
+test("capitulo inicia o proximo audio no mesmo elemento antes de navegar", () => {
+  const endedHandler = player.match(/onEnded=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
   assert.match(endedHandler, /saveProgress\(chapterId, \{ completed: true, force: true, keepalive: true \}\)/);
-  assert.match(endedHandler, /progressSave\.finally\(\(\) => \{/);
-  assert.ok(
-    endedHandler.indexOf("saveProgress(chapterId, { completed: true") <
-      endedHandler.indexOf("window.location.href = nextChapterHref"),
-  );
+  assert.match(endedHandler, /continueWithNextChapter\(event\.currentTarget\)/);
+  assert.doesNotMatch(endedHandler, /window\.location/);
+  assert.match(player, /audio\.src = next\.src;[\s\S]*?audio\.load\(\);[\s\S]*?audio\.play\(\)/);
+  assert.match(player, /router\.push\(next\.href, \{ scroll: false \}\)/);
   assert.match(player, /if \(!completionSentRef\.current\) \{\s*void saveProgress\(chapterId, \{ completed: true, force: true, keepalive: true \}\)/);
 });
 
@@ -151,7 +151,7 @@ test("player descarta downloads antigos quando a origem muda", () => {
   assert.match(player, /instanceof StaleAudioPlaybackError/);
   assert.match(player, /audioSource\?\.chapterId === chapterId/);
   assert.match(player, /audioSource\.audioRevision === resolvedIdentity\.audioRevision/);
-  assert.match(player, /}, \[audioRevision, chapterId, src\]\)/);
+  assert.match(player, /}, \[audioRevision, chapterId, src, startOffset\]\)/);
   assert.doesNotMatch(player, /sourceProp/);
 });
 
@@ -192,10 +192,20 @@ test("capitulo ja concluido pode ser reproduzido novamente do inicio", () => {
   assert.doesNotMatch(player, /startOffset \+ initialPosition/);
 });
 
-test("erro do elemento local nao tenta reiniciar streaming", () => {
+test("erro de rede ou decodificacao retenta o stream uma vez e preserva a posicao", () => {
   const errorHandler = player.match(/onError=\{\(event\) => \{[\s\S]*?\n\s*\}\}/)?.[0] ?? "";
-  assert.doesNotMatch(errorHandler, /resolveInterruptedAudioRetry|beginAudioReload|shouldRetryMediaError/);
+  assert.match(errorHandler, /resolveInterruptedAudioRetry/);
+  assert.match(errorHandler, /shouldRetryMediaError/);
+  assert.match(errorHandler, /buildAudioRetrySource/);
+  assert.match(errorHandler, /pendingRetryRef\.current = pendingRetry/);
   assert.match(errorHandler, /setPlaybackError\(PLAYBACK_CONNECTION_ERROR\)/);
+});
+
+test("Safari recebe play ainda na tarefa do gesto antes de aguardar metadados", () => {
+  const startPlayback = player.match(/const startPlayback = async[\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.ok(startPlayback.indexOf("playbackPromise = activeAudio.play()") >= 0);
+  assert.ok(startPlayback.indexOf("playbackPromise = activeAudio.play()") < startPlayback.indexOf("await waitForMetadata(activeAudio)"));
+  assert.match(player, /isPlaybackStartBlocked\(error\)/);
 });
 
 test("servidor grava a conclusao mais recente e nao aborta streaming depois dos cabecalhos", () => {

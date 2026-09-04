@@ -1,6 +1,7 @@
 "use client";
 
 import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioDownloadModal } from "@/components/audio-download-modal";
 import { KaraokeVolumeMenu } from "@/components/karaoke-volume-menu";
@@ -10,6 +11,14 @@ import { getEncryptedAudioUrl } from "@/lib/audio-cache";
 import { getInitialResumePosition, isPlaybackComplete, shouldSaveCheckpoint } from "@/lib/audio-progress";
 import { getQueuedProgress, queueProgress, removeQueuedProgress } from "@/lib/progress-outbox";
 import { getCurrentChapterAudioIdentity } from "@/lib/current-audio-revision";
+import {
+  advanceAudioRetryState,
+  buildAudioRetrySource,
+  isPlaybackStartBlocked,
+  resolveInterruptedAudioRetry,
+  shouldRetryMediaError,
+  type AudioRetryState,
+} from "@/lib/audio-player-retry";
 import {
   getActiveChapterPartIndex,
   getAdjacentChapterPart,
@@ -30,6 +39,18 @@ const NEXT_CHAPTER_AUTOPLAY_KEY = "audio-novel-next-chapter-autoplay-v1";
 
 class StaleAudioPlaybackError extends Error {}
 
+export type NextChapterPlayback = {
+  chapterId: string;
+  href: string;
+  audioRevision: number;
+  src: string;
+  duration: number;
+  startOffset: number;
+  chapterTitle: string;
+  novelTitle: string;
+  coverUrl: string;
+};
+
 export function AudioPlayer({
   chapterId,
   audioRevision,
@@ -45,6 +66,7 @@ export function AudioPlayer({
   chapterParts = [],
   accountScope,
   nextChapterHref = null,
+  nextChapterPlayback = null,
 }: {
   chapterId: string;
   audioRevision: number;
@@ -60,7 +82,9 @@ export function AudioPlayer({
   chapterParts?: ChapterPlaybackPart[];
   accountScope: string;
   nextChapterHref?: string | null;
+  nextChapterPlayback?: NextChapterPlayback | null;
 }) {
+  const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingStartRef = useRef<number | null>(null);
   const transcriptCueRefs = useRef<Array<HTMLParagraphElement | null>>([]);
@@ -72,6 +96,12 @@ export function AudioPlayer({
   const playbackStartedRef = useRef(false);
   const playbackActiveRef = useRef(false);
   const desiredPlaybackRef = useRef(false);
+  const audioRetryStateRef = useRef<AudioRetryState>({
+    sourceRevision: 0,
+    automaticRetryCount: 0,
+  });
+  const pendingRetryRef = useRef<{ position: number; shouldResume: boolean } | null>(null);
+  const seamlessTransitionRef = useRef<NextChapterPlayback | null>(null);
   const audioGenerationRef = useRef(0);
   const downloadedAudioRef = useRef<{ chapterId: string; audioRevision: number; source: string; objectUrl: string } | null>(null);
   const downloadPromiseRef = useRef<{
@@ -137,9 +167,15 @@ export function AudioPlayer({
   const nextCue = activeIndex >= 0 && activeIndex < transcript.length - 1 ? transcript[activeIndex + 1] : null;
   const progressDuration = resolvedDuration || duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (current / progressDuration) * 100));
-  const activeAudioSource = audioSource?.chapterId === chapterId &&
-    audioSource.audioRevision === resolvedIdentity.audioRevision
-    ? audioSource.objectUrl
+  const audioSourceMatchesPage = audioSource?.chapterId === chapterId &&
+    audioSource.audioRevision === resolvedIdentity.audioRevision;
+  const audioSourceMatchesQueuedNext = Boolean(
+    nextChapterPlayback &&
+      audioSource?.chapterId === nextChapterPlayback.chapterId &&
+      audioSource.audioRevision === nextChapterPlayback.audioRevision,
+  );
+  const activeAudioSource = audioSourceMatchesPage || audioSourceMatchesQueuedNext
+    ? audioSource?.objectUrl ?? ""
     : "";
   const downloadingAudio = audioDownload?.chapterId === chapterId &&
     audioDownload.audioRevision === resolvedIdentity.audioRevision &&
@@ -183,6 +219,9 @@ export function AudioPlayer({
   useEffect(() => {
     audioGenerationRef.current += 1;
     const generation = audioGenerationRef.current;
+    const seamlessTransition = seamlessTransitionRef.current;
+    const isSeamlessContinuation = seamlessTransition?.chapterId === chapterId;
+    if (isSeamlessContinuation) seamlessTransitionRef.current = null;
     currentAudioIdentityRef.current = {
       chapterId,
       pageAudioRevision: audioRevision,
@@ -194,16 +233,25 @@ export function AudioPlayer({
     const downloadedAudio = downloadedAudioRef.current;
     if (downloadedAudio) URL.revokeObjectURL(downloadedAudio.objectUrl);
     downloadedAudioRef.current = null;
-    playbackActiveRef.current = false;
-    desiredPlaybackRef.current = false;
+    audioRetryStateRef.current = {
+      sourceRevision: 0,
+      automaticRetryCount: 0,
+    };
+    pendingRetryRef.current = null;
+    if (!isSeamlessContinuation) {
+      playbackActiveRef.current = false;
+      desiredPlaybackRef.current = false;
+    }
     // A navegacao SPA preserva este componente entre capitulos: sem o reset, o
     // estado do capitulo anterior corromperia o progresso do capitulo novo
     // (ex.: conclusao alavancada ou salvamentos com a posicao zerada).
-    playbackStartedRef.current = false;
+    playbackStartedRef.current = isSeamlessContinuation;
     // Um salvamento ainda nao confirmado pelo servidor (fila offline) e mais
     // recente que a posicao embutida no HTML e prevalece sobre ela.
     const queuedProgress = getQueuedProgress(accountScopeRef.current, chapterId);
-    const resumePosition = queuedProgress
+    const resumePosition = isSeamlessContinuation
+      ? Math.max(0, (audioRef.current?.currentTime ?? startOffset) - startOffset)
+      : queuedProgress
       ? getInitialResumePosition(
           queuedProgress.positionSec,
           queuedProgress.durationSec || durationPropRef.current,
@@ -211,7 +259,7 @@ export function AudioPlayer({
         )
       : initialResumePositionRef.current;
     completionSentRef.current = false;
-    pendingStartRef.current = null;
+    if (!isSeamlessContinuation) pendingStartRef.current = null;
     lastCheckpointAtRef.current = 0;
     lastProgressPayloadRef.current = "";
     resumePositionRef.current = resumePosition;
@@ -228,7 +276,7 @@ export function AudioPlayer({
       if (activeDownload) URL.revokeObjectURL(activeDownload.objectUrl);
       downloadedAudioRef.current = null;
     };
-  }, [audioRevision, chapterId, src]);
+  }, [audioRevision, chapterId, src, startOffset]);
 
   const saveProgress = useCallback(async (targetChapterId: string, {
     completed = false,
@@ -444,9 +492,20 @@ export function AudioPlayer({
         if (!audioRef.current) return;
         const activeAudio = audioRef.current;
         const justLoadedSource = activeAudio.getAttribute("src") !== playbackSource;
+        activeAudio.playbackRate = playbackRate;
+        activeAudio.volume = volume;
+        activeAudio.muted = muted;
+        desiredPlaybackRef.current = true;
+
+        // No Safari/iOS, aguardar loadedmetadata antes de chamar play perde a
+        // ativacao do toque. Solicitar a reproducao na mesma tarefa do gesto
+        // evita o fallback de baixar o arquivo inteiro e a pressao de memoria.
+        let playbackPromise: Promise<void> | null = null;
         if (justLoadedSource) {
           activeAudio.src = playbackSource;
           activeAudio.load();
+          playbackPromise = activeAudio.play();
+          void playbackPromise.catch(() => undefined);
         }
         await waitForMetadata(activeAudio);
         if (generation !== audioGenerationRef.current) return;
@@ -465,11 +524,7 @@ export function AudioPlayer({
         activeAudio.currentTime = nextPosition;
         setKaraokeMode(playMode === "karaoke");
         setPlaybackError("");
-        activeAudio.playbackRate = playbackRate;
-        activeAudio.volume = volume;
-        activeAudio.muted = muted;
-        desiredPlaybackRef.current = true;
-        await activeAudio.play();
+        await (playbackPromise ?? activeAudio.play());
         if (generation !== audioGenerationRef.current) return;
         setPlaying(true);
       };
@@ -486,6 +541,7 @@ export function AudioPlayer({
       } catch (error) {
         if (
           !sourceWasDirectStream ||
+          isPlaybackStartBlocked(error) ||
           generation !== audioGenerationRef.current ||
           error instanceof StaleAudioPlaybackError
         ) {
@@ -513,6 +569,13 @@ export function AudioPlayer({
     if (!audio || downloadingAudio) return;
 
     if (audio.paused) {
+      if (playbackError || audio.error) {
+        audioRetryStateRef.current = advanceAudioRetryState({
+          state: audioRetryStateRef.current,
+          reason: "manual",
+        });
+        pendingRetryRef.current = null;
+      }
       void playDownloadedAudio();
     } else {
       desiredPlaybackRef.current = false;
@@ -581,6 +644,11 @@ export function AudioPlayer({
   }, [autoPlayNextChapter, chapterId, playDownloadedAudio]);
 
   useEffect(() => {
+    if (!autoPlayNextChapter || !nextChapterPlayback) return;
+    router.prefetch(nextChapterPlayback.href);
+  }, [autoPlayNextChapter, nextChapterPlayback, router]);
+
+  useEffect(() => {
     if (!shouldScrollActiveCueRef.current || activeIndex < 0) return;
 
     transcriptCueRefs.current[activeIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -622,6 +690,68 @@ export function AudioPlayer({
     updateSettings({ playbackRate: nextRate });
     if (audio) audio.playbackRate = nextRate;
   }
+
+  const continueWithNextChapter = useCallback((audio: HTMLAudioElement) => {
+    const next = nextChapterPlayback;
+    if (!next) return false;
+
+    try {
+      window.sessionStorage.setItem(NEXT_CHAPTER_AUTOPLAY_KEY, next.href);
+    } catch {
+      // A troca no mesmo elemento de audio independe do sessionStorage.
+    }
+
+    seamlessTransitionRef.current = next;
+    currentAudioIdentityRef.current = {
+      chapterId: next.chapterId,
+      pageAudioRevision: next.audioRevision,
+      audioRevision: next.audioRevision,
+      src: next.src,
+    };
+    pendingStartRef.current = next.startOffset;
+    resumePositionRef.current = 0;
+    audioRetryStateRef.current = {
+      sourceRevision: 0,
+      automaticRetryCount: 0,
+    };
+    pendingRetryRef.current = null;
+    setAudioSource({
+      chapterId: next.chapterId,
+      audioRevision: next.audioRevision,
+      source: next.src,
+      objectUrl: next.src,
+    });
+    setResolvedDuration(next.duration);
+    setCurrent(0);
+    setPlaybackError("");
+    setKaraokeMode(playMode === "karaoke");
+
+    if ("mediaSession" in navigator && typeof MediaMetadata !== "undefined") {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: next.chapterTitle,
+        artist: next.novelTitle,
+        album: "Audio Novel BR",
+        artwork: next.coverUrl ? [{ src: next.coverUrl }] : [],
+      });
+    }
+
+    // Trocar a fonte e chamar play diretamente dentro do evento ended mantem
+    // a mesma sessao de midia ativa quando a tela do celular esta bloqueada.
+    audio.src = next.src;
+    audio.load();
+    audio.playbackRate = playbackRate;
+    audio.volume = volume;
+    audio.muted = muted;
+    desiredPlaybackRef.current = true;
+
+    const navigate = () => router.push(next.href, { scroll: false });
+    const playbackPromise = audio.play();
+    void playbackPromise.then(navigate).catch(() => {
+      seamlessTransitionRef.current = null;
+      navigate();
+    });
+    return true;
+  }, [muted, nextChapterPlayback, playbackRate, playMode, router, volume]);
 
   function pauseIfNeededAtGroupedChapterEnd(audio: HTMLAudioElement) {
     if (!pauseAtChapterEnd || groupedChapterParts.length === 0) return;
@@ -714,8 +844,12 @@ export function AudioPlayer({
           src={activeAudioSource || undefined}
           onLoadedMetadata={(event) => {
             const audioDuration = Math.max(0, event.currentTarget.duration - startOffset);
+            const pendingRetry = pendingRetryRef.current;
             setResolvedDuration(duration || audioDuration);
-            if (pendingStartRef.current !== null) {
+            if (pendingRetry) {
+              event.currentTarget.currentTime = pendingRetry.position;
+              pendingRetryRef.current = null;
+            } else if (pendingStartRef.current !== null) {
               event.currentTarget.currentTime = pendingStartRef.current;
               // Consome o seek pendente: um loadedmetadata posterior (ex.: troca
               // de fonte) nao pode reaplicar uma posicao antiga.
@@ -725,6 +859,16 @@ export function AudioPlayer({
             event.currentTarget.muted = muted;
             event.currentTarget.playbackRate = playbackRate;
             setPlaybackError("");
+            if (pendingRetry?.shouldResume) {
+              desiredPlaybackRef.current = true;
+              void event.currentTarget.play().catch(() => {
+                desiredPlaybackRef.current = false;
+                playbackActiveRef.current = false;
+                setPlaying(false);
+                setKaraokeMode(false);
+                setPlaybackError(PLAYBACK_CONNECTION_ERROR);
+              });
+            }
           }}
           onTimeUpdate={(event) => {
             const relativePosition = Math.max(0, event.currentTarget.currentTime - startOffset);
@@ -752,26 +896,59 @@ export function AudioPlayer({
             setPlaying(false);
             if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
           }}
-          onEnded={() => {
-            desiredPlaybackRef.current = false;
-            playbackActiveRef.current = false;
-            setPlaying(false);
-            setKaraokeMode(false);
-            setCurrent(progressDuration);
-            const progressSave = saveProgress(chapterId, { completed: true, force: true, keepalive: true });
-            if (autoPlayNextChapter && nextChapterHref) {
-              try {
-                window.sessionStorage.setItem(NEXT_CHAPTER_AUTOPLAY_KEY, nextChapterHref);
-              } catch {
-                // A navegacao continua mesmo se o navegador bloquear sessionStorage.
+          onEnded={(event) => {
+            const continued = autoPlayNextChapter && nextChapterPlayback
+              ? continueWithNextChapter(event.currentTarget)
+              : false;
+            if (!continued) {
+              desiredPlaybackRef.current = false;
+              playbackActiveRef.current = false;
+              setPlaying(false);
+              setKaraokeMode(false);
+              setCurrent(progressDuration);
+              if (autoPlayNextChapter && nextChapterHref) {
+                router.push(nextChapterHref, { scroll: false });
               }
-              void progressSave.finally(() => {
-                window.location.href = nextChapterHref;
-              });
             }
+            void saveProgress(chapterId, { completed: true, force: true, keepalive: true });
           }}
           onError={(event) => {
-            void event.currentTarget;
+            const audio = event.currentTarget;
+            const pendingRetry = resolveInterruptedAudioRetry({
+              pendingRetry: pendingRetryRef.current,
+              currentPosition: audio.currentTime,
+              desiredPlayback: desiredPlaybackRef.current,
+            });
+            pendingRetryRef.current = null;
+
+            const isDirectStream = !audio.currentSrc.startsWith("blob:");
+            if (isDirectStream && shouldRetryMediaError({
+              errorCode: audio.error?.code ?? null,
+              retryCount: audioRetryStateRef.current.automaticRetryCount,
+            })) {
+              const nextRetryState = advanceAudioRetryState({
+                state: audioRetryStateRef.current,
+                reason: "automatic",
+              });
+              audioRetryStateRef.current = nextRetryState;
+              pendingRetryRef.current = pendingRetry;
+              desiredPlaybackRef.current = pendingRetry.shouldResume;
+              const retrySource = buildAudioRetrySource(
+                currentAudioIdentityRef.current.src,
+                nextRetryState.sourceRevision,
+              );
+              setPlaybackError("");
+              setAudioSource({
+                chapterId: currentAudioIdentityRef.current.chapterId,
+                audioRevision: currentAudioIdentityRef.current.audioRevision,
+                source: currentAudioIdentityRef.current.src,
+                objectUrl: retrySource,
+              });
+              audio.src = retrySource;
+              audio.load();
+              return;
+            }
+
             desiredPlaybackRef.current = false;
             playbackActiveRef.current = false;
             setPlaying(false);

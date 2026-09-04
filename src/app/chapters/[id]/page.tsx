@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { PlaySquare } from "lucide-react";
-import { AudioPlayer } from "@/components/audio-player";
+import { AudioPlayer, type NextChapterPlayback } from "@/components/audio-player";
 import { ChapterPartLinks } from "@/components/chapter-part-links";
 import { ChapterViewTracker } from "@/components/chapter-view-tracker";
 import { CommentForm } from "@/components/comment-form";
@@ -17,6 +17,7 @@ import { getPublicCommentStatusFilter } from "@/lib/comment-moderation";
 import { CHAPTER_PROGRESS_SELECT, COMMENT_THREAD_SELECT } from "@/lib/page-data-select";
 import { prisma } from "@/lib/prisma";
 import { getActiveServerSession } from "@/lib/safe-auth-session";
+import { hasPremiumAccess } from "@/lib/subscription";
 
 type Cue = {
   start: number;
@@ -87,6 +88,12 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
         title: true,
         position: true,
         positionEnd: true,
+        contentType: true,
+        durationSec: true,
+        audioRevision: true,
+        coverUrl: true,
+        startSec: true,
+        premiumOnly: true,
         volume: { select: { position: true } },
       },
     }),
@@ -96,6 +103,21 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
   const currentChapterIndex = orderedChapters.findIndex((chapter) => chapter.id === id);
   const previousChapter = currentChapterIndex > 0 ? orderedChapters[currentChapterIndex - 1] : null;
   const nextChapter = currentChapterIndex >= 0 && currentChapterIndex < orderedChapters.length - 1 ? orderedChapters[currentChapterIndex + 1] : null;
+  const nextChapterPlayback: NextChapterPlayback | null =
+    nextChapter?.contentType === "AUDIO" &&
+    (!nextChapter.premiumOnly || hasPremiumAccess(session?.user))
+      ? {
+          chapterId: nextChapter.id,
+          href: `/chapters/${nextChapter.id}`,
+          audioRevision: nextChapter.audioRevision,
+          src: getChapterAudioPath(nextChapter.id, nextChapter.audioRevision),
+          duration: nextChapter.durationSec,
+          startOffset: nextChapter.startSec,
+          chapterTitle: nextChapter.title,
+          novelTitle: access.chapter.volume.novel.title,
+          coverUrl: nextChapter.coverUrl ?? access.chapter.volume.novel.coverUrl,
+        }
+      : null;
   const transcript = JSON.parse(access.chapter.transcriptJson) as Cue[];
   const chapterCoverUrl = access.chapter.coverUrl ?? access.chapter.volume.novel.coverUrl;
   const durationLabel = isYouTubeChapter ? "YouTube" : `${Math.round(access.chapter.durationSec / 60)} min`;
@@ -170,6 +192,7 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
           chapterParts={chapterParts}
           accountScope={session?.user?.id ?? "anonymous"}
           nextChapterHref={nextChapter ? `/chapters/${nextChapter.id}` : null}
+          nextChapterPlayback={nextChapterPlayback}
         />
       )}
       <section className="mt-8">

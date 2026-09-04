@@ -13,6 +13,15 @@ export type PendingAudioRetry = {
   shouldResume: boolean;
 };
 
+export function isPlaybackStartBlocked(error: unknown) {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "name" in error &&
+      error.name === "NotAllowedError",
+  );
+}
+
 export function shouldRetryMediaError({
   errorCode,
   retryCount,
