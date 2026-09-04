@@ -31,10 +31,17 @@ test("lista publica de capitulos exclui payloads de reproducao", () => {
   assert.equal(chapter.title, true);
 });
 
+test("listas publica e administrativa ordenam volumes e capitulos numericamente", () => {
+  assert.deepEqual(PUBLIC_NOVEL_SELECT.volumes.orderBy, { position: "asc" });
+  assert.deepEqual(PUBLIC_NOVEL_SELECT.volumes.select.chapters.orderBy, { position: "asc" });
+  assert.deepEqual(ADMIN_NOVEL_PANEL_SELECT.volumes.orderBy, { position: "asc" });
+  assert.deepEqual(ADMIN_NOVEL_PANEL_SELECT.volumes.select.chapters.orderBy, { position: "asc" });
+});
+
 test("lista administrativa de conteudo carrega apenas contadores dos capitulos", () => {
   const chapter = ADMIN_CONTENT_NOVEL_SELECT.volumes.select.chapters.select;
 
-  assert.deepEqual(Object.keys(chapter).sort(), ["position", "positionEnd", "premiumOnly"]);
+  assert.deepEqual(Object.keys(chapter).sort(), ["chapterPartsJson", "position", "positionEnd", "premiumOnly"]);
 });
 
 test("biblioteca exclui senha e payloads grandes de capitulos", () => {

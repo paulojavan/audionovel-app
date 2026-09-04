@@ -9,10 +9,9 @@ const cueSchema = z.object({
 
 const chapterPositionSchema = z.number().finite().min(0);
 
-function hasConsecutiveIntegerPositions(items: Array<{ position: number }>) {
+function hasStrictlyIncreasingPositions(items: Array<{ position: number }>) {
   return items.length <= 1 || items.every((item, index) => (
-    Number.isInteger(item.position)
-    && (index === 0 || item.position === items[index - 1].position + 1)
+    index === 0 || item.position > items[index - 1].position
   ));
 }
 
@@ -55,8 +54,8 @@ export const chapterSchema = z
     published: z.boolean(),
     refreshAudioRevision: z.boolean().optional().default(false),
   })
-  .refine(({ chapterParts }) => hasConsecutiveIntegerPositions(chapterParts), {
-    message: "Capitulos agrupados devem usar posicoes inteiras consecutivas.",
+  .refine(({ chapterParts }) => hasStrictlyIncreasingPositions(chapterParts), {
+    message: "Capitulos agrupados devem usar posicoes unicas em ordem crescente.",
     path: ["chapterParts"],
   });
 
@@ -64,8 +63,8 @@ export const chapterBatchSchema = z
   .object({
     chapters: z.array(chapterSchema).min(1).max(50),
   })
-  .refine(({ chapters }) => hasConsecutiveIntegerPositions(chapters), {
-    message: "Capitulos em bloco devem usar posicoes inteiras consecutivas.",
+  .refine(({ chapters }) => hasStrictlyIncreasingPositions(chapters), {
+    message: "Capitulos em bloco devem usar posicoes unicas em ordem crescente.",
     path: ["chapters"],
   });
 

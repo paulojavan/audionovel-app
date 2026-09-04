@@ -7,7 +7,8 @@ test("continua a sequencia depois do ultimo capitulo individual", () => {
 });
 
 test("continua a sequencia depois de um capitulo decimal", () => {
-  assert.equal(getNextChapterPosition([{ position: 8.5, positionEnd: null }]), 9.5);
+  assert.equal(getNextChapterPosition([{ position: 8.5, positionEnd: null }]), 9);
+  assert.equal(getNextChapterPosition([{ position: 10.7, positionEnd: null }]), 11);
 });
 
 test("continua a sequencia depois do fim de um capitulo agrupado", () => {

@@ -284,6 +284,7 @@ export const ADMIN_CONTENT_NOVEL_SELECT = {
         select: {
           position: true,
           positionEnd: true,
+          chapterPartsJson: true,
           premiumOnly: true,
         },
       },
@@ -321,6 +322,7 @@ export const ADMIN_NOVEL_PANEL_SELECT = {
           title: true,
           position: true,
           positionEnd: true,
+          chapterPartsJson: true,
           contentType: true,
           durationSec: true,
           premiumOnly: true,

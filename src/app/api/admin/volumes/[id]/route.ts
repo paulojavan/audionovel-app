@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { z } from "zod";
 import { requireAdmin } from "@/lib/api";
+import { volumeUpdateSchema } from "@/lib/admin-volume-validation";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/prisma";
-
-const volumeUpdateSchema = z.object({
-  title: z.string().trim().min(2).max(160),
-  position: z.number().int().min(1),
-});
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();

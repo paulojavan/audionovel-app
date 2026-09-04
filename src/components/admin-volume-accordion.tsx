@@ -108,7 +108,7 @@ export function AdminVolumeAccordion({ volumes }: { volumes: AdminVolume[] }) {
                 </label>
                 <label className="grid gap-1 text-sm text-zinc-300">
                   Numero
-                  <input name="position" type="number" min="1" defaultValue={volume.position} className="rounded-md border border-white/10 bg-black px-3 py-2 text-white" required />
+                  <input name="position" type="number" min="0" step="any" defaultValue={volume.position} className="rounded-md border border-white/10 bg-black px-3 py-2 text-white" required />
                 </label>
                 <button disabled={pending} className="rounded-full bg-[#18b7bd] px-4 py-2 text-sm font-black text-[#021114] disabled:opacity-60">
                   Salvar volume

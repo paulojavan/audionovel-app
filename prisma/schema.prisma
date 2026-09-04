@@ -132,7 +132,7 @@ model NovelTag {
 model Volume {
   id        String    @id @default(cuid())
   title     String
-  position  Int
+  position  Float
   novelId   String
   novel     Novel     @relation(fields: [novelId], references: [id], onDelete: Cascade)
   chapters  Chapter[]
