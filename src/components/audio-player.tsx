@@ -3,6 +3,7 @@
 import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { AudioDownloadModal } from "@/components/audio-download-modal";
 import { KaraokeVolumeMenu } from "@/components/karaoke-volume-menu";
 import { PlayerSettingsMenu } from "@/components/player-settings-menu";
@@ -482,16 +483,25 @@ export function AudioPlayer({
     try {
       const startPlayback = async (playbackSource: string) => {
         const currentIdentity = currentAudioIdentityRef.current;
-        setAudioSource({
-          chapterId,
-          audioRevision: currentIdentity.audioRevision,
-          source: currentIdentity.src,
-          objectUrl: playbackSource,
-        });
-
         if (!audioRef.current) return;
         const activeAudio = audioRef.current;
         const justLoadedSource = activeAudio.getAttribute("src") !== playbackSource;
+
+        if (justLoadedSource) {
+          // O estado precisa chegar ao DOM antes do play. Se a atualizacao do
+          // React ficar pendente, ela reatribui `src` logo depois do clique,
+          // interrompe a promessa de play e empurra o player para o fallback
+          // de download, quando a ativacao do usuario ja foi perdida.
+          flushSync(() => {
+            setAudioSource({
+              chapterId,
+              audioRevision: currentIdentity.audioRevision,
+              source: currentIdentity.src,
+              objectUrl: playbackSource,
+            });
+          });
+        }
+
         activeAudio.playbackRate = playbackRate;
         activeAudio.volume = volume;
         activeAudio.muted = muted;
@@ -502,7 +512,6 @@ export function AudioPlayer({
         // evita o fallback de baixar o arquivo inteiro e a pressao de memoria.
         let playbackPromise: Promise<void> | null = null;
         if (justLoadedSource) {
-          activeAudio.src = playbackSource;
           activeAudio.load();
           playbackPromise = activeAudio.play();
           void playbackPromise.catch(() => undefined);
@@ -521,7 +530,11 @@ export function AudioPlayer({
                 (justLoadedSource && activeAudio.currentTime === 0 && (resumePositionRef.current > 0 || startOffset > 0))
               ? startOffset + resumePositionRef.current
               : activeAudio.currentTime);
-        activeAudio.currentTime = nextPosition;
+        // Evita reiniciar a selecao do recurso com um seek redundante para 0
+        // enquanto a primeira promessa de play ainda esta pendente.
+        if (Math.abs(activeAudio.currentTime - nextPosition) > 0.05) {
+          activeAudio.currentTime = nextPosition;
+        }
         setKaraokeMode(playMode === "karaoke");
         setPlaybackError("");
         await (playbackPromise ?? activeAudio.play());

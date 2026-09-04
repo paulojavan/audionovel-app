@@ -18,8 +18,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v17"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "mobile-audio-reliability-2026-09-04"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v18"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "audio-playback-recovery-2026-09-04"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,

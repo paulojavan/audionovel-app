@@ -1,11 +1,11 @@
-// Audio Novel BR - Service Worker v17
+// Audio Novel BR - Service Worker v18
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v17";
-const RELEASE_REVISION = "mobile-audio-reliability-2026-09-04";
-const PREVIOUS_CACHE_VERSION = "v16";
-const FORCE_RECOVERY_ACTIVATION = CACHE_VERSION === "v17";
+const CACHE_VERSION = "v18";
+const RELEASE_REVISION = "audio-playback-recovery-2026-09-04";
+const PREVIOUS_CACHE_VERSION = "v17";
+const FORCE_RECOVERY_ACTIVATION = CACHE_VERSION === "v18";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -50,8 +50,8 @@ self.addEventListener("install", (event) => {
         console.warn("[SW] Cache install error:", err);
       }
 
-      // Esta versao precisa substituir imediatamente o worker v16 para que as
-      // correcoes do player movel cheguem aos PWAs ja instalados.
+      // Esta versao precisa substituir imediatamente o worker v17 para que a
+      // correcao do inicio da reproducao chegue aos PWAs ja instalados.
       if (FORCE_RECOVERY_ACTIVATION) {
         await self.skipWaiting();
       }

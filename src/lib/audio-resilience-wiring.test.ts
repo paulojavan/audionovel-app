@@ -121,7 +121,7 @@ test("player online inicia streaming direto sem baixar o arquivo inteiro", () =>
     player,
     /activeAudio\.getAttribute\("src"\) !== playbackSource/,
   );
-  assert.match(player, /activeAudio\.src = playbackSource/);
+  assert.match(player, /flushSync\(\(\) => \{\s*setAudioSource\(\{/);
   assert.match(
     player,
     /catch \(error\)[\s\S]*?sourceWasDirectStream[\s\S]*?getDownloadedAudioUrl\(\{ online: false \}\)/,
@@ -203,8 +203,12 @@ test("erro de rede ou decodificacao retenta o stream uma vez e preserva a posica
 
 test("Safari recebe play ainda na tarefa do gesto antes de aguardar metadados", () => {
   const startPlayback = player.match(/const startPlayback = async[\s\S]*?\n\s*};/)?.[0] ?? "";
-  assert.ok(startPlayback.indexOf("playbackPromise = activeAudio.play()") >= 0);
-  assert.ok(startPlayback.indexOf("playbackPromise = activeAudio.play()") < startPlayback.indexOf("await waitForMetadata(activeAudio)"));
+  const sourceCommitIndex = startPlayback.indexOf("flushSync(() => {");
+  const playIndex = startPlayback.indexOf("playbackPromise = activeAudio.play()");
+  assert.ok(sourceCommitIndex >= 0);
+  assert.ok(playIndex > sourceCommitIndex);
+  assert.ok(playIndex < startPlayback.indexOf("await waitForMetadata(activeAudio)"));
+  assert.match(startPlayback, /Math\.abs\(activeAudio\.currentTime - nextPosition\) > 0\.05/);
   assert.match(player, /isPlaybackStartBlocked\(error\)/);
 });
 

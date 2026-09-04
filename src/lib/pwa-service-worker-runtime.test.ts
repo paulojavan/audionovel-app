@@ -9,9 +9,9 @@ const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"),
 // Os nomes historicos dos fixtures ficam estaveis; os testes de runtime
 // exercitam a logica, enquanto pwa-service-worker.test.ts valida a versao real.
 const serviceWorkerRuntimeSource = serviceWorkerSource
-  .replace('const CACHE_VERSION = "v17";', 'const CACHE_VERSION = "v15";')
-  .replace('const PREVIOUS_CACHE_VERSION = "v16";', 'const PREVIOUS_CACHE_VERSION = "v14";')
-  .replace('CACHE_VERSION === "v17"', 'CACHE_VERSION === "v15"');
+  .replace('const CACHE_VERSION = "v18";', 'const CACHE_VERSION = "v15";')
+  .replace('const PREVIOUS_CACHE_VERSION = "v17";', 'const PREVIOUS_CACHE_VERSION = "v14";')
+  .replace('CACHE_VERSION === "v18"', 'CACHE_VERSION === "v15"');
 const offlinePageSource = readFileSync(join(process.cwd(), "src", "app", "offline", "page.tsx"), "utf8");
 const layoutSource = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
 
