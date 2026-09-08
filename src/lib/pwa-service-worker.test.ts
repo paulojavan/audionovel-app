@@ -18,8 +18,8 @@ test("service worker nao pre-cacheia o manifest publico", () => {
 });
 
 test("service worker usa cache-first para chunks versionados do Next", () => {
-  assert.match(serviceWorkerSource, /CACHE_VERSION = "v18"/);
-  assert.match(serviceWorkerSource, /RELEASE_REVISION = "audio-playback-recovery-2026-09-04"/);
+  assert.match(serviceWorkerSource, /CACHE_VERSION = "v19"/);
+  assert.match(serviceWorkerSource, /RELEASE_REVISION = "authenticated-content-2026-09-08"/);
   assert.match(
     serviceWorkerSource,
     /postMessage\(\{ version: CACHE_VERSION, revision: RELEASE_REVISION \}\)/,
@@ -74,6 +74,7 @@ test("service worker limita cache de navegacao as rotas aprovadas e separa por c
     /networkFirstWithPageCache\(request, event\)/,
   );
   assert.doesNotMatch(serviceWorkerSource, /getAccountOfflineRedirect/);
+  assert.match(serviceWorkerSource, /canUseNavigationCache\(scope, requestUrl\.pathname\)/);
 });
 
 test("paginas de capitulo usam recuperacao na lentidao e cache apenas na queda real", () => {

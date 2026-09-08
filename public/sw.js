@@ -1,11 +1,11 @@
-// Audio Novel BR - Service Worker v18
+// Audio Novel BR - Service Worker v19
 // Estratégia: cache estático compartilhado e páginas visitadas isoladas por conta.
 
 const CACHE_PREFIX = "audio-novel-br-pwa";
-const CACHE_VERSION = "v18";
-const RELEASE_REVISION = "audio-playback-recovery-2026-09-04";
-const PREVIOUS_CACHE_VERSION = "v17";
-const FORCE_RECOVERY_ACTIVATION = CACHE_VERSION === "v18";
+const CACHE_VERSION = "v19";
+const RELEASE_REVISION = "authenticated-content-2026-09-08";
+const PREVIOUS_CACHE_VERSION = "v18";
+const FORCE_RECOVERY_ACTIVATION = CACHE_VERSION === "v19";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const PAGE_CACHE_PREFIX = `${CACHE_PREFIX}-pages-${CACHE_VERSION}-`;
 const ACCOUNT_META_CACHE = `${CACHE_PREFIX}-account-${CACHE_VERSION}`;
@@ -50,8 +50,8 @@ self.addEventListener("install", (event) => {
         console.warn("[SW] Cache install error:", err);
       }
 
-      // Esta versao precisa substituir imediatamente o worker v17 para que a
-      // correcao do inicio da reproducao chegue aos PWAs ja instalados.
+      // Esta versao precisa substituir imediatamente o worker v18 para remover
+      // paginas de conteudo que possam ter sido cacheadas no escopo anonimo.
       if (FORCE_RECOVERY_ACTIVATION) {
         await self.skipWaiting();
       }
@@ -231,6 +231,7 @@ async function networkFirstWithPageCache(
   timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
 ) {
   const scope = await getAccountScope();
+  const canUseCache = canUseNavigationCache(scope, new URL(request.url).pathname);
   const networkTask = fetch(request).then(async (response) => {
     try {
       await publishNavigationPage(response.clone(), request, scope);
@@ -247,6 +248,7 @@ async function networkFirstWithPageCache(
     return result.response;
   }
   if (result.kind === "failure") {
+    if (!canUseCache) return getOfflineFallback();
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
     return cached ?? getOfflineFallback();
@@ -266,6 +268,7 @@ async function networkFirstChapterPage(
   timeoutMs = NAVIGATION_RESPONSE_TIMEOUT_MS,
 ) {
   const scope = await getAccountScope();
+  const canUseCache = canUseNavigationCache(scope, new URL(request.url).pathname);
   const networkTask = fetch(request).then(async (response) => {
     try {
       await publishNavigationPage(response.clone(), request, scope);
@@ -282,6 +285,7 @@ async function networkFirstChapterPage(
     return result.response;
   }
   if (result.kind === "failure") {
+    if (!canUseCache) return getOfflineFallback();
     const cache = await caches.open(getAccountPageCacheName(scope));
     const cached = await cache.match(getNavigationCacheKey(request));
     return cached ?? getOfflineFallback();
@@ -304,7 +308,7 @@ async function publishNavigationPage(response, request, scope) {
 
   const html = await response.clone().text();
   if (extractOfflineAccountScope(html) !== scope) return;
-  if (requestUrl.pathname === "/biblioteca" && scope === ANONYMOUS_ACCOUNT_SCOPE) return;
+  if (!canUseNavigationCache(scope, requestUrl.pathname)) return;
   if (scope !== (await getAccountScope())) return;
 
   const cache = await caches.open(getAccountPageCacheName(scope));
@@ -374,6 +378,8 @@ function waitForNetworkResult(networkTask, timeoutMs) {
 }
 
 async function getCompatibleCachedNavigation(request, scope) {
+  if (!canUseNavigationCache(scope, new URL(request.url).pathname)) return null;
+
   const pageCache = await caches.open(getAccountPageCacheName(scope));
   const cached = await pageCache.match(getNavigationCacheKey(request));
   if (!cached) return null;
@@ -389,6 +395,10 @@ async function getCompatibleCachedNavigation(request, scope) {
     assetUrls.map((assetUrl) => staticCache.match(assetUrl)),
   );
   return assets.every(Boolean) ? cached : null;
+}
+
+function canUseNavigationCache(scope, pathname) {
+  return scope !== ANONYMOUS_ACCOUNT_SCOPE || pathname === "/";
 }
 
 function getAccountPageCacheName(scope) {

@@ -5,7 +5,6 @@ import { clearNextAuthSessionCookies, hasNextAuthSessionCookie } from "./lib/ses
 import { isDecodedSessionTokenUsable } from "./lib/session-token";
 
 const publicPages = new Set(["/", "/login", "/cadastro", "/recuperar-senha", "/redefinir-senha"]);
-const publicPagePrefixes = ["/novels", "/chapters"];
 const publicApiPrefixes = ["/api/auth", "/api/register", "/api/password-reset", "/api/chapters"];
 const publicApiSuffixes = ["/api/billing/webhook", "/api/billing/return"];
 const publicFiles = new Set([
@@ -52,9 +51,8 @@ function secureResponse(response: NextResponse, csp: string) {
   return response;
 }
 
-function isPublicPath(pathname: string) {
+export function isPublicPath(pathname: string) {
   if (publicPages.has(pathname)) return true;
-  if (publicPagePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return true;
   if (publicFiles.has(pathname)) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (pathname.startsWith("/icons/")) return true;

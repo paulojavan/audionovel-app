@@ -57,10 +57,13 @@ export async function generateMetadata({ params }: ChapterPageProps): Promise<Me
 export default async function ChapterPage({ params }: ChapterPageProps) {
   const { id } = await params;
   const session = await getActiveServerSession();
+  const loginUrl = `/login?callbackUrl=${encodeURIComponent(`/chapters/${id}`)}`;
+  if (!session?.user?.id) redirect(loginUrl);
+
   const access = await canPlayChapter(id, session?.user?.id);
 
   if (access.status === 404) notFound();
-  if (access.status === 401) redirect("/login");
+  if (access.status === 401) redirect(loginUrl);
   if (!access.allowed || !access.chapter) redirect("/assinaturas?premium=required");
 
   const isYouTubeChapter = access.chapter.contentType === "YOUTUBE";

@@ -9,9 +9,9 @@ const serviceWorkerSource = readFileSync(join(process.cwd(), "public", "sw.js"),
 // Os nomes historicos dos fixtures ficam estaveis; os testes de runtime
 // exercitam a logica, enquanto pwa-service-worker.test.ts valida a versao real.
 const serviceWorkerRuntimeSource = serviceWorkerSource
-  .replace('const CACHE_VERSION = "v18";', 'const CACHE_VERSION = "v15";')
-  .replace('const PREVIOUS_CACHE_VERSION = "v17";', 'const PREVIOUS_CACHE_VERSION = "v14";')
-  .replace('CACHE_VERSION === "v18"', 'CACHE_VERSION === "v15"');
+  .replace('const CACHE_VERSION = "v19";', 'const CACHE_VERSION = "v15";')
+  .replace('const PREVIOUS_CACHE_VERSION = "v18";', 'const PREVIOUS_CACHE_VERSION = "v14";')
+  .replace('CACHE_VERSION === "v19"', 'CACHE_VERSION === "v15"');
 const offlinePageSource = readFileSync(join(process.cwd(), "src", "app", "offline", "page.tsx"), "utf8");
 const layoutSource = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
 
@@ -63,6 +63,7 @@ type WorkerRuntime = {
   cacheFirst(request: Request): Promise<Response>;
   getNavigationCacheKey(request: Request): string;
   isCacheableNavigationPath(pathname: string): boolean;
+  canUseNavigationCache(scope: string, pathname: string): boolean;
 };
 
 function createRuntime(
@@ -307,6 +308,39 @@ test("pagina visitada com rede lenta aguarda a resposta da rede", async () => {
   ]);
 
   assert.equal(responseResult, "timeout");
+});
+
+test("escopo anonimo nunca reutiliza cache de novels ou capitulos", async () => {
+  const caches = new MemoryCacheStorage();
+  const created = createRuntime(async () => {
+    throw new TypeError("Failed to fetch");
+  }, caches);
+  const anonymousPages = await caches.open("audio-novel-br-pwa-pages-v15-anonymous");
+  await anonymousPages.put(
+    `${ORIGIN}/novels/privada`,
+    responseWithUrl(offlineHtml("anonymous", "NOVEL-PRIVADA"), `${ORIGIN}/novels/privada`, "text/html"),
+  );
+  await anonymousPages.put(
+    `${ORIGIN}/chapters/privado`,
+    responseWithUrl(offlineHtml("anonymous", "CAPITULO-PRIVADO"), `${ORIGIN}/chapters/privado`, "text/html"),
+  );
+  const staticCache = await caches.open("audio-novel-br-pwa-v15");
+  await staticCache.put(
+    "/offline-fallback.html",
+    responseWithUrl("OFFLINE", `${ORIGIN}/offline-fallback.html`, "text/html"),
+  );
+
+  const novelResponse = await created.runtime.networkFirstWithPageCache(
+    new Request(`${ORIGIN}/novels/privada`),
+  );
+  const chapterResponse = await created.runtime.networkFirstChapterPage(
+    new Request(`${ORIGIN}/chapters/privado`),
+  );
+
+  assert.equal(await novelResponse.text(), "OFFLINE");
+  assert.equal(await chapterResponse.text(), "OFFLINE");
+  assert.equal(created.runtime.canUseNavigationCache("anonymous", "/"), true);
+  assert.equal(created.runtime.canUseNavigationCache("anonymous", "/novels/privada"), false);
 });
 
 test("inicializacao fria presa mostra recuperacao em vez de uma janela vazia", async () => {

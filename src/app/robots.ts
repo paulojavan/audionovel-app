@@ -5,8 +5,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/novels/", "/chapters/"],
-        disallow: ["/admin/", "/api/", "/biblioteca", "/notificacoes", "/offline", "/perfil"],
+        allow: "/",
+        disallow: ["/admin/", "/api/", "/biblioteca", "/chapters/", "/notificacoes", "/novels", "/offline", "/perfil"],
       },
     ],
     sitemap: "https://audionovelbr.com.br/sitemap.xml",

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
 import { FavoriteNovelButton } from "@/components/favorite-novel-button";
@@ -45,9 +45,13 @@ export async function generateMetadata({ params }: NovelPageProps): Promise<Meta
 
 export default async function NovelPage({ params }: NovelPageProps) {
   const { slug } = await params;
-  const [novel, session, requestHeaders] = await Promise.all([
+  const session = await getActiveServerSession();
+  if (!session?.user?.id) {
+    redirect(`/login?callbackUrl=${encodeURIComponent(`/novels/${slug}`)}`);
+  }
+
+  const [novel, requestHeaders] = await Promise.all([
     getCachedPublicNovel(slug),
-    getActiveServerSession(),
     headers(),
   ]);
 

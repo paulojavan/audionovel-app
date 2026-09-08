@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Search, Star, X } from "lucide-react";
 import { NovelStatusCover } from "@/components/novel-status-cover";
 import { normalizeCatalogQuery } from "@/lib/catalog-query";
 import { getCachedCatalogPage, getCachedCatalogTags } from "@/lib/public-data";
+import { getActiveServerSession } from "@/lib/safe-auth-session";
 
 const PAGE_SIZE = 12;
 
@@ -11,7 +13,19 @@ export default async function NovelsPage({
 }: {
   searchParams: Promise<{ q?: string; tag?: string; author?: string; page?: string }>;
 }) {
-  const filters = normalizeCatalogQuery(await searchParams);
+  const rawSearchParams = await searchParams;
+  const session = await getActiveServerSession();
+  if (!session?.user?.id) {
+    const callbackParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(rawSearchParams)) {
+      if (value) callbackParams.set(key, value);
+    }
+    const query = callbackParams.toString();
+    const callbackUrl = query ? `/novels?${query}` : "/novels";
+    redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  }
+
+  const filters = normalizeCatalogQuery(rawSearchParams);
   const { query, currentPage, selectedTag, selectedAuthor } = filters;
 
   const [tags, catalog] = await Promise.all([
