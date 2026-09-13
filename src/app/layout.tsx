@@ -17,6 +17,7 @@ import { PwaLifecycle } from "@/components/pwa-lifecycle";
 import { PwaInstallMenuItem } from "@/components/pwa-install-menu-item";
 import { PwaOfflineNavigation } from "@/components/pwa-offline-navigation";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { SiteFooter } from "@/components/site-footer";
 import { SessionHeartbeat } from "@/components/session-heartbeat";
 import { UserMenu } from "@/components/user-menu";
 import { getVersionedPwaAsset } from "@/lib/pwa-assets";
@@ -224,6 +225,7 @@ export default async function RootLayout({
                 )}
               </header>
               {children}
+              <SiteFooter />
             </main>
             <MobileAppNav
               role={activeSession.user.role}

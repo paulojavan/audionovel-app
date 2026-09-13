@@ -156,6 +156,7 @@ model Chapter {
   startSec         Int                 @default(0)
   chapterPartsJson String              @default("[]")
   transcriptJson   String              @default("[]")
+  galleryImagesJson String              @default("[]")
   premiumOnly      Boolean             @default(false)
   published        Boolean             @default(true)
   publishedAt      DateTime?

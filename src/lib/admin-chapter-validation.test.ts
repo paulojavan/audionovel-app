@@ -112,3 +112,16 @@ test("aceita lote consecutivo hospedado em novo bucket R2", () => {
 test("rejeita posicao negativa", () => {
   assert.equal(chapterSchema.safeParse({ ...baseChapter, position: -0.5 }).success, false);
 });
+
+test("aceita galeria opcional com imagens HTTPS permitidas", () => {
+  assert.deepEqual(chapterSchema.parse(baseChapter).galleryImages, []);
+  assert.deepEqual(
+    chapterSchema.parse({ ...baseChapter, galleryImages: ["https://images.unsplash.com/photo-123"] }).galleryImages,
+    ["https://images.unsplash.com/photo-123"],
+  );
+});
+
+test("rejeita galeria com URL insegura ou mais de 12 imagens", () => {
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, galleryImages: ["http://localhost/image.jpg"] }).success, false);
+  assert.equal(chapterSchema.safeParse({ ...baseChapter, galleryImages: Array(13).fill("https://images.unsplash.com/photo-123") }).success, false);
+});

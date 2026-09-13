@@ -9,6 +9,7 @@ const allowedImageHosts = Array.from(
       "i1.wp.com",
       "i2.wp.com",
       "i3.wp.com",
+      "**.r2.dev",
       ...(process.env.IMAGE_URL_ALLOWED_HOSTS ?? "").split(","),
     ]
       .map((host) => host.trim().toLowerCase())

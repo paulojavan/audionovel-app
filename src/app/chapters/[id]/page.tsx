@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { PlaySquare } from "lucide-react";
 import { AudioPlayer, type NextChapterPlayback } from "@/components/audio-player";
 import { ChapterPartLinks } from "@/components/chapter-part-links";
+import { ChapterImageCarousel } from "@/components/chapter-image-carousel";
 import { ChapterViewTracker } from "@/components/chapter-view-tracker";
 import { CommentForm } from "@/components/comment-form";
 import { CommentThread } from "@/components/comment-thread";
@@ -122,6 +123,7 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
         }
       : null;
   const transcript = JSON.parse(access.chapter.transcriptJson) as Cue[];
+  const galleryImages = JSON.parse(access.chapter.galleryImagesJson) as string[];
   const chapterCoverUrl = access.chapter.coverUrl ?? access.chapter.volume.novel.coverUrl;
   const durationLabel = isYouTubeChapter ? "YouTube" : `${Math.round(access.chapter.durationSec / 60)} min`;
   const chapterPositionLabel = getChapterPositionLabel(access.chapter.position, access.chapter.positionEnd);
@@ -198,6 +200,7 @@ export default async function ChapterPage({ params }: ChapterPageProps) {
           nextChapterPlayback={nextChapterPlayback}
         />
       )}
+      {galleryImages.length > 0 ? <ChapterImageCarousel images={galleryImages} chapterTitle={access.chapter.title} /> : null}
       <section className="mt-8">
         <h2 className="mb-3 text-xl font-bold">Comentarios do capitulo</h2>
         <CommentForm target="chapter" targetId={id} isLoggedIn={canComment} />

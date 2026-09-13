@@ -55,6 +55,7 @@ export async function POST(request: Request) {
             youtubeUrl: chapter.contentType === "YOUTUBE" ? cleanedUrl : null,
             youtubeVideoId,
             coverUrl: chapter.coverUrl || null,
+            galleryImagesJson: JSON.stringify(chapter.galleryImages),
             startSec: chapter.startSec,
             chapterPartsJson: JSON.stringify(chapterParts),
             transcriptJson: chapter.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(chapter.transcriptJson, chapter.title, chapter.durationSec)) : "[]",

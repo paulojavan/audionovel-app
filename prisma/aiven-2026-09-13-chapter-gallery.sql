@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE "Chapter"
+  ADD COLUMN "galleryImagesJson" TEXT NOT NULL DEFAULT '[]';
+
+COMMIT;

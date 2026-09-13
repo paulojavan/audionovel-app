@@ -15,7 +15,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const { id } = await context.params;
   const parsed = chapterSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Dados invalidos." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados invalidos." }, { status: 400 });
 
   try {
     const cleanedUrl = parsed.data.youtubeUrl ? cleanYouTubeUrl(parsed.data.youtubeUrl) : parsed.data.youtubeUrl;
@@ -62,6 +62,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           youtubeUrl: parsed.data.contentType === "YOUTUBE" ? cleanedUrl : null,
           youtubeVideoId,
           coverUrl: parsed.data.coverUrl || null,
+          galleryImagesJson: JSON.stringify(parsed.data.galleryImages),
           startSec: parsed.data.startSec,
           chapterPartsJson: JSON.stringify(chapterParts),
           transcriptJson: parsed.data.contentType === "AUDIO" ? JSON.stringify(normalizeTranscript(parsed.data.transcriptJson, parsed.data.title, parsed.data.durationSec)) : "[]",

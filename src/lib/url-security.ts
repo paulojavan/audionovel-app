@@ -11,6 +11,7 @@ const DEFAULT_IMAGE_HOSTS = [
   "i1.wp.com",
   "i2.wp.com",
   "i3.wp.com",
+  "r2.dev",
 ];
 
 export function isSafePublicHttpsUrl(value: string, allowedHosts: string[] = []) {

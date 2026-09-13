@@ -9,7 +9,7 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
-import { formatAppDate } from "@/lib/app-time";
+import { SiteFooter } from "@/components/site-footer";
 
 const highlights = [
   {
@@ -235,9 +235,7 @@ export function PublicLandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-white/8 bg-[#02090b] px-4 py-7 text-center text-sm text-[#647f83]">
-        <p>© {formatAppDate(new Date(), { year: "numeric" })} Áudio Novel BR. Leia com os olhos. Viva com os ouvidos.</p>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

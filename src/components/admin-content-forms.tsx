@@ -40,6 +40,7 @@ type ChapterEditData = {
   startSec: number;
   chapterPartsJson: string;
   transcriptJson: string;
+  galleryImagesJson: string;
   premiumOnly: boolean;
   published: boolean;
   volumeId: string;
@@ -97,6 +98,13 @@ function getNumber(data: FormData, key: string) {
   return Number(data.get(key) ?? 0);
 }
 
+function getGalleryImages(data: FormData) {
+  return getString(data, "galleryImages")
+    .split(/\r?\n/)
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
 function sharedChapterPayload(data: FormData, prefix = "") {
   const contentType = getString(data, `${prefix}contentType`) as MediaType;
   return {
@@ -148,6 +156,7 @@ export function AdminChapterEditForm({
               startSec: contentType === "YOUTUBE" ? 0 : isEditingGroupedAudio && firstPart ? firstPart.startSec : getNumber(data, "startSec"),
               chapterParts: isEditingGroupedAudio ? nextChapterParts : [],
               transcriptJson: getString(data, "transcriptJson"),
+              galleryImages: getGalleryImages(data),
               refreshAudioRevision: data.get("refreshAudioRevision") === "on",
             });
             setMessage("Capitulo atualizado com sucesso.");
@@ -201,6 +210,17 @@ export function AdminChapterEditForm({
           />
         </>
       )}
+      <label className="grid gap-1 text-sm text-zinc-300">
+        Imagens do capítulo (opcional)
+        <textarea
+          name="galleryImages"
+          defaultValue={(JSON.parse(chapter.galleryImagesJson || "[]") as string[]).join("\n")}
+          placeholder="Uma URL de imagem HTTPS por linha (até 12)"
+          rows={4}
+          className="min-w-0 rounded-md border border-white/10 bg-black px-3 py-2 text-sm"
+        />
+        <span className="text-xs text-zinc-400">As imagens aparecem em um carrossel entre o capítulo e os comentários.</span>
+      </label>
       <PublishFields defaultPremium={chapter.premiumOnly} defaultPublished={chapter.published} />
       <button disabled={pending} className="rounded-full bg-[#18b7bd] px-5 py-3 font-black text-[#021114] disabled:opacity-60">
         Salvar alteracoes
@@ -624,6 +644,7 @@ export function AdminNovelPanelForms({
                   youtubeUrl: contentType === "YOUTUBE" ? cleanYouTubeUrl(getString(data, `chapter.${index}.youtubeUrl`)) : "",
                   chapterParts: mode === "batch" && contentType === "AUDIO" ? batchParts : [],
                   transcriptJson,
+                  galleryImages: getGalleryImages(data),
                 })),
               });
               setMessage(mode === "single" ? "Capitulo cadastrado com sucesso." : "Capitulos cadastrados com sucesso.");
@@ -667,6 +688,16 @@ export function AdminNovelPanelForms({
             <ChapterBlockFields index={0} contentType={contentType} startPosition={nextChapterPosition} />
           )}
         </div>
+        <label className="grid gap-1 text-sm text-zinc-300">
+          Imagens do capítulo (opcional)
+          <textarea
+            name="galleryImages"
+            placeholder="Uma URL de imagem HTTPS por linha (até 12)"
+            rows={4}
+            className="min-w-0 rounded-md border border-white/10 bg-black px-3 py-2 text-sm"
+          />
+          <span className="text-xs text-zinc-400">Em bloco, as imagens pertencem ao capítulo agrupado.</span>
+        </label>
         <PublishFields defaultPremium={false} defaultPublished />
         <button disabled={pending || volumes.length === 0} className="rounded-full bg-[#18b7bd] px-5 py-3 font-black text-[#021114] disabled:opacity-60">
           Salvar capitulos

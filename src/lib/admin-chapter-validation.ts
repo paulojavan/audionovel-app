@@ -36,6 +36,10 @@ const optionalSafeImageUrl = z
   .optional()
   .or(z.literal(""));
 
+const galleryImagesSchema = z.array(
+  z.string().trim().url().refine(isSafeImageHttpsUrl, "Use URLs de imagem HTTPS permitidas."),
+).max(12, "Use no maximo 12 imagens por capitulo.").optional().default([]);
+
 export const chapterSchema = z
   .object({
     volumeId: z.string().min(1),
@@ -46,6 +50,7 @@ export const chapterSchema = z
     audioUrl: optionalSafeAudioUrl,
     youtubeUrl: z.string().url().optional().or(z.literal("")),
     coverUrl: optionalSafeImageUrl,
+    galleryImages: galleryImagesSchema,
     positionEnd: chapterPositionSchema.nullable().optional(),
     startSec: z.number().int().min(0).default(0),
     chapterParts: z.array(chapterPartSchema).optional().default([]),
