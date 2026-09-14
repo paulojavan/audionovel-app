@@ -193,7 +193,7 @@ export default async function RootLayout({
                 ) : null}
               </nav>
             </aside>
-            <main className="min-w-0 pb-32 md:pb-24">
+            <main className="flex min-h-screen min-w-0 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
               <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-white/10 bg-[#020809]/90 px-4 py-3 backdrop-blur md:px-8">
                 <Link href="/" className="flex items-center gap-2 font-black tracking-tight md:hidden">
                   <Image
